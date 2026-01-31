@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Certificate of Calibration</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 40px;
+      color: #000;
+      font-size: 14px;
+    }
+    .signature-name {
+  font-style: italic;
+  font-family: 'Brush Script MT', cursive;
+  font-size: 18px;
+  margin-bottom: 5px;
+}
+
+    h1, h2 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-size: 22px;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      font-size: 16px;
+      margin-top: 30px;
+    }
+
+    .section {
+      margin-top: 20px;
+    }
+
+    .row {
+      display: flex;
+      margin-bottom: 6px;
+    }
+
+    .label {
+      width: 220px;
+      font-weight: bold;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    table, th, td {
+      border: 1px solid #000;
+    }
+
+    th, td {
+      padding: 6px;
+      text-align: center;
+    }
+
+    .left {
+      text-align: left;
+    }
+
+    .footer {
+      margin-top: 40px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .signature {
+      text-align: center;
+    }
+
+    .note {
+      margin-top: 20px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Certificate of Calibration</h1>
+
+  <div class="section">
+    <div class="row"><div class="label">Certificate No:</div><div>20241206</div></div>
+    <div class="row"><div class="label">Calibration Of:</div><div>PULSE System 3560-C</div></div>
+    <div class="row"><div class="label">Identification No:</div><div>2679419</div></div>
+    <div class="row"><div class="label">Converter Type:</div><div>2647</div></div>
+    <div class="row"><div class="label">Date of Receipt:</div><div>2024-12-06</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Client</h2>
+    <p>
+      <%= name %><br />
+      <%= addressLine1 %><br />
+      <%= city %>
+    </p>
+  </div>
+  
+
+  <div class="section">
+    <h2>Calibration Conditions</h2>
+    <div class="row"><div class="label">Preconditioning:</div><div>2 hours at 25 °C</div></div>
+    <div class="row"><div class="label">Environment:</div><div>25.0 °C ± 3 °C</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Specifications</h2>
+    <p>The PULSE System has been calibrated in accordance with vendor specifications.</p>
+  </div>
+
+  <div class="section">
+    <h2>Calibration Equipment Used</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Device Name</th>
+          <th>Manufacturer</th>
+          <th>Type</th>
+          <th>Serial No</th>
+          <th>Traceability</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="left">Calibration Exciter</td>
+          <td>Brüel & Kjær</td>
+          <td>4294</td>
+          <td>3309152</td>
+          <td>OEM</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Accelerometer Calibration Results</h2>
+    <p><strong>Accelerometer Type:</strong> 4533-B (Sensitivity: 9.718 mV/g)</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>S.No</th>
+          <th>Channel</th>
+          <th>Standard Input</th>
+          <th>Channel Reading</th>
+          <th>Remark</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>1</td><td>10 m/s²</td><td>9.53 m/s²</td><td>OK</td></tr>
+        <tr><td>2</td><td>2</td><td>10 m/s²</td><td>9.52 m/s²</td><td>OK</td></tr>
+        <tr><td>3</td><td>3</td><td>10 m/s²</td><td>9.53 m/s²</td><td>OK</td></tr>
+        <tr><td>4</td><td>4</td><td>10 m/s²</td><td>9.51 m/s²</td><td>OK</td></tr>
+        <tr><td>5</td><td>5</td><td>10 m/s²</td><td>—</td><td>Not Working</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Deltatron Converter Results</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Sl.No</th>
+          <th>Type</th>
+          <th>Serial No</th>
+          <th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>2647</td><td>2646909</td><td>OK</td></tr>
+        <tr><td>2</td><td>2647</td><td>2646910</td><td>OK</td></tr>
+        <tr><td>3</td><td>2647</td><td>2646911</td><td>OK</td></tr>
+        <tr><td>4</td><td>2647</td><td>2646912</td><td>NOT OK</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <div class="signature">
+      <div class="signature-name"><%= name || 'Rakshith K' %></div>
+      <strong><%= name || 'Rakshith K' %></strong><br />
+      Calibration Technician
+    </div>
+    <div class="signature">
+      <strong>Kishor Kumar A C</strong><br />
+      Approved Signatory
+    </div>
+  </div>
+
+  <p class="note">
+    Reproduction of the complete certificate is allowed. Part of the certificate may only be reproduced after written permission.
+  </p>
+
+</body>
+</html>
+
+
+
+

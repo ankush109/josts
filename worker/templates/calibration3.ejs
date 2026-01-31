@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate of Calibration</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+        .company-text {
+             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-weight: 300;
+  color:#0891b2;
+        }
+        .email-link,
+.website-link {
+  color: #0891b2;          /* deep cyan */
+  text-decoration: none;
+  font-weight: 300;
+}
+
+.email-link:hover,
+.website-link:hover {
+  text-decoration: underline;
+}
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #000;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .company-header {
+ width: fit-content;   /* shrink to content */
+  margin:  auto;       /* center the block */
+  text-align: left;     /* 👈 text starts from same point */
+  
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #374151;
+        }
+        
+        .company-details {
+            text-align: center;
+            margin: 0 0 10px 0;
+            font-size: 9pt;
+            line-height: 1.6;
+        }
+        
+        .separator-line {
+            border: none;
+            border-top: 2px solid #000;
+            margin: 10px 0 15px 0;
+        }
+        
+        .page {
+            page-break-after: always;
+            position: relative;
+        }
+        
+        .page:last-child {
+            page-break-after: auto;
+        }
+        
+        .page-number {
+            text-align: right;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-size: 14pt;
+            font-weight: bold;
+            text-decoration: underline;
+            margin: 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        
+        table th, table td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+        
+        table th {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+        
+        .logo-container {
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        .logo-container img {
+            max-width: 400px;
+            height: auto;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            font-size: 11pt;
+            margin: 15px 0 10px 0;
+        }
+        
+        .signature-section {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        .signature-images {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .signature-images img {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .note-section {
+            margin-top: 20px;
+        }
+        
+        .note-section h3 {
+            text-decoration: underline;
+            font-size: 11pt;
+            margin-bottom: 10px;
+        }
+        
+        .note-section ol {
+            padding-left: 20px;
+        }
+        
+        .note-section li {
+            margin-bottom: 5px;
+        }
+        
+        .results-table {
+            font-size: 9pt;
+        }
+        
+        .results-table th {
+            background-color: #e0e0e0;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .results-table td {
+            text-align: center;
+        }
+        
+        @media print {
+            body {
+                padding: 0;
+            }
+            .page {
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- PAGE 1 -->
+    <div class="page">
+        <div class="company-header">
+            <p class="company-details">
+               <h1 class="company-text">Jost's Engineering Company Limited</h1>
+                Plot No. – 3, S. No. – 126, Paud Road, Pune, Maharashtra – 411038.<br>
+          <strong>  Contact :</strong>   <a href="mailto:pbhonde@josts.in" class="email-link">pbhonde@josts.in</a>,
+  <a href="mailto:sales@josts.in" class="email-link">sales@josts.in</a><br>
+
+
+   
+               <strong>PAN No.</strong> AAACJ1658A | <strong>GST No:</strong> 27AAACJ1658A1ZZ
+            </p>
+        
+        </div>
+            <hr class="separator-line">
+        
+        <div class="page-number">Page 1 of 2</div>
+        
+        <div class="header">
+            <h1>CERTIFICATE OF CALIBRATION</h1>
+        </div>
+        
+        <table>
+            <tr>
+                <th>Certificate No:</th>
+                <td><%= certificateNo || '' %></td>
+                <th>Case No:</th>
+                <td><%= caseNo || '' %></td>
+            </tr>
+            <tr>
+                <th>Date of Calibration:</th>
+                <td><%= dateOfCalibration || '' %></td>
+                <th>Calibration valid Up to:</th>
+                <td><%= calibrationValidUpto || '' %></td>
+            </tr>
+            <tr>
+                <th colspan="2">Date of Issue:</th>
+                <td colspan="2"><%= dateOfIssue || '' %></td>
+            </tr>
+            <tr>
+                <th colspan="4">Customer details:</th>
+            </tr>
+            <tr>
+                <td colspan="4"><%= customerDetails || '' %></td>
+            </tr>
+            <tr>
+                <th colspan="4">Calibration lab location:</th>
+            </tr>
+            <tr>
+                <td colspan="4"><%= calibrationLabLocation || '' %></td>
+            </tr>
+        </table>
+        
+        <% if (logoUrl) { %>
+        <div class="logo-container">
+            <img src="<%= logoUrl %>" alt="Company Logo">
+        </div>
+        <% } %>
+        
+        <div class="section-title">Identification of Device Under Calibration (DUC)</div>
+        
+        <table>
+            <tr>
+                <th>Instrument name:</th>
+                <td><%= instrumentName || 'Sound Level Meter' %></td>
+                <th>Type/Model:</th>
+                <td><%= typeModel || 'HBK 2245' %></td>
+            </tr>
+            <tr>
+                <th>Manufactured by/Make:</th>
+                <td><%= manufacturer || 'HBK' %></td>
+                <th>Serial No Part ID Mark:</th>
+                <td>SLM: <%= slmSerialNo || '' %><br>Mic: <%= micSerialNo || '' %></td>
+            </tr>
+            <tr>
+                <th>Range:</th>
+                <td><%= range || 'Refer result table' %></td>
+                <th>Accuracy:</th>
+                <td><%= accuracy || 'As Per IS 15575 (Part 1): 2016 Type 1' %></td>
+            </tr>
+            <tr>
+                <th>Instrument Condition:</th>
+                <td colspan="3"><%= instrumentCondition || 'Working condition' %></td>
+            </tr>
+            <tr>
+                <th>Customer requirement:</th>
+                <td colspan="3"><%= customerRequirement || '1/3rd Octave band calibration as per standard procedure.' %></td>
+            </tr>
+        </table>
+        
+        <table>
+            <tr>
+                <th>Multifunctional Acoustic Calibrator</th>
+                <th>Calibrator serial no</th>
+                <th>Traceability (Report No.)</th>
+                <th>Due Date</th>
+                <th>Calibration procedure</th>
+            </tr>
+            <tr>
+                <td><%= calibratorType || 'HBK make Type 4226' %></td>
+                <td><%= calibratorSerialNo || '3412415' %></td>
+                <td><%= traceabilityReportNo || 'CDK2506067' %></td>
+                <td><%= calibratorDueDate || '12-09-2026' %></td>
+                <td><%= calibrationProcedure || 'As specified in IEC 60942 Annex B Microphone method' %></td>
+            </tr>
+        </table>
+        
+        <div class="section-title">Environmental test conditions</div>
+        
+        <table>
+            <tr>
+                <th>Air temperature (°C)</th>
+                <th>Air pressure (kPa)</th>
+                <th>Relative humidity (%RH)</th>
+            </tr>
+            <tr>
+                <td><%= airTemperature || '25.1 (± 2)' %></td>
+                <td><%= airPressure || '102.74' %></td>
+                <td><%= relativeHumidity || '49.0 (±20)' %></td>
+            </tr>
+        </table>
+        
+        <div class="signature-section">
+            <% if (signature1Url || signature2Url) { %>
+            <div class="signature-images">
+                <% if (signature1Url) { %><img src="<%= signature1Url %>" alt="Signature 1"><% } %>
+                <% if (signature2Url) { %><img src="<%= signature2Url %>" alt="Signature 2"><% } %>
+            </div>
+            <% } %>
+            <div><strong>Authorised Signatory</strong></div>
+            <div><strong>[<%= signatory1Name || 'Mr. S.V. Bhosale, Sr Engineer' %>] [<%= signatory2Name || 'Mr. P. Bhonde, Sr Manager' %>]</strong></div>
+        </div>
+        
+        <div class="note-section">
+            <h3>NOTE</h3>
+            <ol>
+                <li>This certificate refers only to item(s) submitted for calibration.</li>
+                <li>The calibration results reported in this certificate are valid at the time and under the stated conditions of measurements.</li>
+                <li>This certificate shall not be reproduced, except in full, unless written permission for the publication of an approved abstract has been obtained from the CEO, Josts Engineering company Limited.</li>
+                <li>Josts is not responsible or stand guarantee of calibration status throughout the life of the equipment, however, the user is responsible to maintain the calibration accuracy within specified limits. The reported uncertainty is stated as standard uncertainty multiplied by coverage factor k=2 at 95.45% confidence level.</li>
+            </ol>
+        </div>
+    </div>
+    
+    <!-- PAGE 2 -->
+    <div class="page">
+        <div class="company-header">
+            <p class="company-details">
+                <strong>Jost's Engineering Company Limited</strong><br>
+                Plot No. – 3, S. No. – 126, Paud Road, Pune, Maharashtra – 411038.<br>
+                Contact: pbhonde@josts.in, sales@josts.in<br>
+                www.josts.com<br>
+                PAN No. AAACJ1658A | GST No: 27AAACJ1658A1ZZ
+            </p>
+            <hr class="separator-line">
+        </div>
+        
+        <div class="page-number">Page 2 of 2</div>
+        
+        <table>
+            <tr>
+                <th>Certificate No:</th>
+                <td><%= certificateNo || '' %></td>
+                <th>Case No:</th>
+                <td><%= caseNo || '' %></td>
+            </tr>
+            <tr>
+                <th>Date of Calibration:</th>
+                <td><%= dateOfCalibration || '' %></td>
+                <th>Calibration valid Up to:</th>
+                <td><%= calibrationValidUpto || '' %></td>
+            </tr>
+            <tr>
+                <th colspan="2">Date of Issue:</th>
+                <td colspan="2"><%= dateOfIssue || '' %></td>
+            </tr>
+        </table>
+        
+        <div class="section-title">Calibration results</div>
+        
+        <% if (logoUrl) { %>
+        <div class="logo-container">
+            <img src="<%= logoUrl %>" alt="Company Logo">
+        </div>
+        <% } %>
+        
+        <div class="section-title">@ Sensitivity <%= sensitivity || '45.6 mV/Pa' %></div>
+        
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Sr No</th>
+                    <th>Master Reading</th>
+                    <th>DUC Reading</th>
+                    <th>Deviation</th>
+                    <th>± Acceptable Deviation</th>
+                    <th>Uncertainty at 95.45% C.L.</th>
+                    <th>Coverage Factor K</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th>dB @ Hz</th>
+                    <th>dB</th>
+                    <th>dB</th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (calibrationResults1 && calibrationResults1.length > 0) { %>
+                    <% calibrationResults1.forEach((result, index) => { %>
+                    <tr>
+                        <td><%= index + 1 %></td>
+                        <td><%= result.masterReading || '' %></td>
+                        <td><%= result.ducReading || '' %></td>
+                        <td><%= result.deviation || '' %></td>
+                        <td><%= result.acceptableDeviation || '' %></td>
+                        <td><%= result.uncertainty || '' %></td>
+                        <td><%= result.coverageFactor || '2.0' %></td>
+                    </tr>
+                    <% }); %>
+                <% } else { %>
+                    <tr><td>1</td><td>94 @ 31.5</td><td></td><td></td><td>1.5</td><td>± 0.51</td><td>2.0</td></tr>
+                    <tr><td>2</td><td>94 @ 63</td><td></td><td></td><td>1.0</td><td>±0.50</td><td>2.0</td></tr>
+                    <tr><td>3</td><td>94 @ 125</td><td></td><td></td><td>1.0</td><td>±0.50</td><td>2.0</td></tr>
+                    <tr><td>4</td><td>94 @ 250</td><td></td><td></td><td>1.0</td><td>±0.42</td><td>2.0</td></tr>
+                    <tr><td>5</td><td>94 @ 500</td><td></td><td></td><td>1.0</td><td>±0.37</td><td>2.0</td></tr>
+                    <tr><td>6</td><td>94 @ 1000</td><td></td><td></td><td>0.7</td><td>±0.42</td><td>2.0</td></tr>
+                    <tr><td>7</td><td>94 @ 2000</td><td></td><td></td><td>1.0</td><td>±0.58</td><td>2.0</td></tr>
+                    <tr><td>8</td><td>94 @ 4000</td><td></td><td></td><td>1.0</td><td>±0.63</td><td>2.0</td></tr>
+                    <tr><td>9</td><td>94 @ 8000</td><td></td><td></td><td>+1.5: -2.5</td><td>±0.78</td><td>2.0</td></tr>
+                    <tr><td>10</td><td>94 @ 12500</td><td></td><td></td><td>+2.0: -5.0</td><td>±1.31</td><td>2.0</td></tr>
+                    <tr><td>11</td><td>94 @ 16000</td><td></td><td></td><td>+2.5: -16.0</td><td>±1.84</td><td>2.0</td></tr>
+                <% } %>
+            </tbody>
+        </table>
+        
+        <table class="results-table">
+            <thead>
+                <tr>
+                    <th>Sr No</th>
+                    <th>Master Reading</th>
+                    <th>DUC Reading</th>
+                    <th>Deviation</th>
+                    <th>± Acceptable Deviation</th>
+                    <th>Uncertainty at 95.45% C.L.</th>
+                    <th>Coverage Factor K</th>
+                </tr>
+                <tr>
+                    <th></th>
+                    <th>dB @ Hz</th>
+                    <th>dB</th>
+                    <th>dB</th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (calibrationResults2 && calibrationResults2.length > 0) { %>
+                    <% calibrationResults2.forEach((result, index) => { %>
+                    <tr>
+                        <td><%= index + 1 %></td>
+                        <td><%= result.masterReading || '' %></td>
+                        <td><%= result.ducReading || '' %></td>
+                        <td><%= result.deviation || '' %></td>
+                        <td><%= result.acceptableDeviation || '' %></td>
+                        <td><%= result.uncertainty || '' %></td>
+                        <td><%= result.coverageFactor || '2.0' %></td>
+                    </tr>
+                    <% }); %>
+                <% } else { %>
+                    <tr><td>1</td><td>94 @ 1000</td><td></td><td></td><td>0.7</td><td>±0.42</td><td>2.0</td></tr>
+                    <tr><td>2</td><td>104 @ 1000</td><td></td><td></td><td>0.7</td><td>±0.42</td><td>2.0</td></tr>
+                    <tr><td>3</td><td>114 @ 1000</td><td></td><td></td><td>0.7</td><td>±0.42</td><td>2.0</td></tr>
+                <% } %>
+            </tbody>
+        </table>
+        
+        <div class="note-section">
+            <h3>Note</h3>
+            <ol>
+                <li><strong>Measurements are traceable to SI units/ National and International standards.</strong></li>
+                <li><strong>DUC: Device under calibration.</strong></li>
+            </ol>
+        </div>
+        
+        <div class="signature-section">
+            <% if (signature1Url || signature2Url) { %>
+            <div class="signature-images">
+                <% if (signature1Url) { %><img src="<%= signature1Url %>" alt="Signature 1"><% } %>
+                <% if (signature2Url) { %><img src="<%= signature2Url %>" alt="Signature 2"><% } %>
+            </div>
+            <% } %>
+            <div><strong>Calibrated By Authorised Signatory</strong></div>
+            <div><strong>[<%= signatory1Name || 'Mr. S.V. Bhosale, Sr Engineer' %>] [<%= signatory2Name || 'Mr. P. Bhonde, Sr Manager' %>]</strong></div>
+        </div>
+    </div>
+</body>
+</html>
