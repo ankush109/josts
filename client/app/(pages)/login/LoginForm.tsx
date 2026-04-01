@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { LoginInputSchema } from "@/app/types/schema";
 import { useLoginMutation } from "@/app/hooks/mutation/useLoginMutation";
+import { useAuth } from "@/app/provider/AuthProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useGetUserDetailsQuery } from "@/app/hooks/mutation/useGetUserDetails";
@@ -41,6 +42,7 @@ const formSchema = z.object({
 
 export function LoginForm() {
   const router = useRouter();
+  const { setUser } = useAuth();
   const { mutate: LoginUser } = useLoginMutation();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
@@ -68,7 +70,7 @@ export function LoginForm() {
     LoginUser(data, {
       onSuccess: (response) => {
         localStorage.setItem("token", response.token);
-        localStorage.setItem("user", JSON.stringify(response.user));
+        setUser(response.user);
         toast.success("Login successful!");
         router.push("/home");
       },
