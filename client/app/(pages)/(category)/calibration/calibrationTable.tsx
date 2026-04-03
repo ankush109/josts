@@ -57,11 +57,14 @@ import {
   Plus,
   TrendingUp,
   ClipboardList,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { AUTH_API } from "@/app/hooks/client";
+import { ENDPOINTS } from "@/app/hooks/endpoints";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +87,7 @@ interface ReportListItem {
     calibratedAt?: string;
     verifiedAt?: string;
   };
+  filePath: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -175,6 +179,7 @@ export default function CalibrationReportsTable() {
   const [sortOrder, setSortOrder]           = useState<"asc" | "desc">("desc");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+  const [viewingPdf, setViewingPdf] = useState<string | null>(null);
 
   const allItems: ReportListItem[] = data?.items ?? [];
 
@@ -230,6 +235,19 @@ export default function CalibrationReportsTable() {
   function confirmDelete(id: string) {
     setReportToDelete(id);
     setDeleteDialogOpen(true);
+  }
+
+  async function handleViewPdf(e: React.MouseEvent, reportId: string) {
+    e.stopPropagation();
+    setViewingPdf(reportId);
+    try {
+      const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(reportId, "calibration"));
+      window.open(res.data.fileUrl, "_blank");
+    } catch {
+      toast.error("Failed to load PDF");
+    } finally {
+      setViewingPdf(null);
+    }
   }
 
   function handleDelete() {
@@ -570,6 +588,13 @@ export default function CalibrationReportsTable() {
                               Actions
                             </DropdownMenuLabel>
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={(e) => report.filePath ? handleViewPdf(e, report._id) : e.stopPropagation()}
+                              disabled={!report.filePath || viewingPdf === report._id}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              {viewingPdf === report._id ? "Loading…" : "View PDF"}
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();

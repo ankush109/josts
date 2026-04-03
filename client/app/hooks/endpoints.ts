@@ -11,6 +11,7 @@ export const ENDPOINTS = {
   CHANGE_REPORT_STATUS:       (reportId: string | number, status: string) => `/report/${reportId}/${status}`,
   DELETE_DRAFT:               (reportId: string | number)    => `/report/${reportId}`,
 
+  GET_REPORT_URL:             (id: string, type?: string)   => type ? `/report/${id}?type=${type}` : `/report/${id}`,
   GET_CALIBRATION_REPORTS:    ()                             => `/calibration-report`,
   GET_CALIBRATION_REPORTS_BY_ID: (reportId: string)         => `/calibration-report/${reportId}`,
   CREATE_CALIBRATION_REPORT:  ()                             => `/calibration-report`,

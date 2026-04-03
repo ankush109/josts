@@ -925,7 +925,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const activeParam = activeInst.params.find((p) => p.id === activeParamId) ?? activeInst.params[0];
 
   const { user } = useAuth();
-  const userId = user?.id ?? null;
+  const userId = user?.id ?? (user as any)?._id ?? null;
 
   function validate(): FormError[] {
     const errors: FormError[] = [];

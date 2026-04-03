@@ -4,12 +4,11 @@ export const getProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    const user = await User.findById(userId).select("-password");
-    console.log("User profile data:", user);
+    const user = await User.findById(userId).select("-password").lean();
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json({ user });
+    res.json({ user: { ...user, id: user._id } });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

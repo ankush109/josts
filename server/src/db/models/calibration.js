@@ -243,6 +243,10 @@ const calibrationReportSchema = new mongoose.Schema(
       type: signaturesSchema,
       default: () => ({}),
     },
+    filePath: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true }
 );

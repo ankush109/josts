@@ -152,9 +152,9 @@ export default function DraftTable() {
       <Card className="w-full max-w-md">
         <CardContent className="pt-6">
           <div className="flex flex-col items-center text-center space-y-2">
-            <AlertCircle className="h-12 w-12 text-red-500" />
+            <AlertCircle className="h-12 w-12 text-destructive" />
             <h3 className="font-semibold text-lg">Error Loading Drafts</h3>
-            <p className="text-sm text-gray-500">Please try refreshing the page</p>
+            <p className="text-sm text-muted-foreground">Please try refreshing the page</p>
           </div>
         </CardContent>
       </Card>
@@ -170,7 +170,7 @@ export default function DraftTable() {
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
             <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 placeholder="Search by draft name..."
                 value={searchQuery}
@@ -211,9 +211,9 @@ export default function DraftTable() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
+          <div className="rounded-lg border border-border overflow-hidden">
             <Table>
-              <TableHeader className="bg-gradient-to-r from-blue-50 to-blue-100">
+              <TableHeader className="bg-muted">
                 <TableRow>
                   <TableHead className="font-semibold">Draft Name</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
@@ -228,31 +228,31 @@ export default function DraftTable() {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12">
                       <div className="flex flex-col items-center space-y-2">
-                        <FilePenLine className="h-12 w-12 text-gray-300" />
-                        <p className="text-gray-500 font-medium">No drafts found</p>
-                        <p className="text-sm text-gray-400">Try adjusting your search criteria</p>
+                        <FilePenLine className="h-12 w-12 text-muted-foreground/40" />
+                        <p className="text-muted-foreground font-medium">No drafts found</p>
+                        <p className="text-sm text-muted-foreground/70">Try adjusting your search criteria</p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   currentReports.map((report: any) => (
-                    <TableRow key={report._id} className="hover:bg-gray-50 transition-colors">
+                    <TableRow key={report._id} className="hover:bg-muted/40 transition-colors">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <FilePenLine className="h-4 w-4 text-orange-600" />
+                          <FilePenLine className="h-4 w-4 text-primary" />
                           {report.payload?.name || "Untitled Draft"}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-700">
+                        <Badge variant="secondary" className="bg-muted text-muted-foreground">
                           <FileText className="h-3 w-3 mr-1" />
                           {report.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-700">
+                      <TableCell className="text-foreground">
                         {report.reportedBy || "Unknown User"}
                       </TableCell>
-                      <TableCell className="text-gray-600 text-sm">
+                      <TableCell className="text-muted-foreground text-sm">
                         {new Date(report.createdAt).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'short',
@@ -282,7 +282,7 @@ export default function DraftTable() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem 
                               onClick={() => confirmDelete(report._id)}
-                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                              className="text-destructive focus:text-destructive focus:bg-destructive/10"
                             >
                               <Trash className="mr-2 h-4 w-4" />
                               Delete Draft
@@ -298,7 +298,7 @@ export default function DraftTable() {
               {filteredAndSortedReports.length > 0 && (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={5} className="text-sm text-gray-600">
+                    <TableCell colSpan={5} className="text-sm text-muted-foreground">
                       Showing {startIndex + 1}-{Math.min(endIndex, filteredAndSortedReports.length)} of {filteredAndSortedReports.length} drafts
                     </TableCell>
                   </TableRow>
@@ -309,7 +309,7 @@ export default function DraftTable() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-4">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted-foreground">
                 Page {currentPage} of {totalPages}
               </div>
 
@@ -380,7 +380,7 @@ export default function DraftTable() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

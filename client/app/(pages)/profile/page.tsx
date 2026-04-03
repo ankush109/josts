@@ -8,13 +8,13 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { User, MapPin, Mail, Bell, Save, Loader2 } from "lucide-react";
 
 export default function ProfilePage() {
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -36,69 +36,64 @@ export default function ProfilePage() {
   }, []);
 
   const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
     setIsSaving(true);
-    
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      
       const updatedUser = {
         ...JSON.parse(localStorage.getItem("user") || "{}"),
         ...formData,
       };
-      
       localStorage.setItem("user", JSON.stringify(updatedUser));
-      
       toast.success("Profile updated successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to update profile");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const initials = formData.name
-    ?.split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase() || "U";
+  const initials =
+    formData.name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase() || "U";
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-20 pb-12">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+    <div className="min-h-screen bg-background pt-16 pb-12">
+      <Navbar />
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
-          <p className="text-gray-600 mt-2">Manage your account settings and preferences</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage your account settings and preferences
+          </p>
         </div>
 
-        <div className="grid gap-6">
-          
+        <div className="grid gap-5">
+          {/* Personal info */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-4">
               <div className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarFallback className="bg-blue-600 text-white text-2xl">
+                <Avatar className="h-16 w-16">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xl font-medium">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <CardTitle>Personal Information</CardTitle>
+                  <CardTitle className="text-base">Personal Information</CardTitle>
                   <CardDescription>Update your personal details</CardDescription>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              
-              <div className="space-y-2">
-                <Label htmlFor="name" className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-gray-500" />
+            <CardContent className="space-y-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className="flex items-center gap-2 text-sm">
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
                   Full Name
                 </Label>
                 <Input
@@ -106,55 +101,54 @@ export default function ProfilePage() {
                   placeholder="Enter your full name"
                   value={formData.name}
                   onChange={(e) => handleInputChange("name", e.target.value)}
-                  className="max-w-md"
+                  className="max-w-sm"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-gray-500" />
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="flex items-center gap-2 text-sm">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                   Email Address
                 </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
                   value={formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                  className="max-w-md"
+                  className="max-w-sm"
                   disabled
                 />
-                <p className="text-xs text-gray-500">Email cannot be changed</p>
+                <p className="text-xs text-muted-foreground">Email cannot be changed</p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="location" className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gray-500" />
+              <div className="space-y-1.5">
+                <Label htmlFor="location" className="flex items-center gap-2 text-sm">
+                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                   Location
                 </Label>
                 <Input
                   id="location"
-                  placeholder="e.g., San Francisco, CA"
+                  placeholder="e.g., Mumbai, India"
                   value={formData.location}
                   onChange={(e) => handleInputChange("location", e.target.value)}
-                  className="max-w-md"
+                  className="max-w-sm"
                 />
               </div>
             </CardContent>
           </Card>
 
+          {/* Notifications */}
           <Card>
-            <CardHeader>
-              <CardTitle>Notifications</CardTitle>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Notifications</CardTitle>
               <CardDescription>Manage how you receive notifications</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
                 <div className="flex items-start gap-3">
-                  <Bell className="h-5 w-5 text-gray-500 mt-0.5" />
+                  <Bell className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div>
-                    <p className="font-medium text-gray-900">Email Alerts</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm font-medium">Email Alerts</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Receive email notifications about report updates and status changes
                     </p>
                   </div>
@@ -167,25 +161,26 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
+          {/* Account info */}
           <Card>
-            <CardHeader>
-              <CardTitle>Account Information</CardTitle>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Account Information</CardTitle>
               <CardDescription>View your account details</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between py-2">
-                <span className="text-gray-600">Account Status</span>
-                <span className="font-medium text-green-600">Active</span>
+            <CardContent className="space-y-1">
+              <div className="flex justify-between py-2.5">
+                <span className="text-sm text-muted-foreground">Account Status</span>
+                <span className="text-sm font-medium text-green-600">Active</span>
               </div>
               <Separator />
-              <div className="flex justify-between py-2">
-                <span className="text-gray-600">Member Since</span>
-                <span className="font-medium text-gray-900">January 2025</span>
+              <div className="flex justify-between py-2.5">
+                <span className="text-sm text-muted-foreground">Member Since</span>
+                <span className="text-sm font-medium">January 2025</span>
               </div>
               <Separator />
-              <div className="flex justify-between py-2">
-                <span className="text-gray-600">Total Reports</span>
-                <span className="font-medium text-gray-900">0</span>
+              <div className="flex justify-between py-2.5">
+                <span className="text-sm text-muted-foreground">Total Reports</span>
+                <span className="text-sm font-medium">0</span>
               </div>
             </CardContent>
           </Card>

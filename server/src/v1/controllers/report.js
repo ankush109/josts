@@ -1,4 +1,5 @@
 import Report from "../../db/models/report.js";
+import CalibrationReport from "../../db/models/calibration.js";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { pushPdfJobToRedis } from "../../utils/func-utils.js";
@@ -116,27 +117,24 @@ async function getSignedPDFUrl(key) {
 export const getReportUrl = async (req, res) => {
   try {
     const reportId = req.params.id;
-    console.log("Fetching report with ID:", reportId);
-    const report = await Report.findById({
-        _id: reportId,
-    });
-console.log("Report found:", report);
-    if (!report) {
-      return res.status(404).json({ message: "Report not found" });
+    const isCalibration = req.query.type === "calibration";
+
+    let filePath;
+
+    if (isCalibration) {
+      const report = await CalibrationReport.findById(reportId);
+      if (!report) return res.status(404).json({ message: "Report not found" });
+      if (!report.filePath) return res.status(400).json({ message: "Report not ready yet" });
+      filePath = report.filePath;
+    } else {
+      const report = await Report.findById(reportId);
+      if (!report) return res.status(404).json({ message: "Report not found" });
+      if (report.status !== "uploaded" || !report.filePath) return res.status(400).json({ message: "Report not ready yet" });
+      filePath = report.filePath;
     }
 
-    // if (report.reportedBy.toString() !== req.user.userId) {
-    //   return res.status(403).json({ message: "Forbidden" });
-    // }
-
-    if (report.status !== "uploaded" || !report.filePath) {
-      return res.status(400).json({ message: "Report not ready yet" });
-    }
-
-    // 🔹 Generate signed URL from S3 key
-    const signedUrl = await getSignedPDFUrl(report.filePath);
-
-    res.json({ fileUrl: signedUrl }); // send URL to frontend
+    const signedUrl = await getSignedPDFUrl(filePath);
+    res.json({ fileUrl: signedUrl });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

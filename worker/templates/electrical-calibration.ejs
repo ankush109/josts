@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Calibration Certificate</title>
+  <style>
+    @page { size: A4; margin: 15mm 12mm; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      color: #000;
+    }
+
+    /* ── Page break ── */
+    .page { page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .header-logo img {
+      height: 60px;
+      width: auto;
+    }
+    .header-company {
+      flex: 1;
+      text-align: center;
+      padding: 0 12px;
+      line-height: 1.55;
+    }
+    .header-company .company-name {
+      font-size: 14pt;
+      font-weight: 700;
+    }
+    .header-company .company-meta {
+      font-size: 8.5pt;
+      color: #111;
+    }
+    .header-qr img {
+      height: 60px;
+      width: auto;
+    }
+
+    hr.divider {
+      border: none;
+      border-top: 2px solid #000;
+      margin: 6px 0 10px;
+    }
+
+    /* ── Certificate title ── */
+    .cert-title {
+      text-align: center;
+      font-size: 13pt;
+      font-weight: 700;
+      text-decoration: underline;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    /* ── All tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 0;
+    }
+
+    table td, table th {
+      border: 1px solid #000;
+      padding: 5px 7px;
+      vertical-align: middle;
+      font-size: 9.5pt;
+    }
+
+    .bold { font-weight: 700; }
+    .center { text-align: center; }
+    .italic { font-style: italic; }
+
+    /* ── Results table ── */
+    .results-table th {
+      background: #f0f0f0;
+      text-align: center;
+      font-weight: 700;
+      font-size: 9pt;
+    }
+    .results-table td {
+      text-align: center;
+      font-size: 9pt;
+    }
+    .results-table td.param-cell {
+      font-weight: 600;
+    }
+
+    /* ── Section label above table ── */
+    .section-label {
+      font-weight: 700;
+      font-size: 9.5pt;
+      margin: 8px 0 4px;
+    }
+
+    /* ── Calibration type heading ── */
+    .cal-type-heading {
+      text-align: center;
+      font-weight: 700;
+      font-size: 10pt;
+      border: 1px solid #000;
+      padding: 5px;
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════ PAGE 1 -->
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
+        <img src="<%= logoUrl %>" alt="Josts Logo" />
+      <% } %>
+    </div>
+    <div class="header-company">
+      <div class="company-name">Jost's Engineering Company Limited</div>
+      <div class="company-meta">
+        Unit #708 &amp; 709, 7th Floor, Gopal Heights, New Delhi - 110034<br/>
+        CIN : L28100MH1907PLC000252 &nbsp;&nbsp; Tel.: +91 33 2242 9510 &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
+        Email : salescal@josts.in &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Website: www.josts.com<br/>
+        ( Registered Office : Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001 )
+      </div>
+    </div>
+    <div class="header-qr">
+      <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
+        <img src="<%= qrUrl %>" alt="QR" />
+      <% } %>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- Certificate title -->
+  <div class="cert-title">CALIBRATION CERTIFICATE</div>
+
+  <!-- ── Certificate No / Issue Date / Page ── -->
+  <table>
+    <tr>
+      <td colspan="3" class="center bold" style="width:55%">Certificate No.</td>
+      <td colspan="2" class="center bold" style="width:30%">Certificate Issue Date</td>
+      <td class="center bold" style="width:15%">Page Number</td>
+    </tr>
+    <tr>
+      <td colspan="3" class="center"><%= typeof certificateNo !== 'undefined' ? certificateNo : '' %></td>
+      <td colspan="2" class="center"><%= typeof certificateIssueDate !== 'undefined' ? certificateIssueDate : '' %></td>
+      <td class="center">1 of <%= typeof totalPages !== 'undefined' ? totalPages : '2' %></td>
+    </tr>
+  </table>
+
+  <!-- ── Dates / Customer Ref ── -->
+  <table>
+    <tr>
+      <td class="bold center" style="width:15%">DUC<br/>Received<br/>Date</td>
+      <td class="bold center" style="width:16%">Date of<br/>Calibration</td>
+      <td class="bold center" style="width:16%">Calibration<br/>Due Date</td>
+      <td class="bold center" colspan="3">Customer Reference No.</td>
+    </tr>
+    <tr>
+      <td class="center"><%= typeof ducReceivedDate !== 'undefined' ? ducReceivedDate : '' %></td>
+      <td class="center"><%= typeof dateOfCalibration !== 'undefined' ? dateOfCalibration : '' %></td>
+      <td class="center"><%= typeof calibrationDueDate !== 'undefined' ? calibrationDueDate : '' %></td>
+      <td class="center" colspan="3"><%= typeof customerReferenceNo !== 'undefined' ? customerReferenceNo : '' %></td>
+    </tr>
+  </table>
+
+  <!-- ── Customer Name & Address ── -->
+  <table>
+    <tr>
+      <td class="bold" style="width:30%">Name &amp; Address of the Customer :</td>
+      <td style="white-space:pre-line"><%= typeof customerAddress !== 'undefined' ? customerAddress : '' %></td>
+    </tr>
+  </table>
+
+  <!-- ── DUC Details header ── -->
+  <table>
+    <tr>
+      <td colspan="6" class="bold center">Details of the DUC to be Calibrated</td>
+    </tr>
+    <tr>
+      <td class="bold center" colspan="2">Name of DUC</td>
+      <td class="bold center">Identification /<br/>Serial Number</td>
+      <td class="bold center">Make</td>
+      <td class="bold center">Model</td>
+      <td class="bold center">Range</td>
+    </tr>
+    <tr>
+      <td colspan="2" class="center"><%= typeof ducName !== 'undefined' ? ducName : '' %></td>
+      <td class="center"><%= typeof ducSerialNo !== 'undefined' ? ducSerialNo : '' %></td>
+      <td class="center"><%= typeof ducMake !== 'undefined' ? ducMake : '' %></td>
+      <td class="center"><%= typeof ducModel !== 'undefined' ? ducModel : '' %></td>
+      <td class="center"><%= typeof ducRange !== 'undefined' ? ducRange : 'As Per Instrument Spec.' %></td>
+    </tr>
+    <tr>
+      <td class="bold" colspan="2">Accuracy :</td>
+      <td colspan="4"><%= typeof accuracy !== 'undefined' ? accuracy : "As per Manufacturer's Specification" %></td>
+    </tr>
+    <tr>
+      <td class="bold" colspan="2">Condition of Item :</td>
+      <td colspan="4"><%= typeof conditionOfItem !== 'undefined' ? conditionOfItem : 'Satisfactory' %></td>
+    </tr>
+    <tr>
+      <td class="bold" colspan="2">Location of Calibration:</td>
+      <td colspan="4"><%= typeof locationOfCalibration !== 'undefined' ? locationOfCalibration : 'At Site' %></td>
+    </tr>
+  </table>
+
+  <!-- ── Environmental Conditions ── -->
+  <table>
+    <tr>
+      <td colspan="6" class="bold center">Environmental Condition</td>
+    </tr>
+    <tr>
+      <td rowspan="2" class="bold center" style="width:18%">Recommended</td>
+      <td style="width:14%">Temp</td>
+      <td style="width:14%"><%= typeof recommendedTemp !== 'undefined' ? recommendedTemp : '25±4 °C' %></td>
+      <td rowspan="2" class="bold center" style="width:12%">During<br/>Calibration</td>
+      <td style="width:14%">Temp</td>
+      <td><%= typeof duringCalibrationTemp !== 'undefined' ? duringCalibrationTemp : '' %></td>
+    </tr>
+    <tr>
+      <td>Humidity</td>
+      <td><%= typeof recommendedHumidity !== 'undefined' ? recommendedHumidity : '55±15 %' %></td>
+      <td>Humidity</td>
+      <td><%= typeof duringCalibrationHumidity !== 'undefined' ? duringCalibrationHumidity : '' %></td>
+    </tr>
+    <tr>
+      <td class="bold" colspan="2">Calibration Procedure :</td>
+      <td colspan="2"><%= typeof calibrationProcedure !== 'undefined' ? calibrationProcedure : '' %></td>
+      <td class="bold">Method of Calibration :</td>
+      <td><%= typeof methodOfCalibration !== 'undefined' ? methodOfCalibration : 'Direct Method' %></td>
+    </tr>
+  </table>
+
+  <!-- ── Description of Standards ── -->
+  <table>
+    <tr>
+      <td colspan="4" class="italic">
+        <strong>Description of Standard (s) :</strong>
+        <%= typeof descriptionOfStandards !== 'undefined' ? descriptionOfStandards : 'Traceable to National / International Standards' %>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── Reference Standard Details ── -->
+  <table>
+    <tr>
+      <td class="bold center" style="width:28%">Reference Standard Details</td>
+      <td class="bold center" style="width:18%">Make/Model</td>
+      <td class="bold center" style="width:16%">Valid upto</td>
+      <td class="bold center">Traceability Certificate No.</td>
+    </tr>
+    <% if (typeof referenceStandards !== 'undefined' && referenceStandards && referenceStandards.length) { %>
+      <% referenceStandards.forEach(function(std) { %>
+        <tr>
+          <td>Name : <%= std.name || '' %></td>
+          <td class="center" rowspan="3"><%= std.makeModel || '' %></td>
+          <td class="center" rowspan="3"><%= std.validUpto || '' %></td>
+          <td class="center" rowspan="3"><%= std.traceabilityCertNo || '' %></td>
+        </tr>
+        <tr><td>ID No : <%= std.idNo || '' %></td></tr>
+        <tr><td>Sr No : <%= std.srNo || '' %></td></tr>
+      <% }); %>
+    <% } else { %>
+      <tr>
+        <td>Name :</td>
+        <td class="center"></td>
+        <td class="center"></td>
+        <td class="center"></td>
+      </tr>
+      <tr><td>ID No :</td></tr>
+      <tr><td>Sr No :</td></tr>
+    <% } %>
+  </table>
+
+</div>
+<!-- ═══════════════════ END PAGE 1 ════════════════════════════════════════════ -->
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ PAGE 2 -->
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-logo">
+      <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
+        <img src="<%= logoUrl %>" alt="Josts Logo" />
+      <% } %>
+    </div>
+    <div class="header-company">
+      <div class="company-name">Jost's Engineering Company Limited</div>
+      <div class="company-meta">
+        Unit #708 &amp; 709, 7th Floor, Gopal Heights, New Delhi - 110034<br/>
+        CIN : L28100MH1907PLC000252 &nbsp;&nbsp; Tel.: +91 33 2242 9510 &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
+        Email : salescal@josts.in &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Website: www.josts.com<br/>
+        ( Registered Office : Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001 )
+      </div>
+    </div>
+    <div class="header-qr">
+      <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
+        <img src="<%= qrUrl %>" alt="QR" />
+      <% } %>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <!-- Certificate No / Issue Date / Page (repeated on page 2) -->
+  <table>
+    <tr>
+      <td colspan="3" class="center bold" style="width:55%">Certificate No.</td>
+      <td colspan="2" class="center bold" style="width:30%">Certificate Issue Date</td>
+      <td class="center bold" style="width:15%">Page Number</td>
+    </tr>
+    <tr>
+      <td colspan="3" class="center"><%= typeof certificateNo !== 'undefined' ? certificateNo : '' %></td>
+      <td colspan="2" class="center"><%= typeof certificateIssueDate !== 'undefined' ? certificateIssueDate : '' %></td>
+      <td class="center">2 of <%= typeof totalPages !== 'undefined' ? totalPages : '2' %></td>
+    </tr>
+  </table>
+
+  <!-- ── Calibration Results section ── -->
+  <div class="section-label">Calibration Results :</div>
+
+  <!-- Calibration type banner -->
+  <div class="cal-type-heading">
+    <%= typeof calibrationType !== 'undefined' ? calibrationType : 'Electro - Technical Calibration' %>
+  </div>
+
+  <!-- Results table -->
+  <table class="results-table">
+    <thead>
+      <tr>
+        <th rowspan="2" style="width:16%">Parameter</th>
+        <th rowspan="2" style="width:14%">Range</th>
+        <th colspan="2">STANDARD</th>
+        <th colspan="2">DUC</th>
+        <th colspan="2">ERROR</th>
+        <th rowspan="2" style="width:14%">Expanded<br/>Uncertainty (± %)</th>
+      </tr>
+      <tr>
+        <th style="width:8%">Value</th>
+        <th style="width:6%">Unit</th>
+        <th style="width:8%">Value</th>
+        <th style="width:6%">Unit</th>
+        <th style="width:8%">Value</th>
+        <th style="width:6%">Unit</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (typeof calibrationResults !== 'undefined' && calibrationResults && calibrationResults.length) { %>
+        <% calibrationResults.forEach(function(param) { %>
+          <%
+            // Count total rows for this parameter (rowspan)
+            var totalRows = 0;
+            (param.ranges || []).forEach(function(r) { totalRows += (r.rows || []).length; });
+            var firstRow = true;
+          %>
+          <% (param.ranges || []).forEach(function(range) { %>
+            <% (range.rows || []).forEach(function(row, rowIdx) { %>
+              <tr>
+                <% if (firstRow) { firstRow = false; %>
+                  <td class="param-cell center" rowspan="<%= totalRows %>"><%= param.parameter || '' %></td>
+                <% } %>
+                <% if (rowIdx === 0) { %>
+                  <td class="center" rowspan="<%= (range.rows || []).length %>"><%= range.label || '' %></td>
+                <% } %>
+                <td class="center"><%= row.standardValue || '' %></td>
+                <td class="center"><%= row.standardUnit  || '' %></td>
+                <td class="center"><%= row.ducValue       || '' %></td>
+                <td class="center"><%= row.ducUnit        || '' %></td>
+                <td class="center"><%= row.errorValue     || '' %></td>
+                <td class="center"><%= row.errorUnit      || '' %></td>
+                <td class="center"><%= row.expandedUncertainty || '' %></td>
+              </tr>
+            <% }); %>
+          <% }); %>
+        <% }); %>
+      <% } else { %>
+        <tr>
+          <td colspan="9" class="center" style="color:#888;font-style:italic">No calibration results provided</td>
+        </tr>
+      <% } %>
+    </tbody>
+  </table>
+
+</div>
+<!-- ═══════════════════ END PAGE 2 ════════════════════════════════════════════ -->
+
+</body>
+</html>

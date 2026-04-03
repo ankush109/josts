@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import CalibrationReport from "../../db/models/calibration.js";
 import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
 import { RANGE_CONSTANTS } from "../constants/voltage-ranges.js";
+import { pushPdfJobToRedis } from "../../utils/func-utils.js";
 
 // ─── Inject computed uncertainty budget into every measurement ─────────────────
 
@@ -58,6 +59,10 @@ export const createCalibrationReport = async (req, res) => {
       signatures:  signatures  ?? {},
     });
 
+    if (report.status !== "draft") {
+      await pushPdfJobToRedis({ reportId: report._id, action: "create", type: "calibration" });
+    }
+
     res.status(201).json(report);
   } catch (err) {
     if (err.code === 11000) {
@@ -92,7 +97,7 @@ export const getAllCalibrationReports = async (req, res) => {
 
     const [reports, total] = await Promise.all([
       CalibrationReport.find(filter)
-        .select("csrNo formatNo status createdBy signatures createdAt updatedAt instruments")
+        .select("csrNo formatNo status createdBy signatures createdAt updatedAt instruments filePath")
         .populate("createdBy", "name email")
         .populate("signatures.calibratedBy", "name email signatureName")
         .populate("signatures.verifiedBy",   "name email signatureName")
@@ -111,6 +116,7 @@ export const getAllCalibrationReports = async (req, res) => {
       createdBy:       r.createdBy,
       signatures:      r.signatures,
       instrumentCount: r.instruments?.length ?? 0,
+      filePath:        r.filePath ?? null,
       createdAt:       r.createdAt,
       updatedAt:       r.updatedAt,
     }));
@@ -176,6 +182,10 @@ export const updateCalibrationReport = async (req, res) => {
 
     if (!report) {
       return res.status(404).json({ message: "report not found" });
+    }
+
+    if (report.status !== "draft") {
+      await pushPdfJobToRedis({ reportId: report._id, action: "edit", type: "calibration" });
     }
 
     res.json(report);

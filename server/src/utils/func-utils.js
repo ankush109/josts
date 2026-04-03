@@ -5,7 +5,7 @@ const redis = new Redis({
   port: 6379,
 });
 
-export const pushPdfJobToRedis = async ({ reportId, action }) => {
+export const pushPdfJobToRedis = async ({ reportId, action, type = "report" }) => {
   const jobId = crypto.randomUUID();
 
   await redis.lpush(
@@ -14,6 +14,7 @@ export const pushPdfJobToRedis = async ({ reportId, action }) => {
       jobId,
       reportId,
       action, // "create" | "edit"
+      type,   // "report" | "calibration"
     })
   );
 
