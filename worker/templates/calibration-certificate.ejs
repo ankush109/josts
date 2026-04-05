@@ -23,50 +23,60 @@
     .header {
       display: flex;
       align-items: flex-start;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
     .header-logo {
-      width: 140px;
+      width: 170px;
       flex-shrink: 0;
-      padding-top: 8px;
+      text-align: center;
     }
     .header-logo img {
-      height: 135px;
+      height: 100px;
       width: auto;
     }
     .header-company {
       flex: 1;
-      padding: 0 10px;
-      line-height: 1.55;
+      padding: 4px 12px 0;
+      line-height: 1.5;
     }
     .header-company .company-name {
-      font-size: 20pt;
+      font-size: 19pt;
       font-weight: 700;
       color: #0a2351;
       font-family: 'Times New Roman', Times, serif;
-      margin-bottom: 2px;
+      margin-bottom: 1px;
     }
     .header-company .company-meta {
-      font-size: 9pt;
+      font-size: 8.5pt;
       color: #000;
       line-height: 1.7;
     }
+    .header-company .company-meta .email-website-row {
+      display: flex;
+      justify-content: flex-start;
+      gap: 0;
+    }
+    .header-company .company-meta .email-website-row .website {
+      margin-left: auto;
+    }
     .header-qr {
-      width: 95px;
+      width: 90px;
       flex-shrink: 0;
-      padding-top: 6px;
-      text-align: right;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding-top: 4px;
     }
     .header-qr img {
-      height: 90px;
-      width: 90px;
+      height: 82px;
+      width: 82px;
       object-fit: contain;
     }
 
     hr.divider {
       border: none;
       border-top: 2px solid #000;
-      margin: 4px 0 10px;
+      margin: 6px 0 10px;
     }
 
     /* ── Certificate title ── */
@@ -193,18 +203,18 @@
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-        Unit #708 &amp; 709, 7th Floor, Gopal Heights, New Delhi - 110034<br/>
-        CIN: L28100MH1907PLC000252, &nbsp;&nbsp; Tel.: +91 33 2242 9510, &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
-        <span style="display:flex; justify-content:space-between; width:100%;">
+        19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
+        CIN: L28100MH1907PLC000252, Tel: +91 33 2242 9510, Fax: +91 33 2248 0861<br/>
+        <span class="email-website-row">
           <span>Email: salescal@josts.in</span>
-          <span>Website: www.josts.com</span>
+          <span class="website">Website: www.josts.com</span>
         </span>
-        <em>( Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001 )</em>
+        <em>(Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001)</em>
       </div>
     </div>
     <div class="header-qr">
-      <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
-        <img src="<%= qrUrl %>" alt="QR Code" />
+      <% if (typeof qrCodeUrl !== 'undefined' && qrCodeUrl) { %>
+        <img src="<%= qrCodeUrl %>" alt="QR Code" />
       <% } %>
     </div>
   </div>
@@ -248,11 +258,7 @@
   <table>
     <tr>
       <td class="bold" style="width:30%">Name &amp; Address of the Customer :</td>
-      <td style="white-space:pre-line">
-        Assam Electricity Grid Corporation Limited
-O/o The Assistant General Manager
-T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
-      </td>
+      <td style="white-space:pre-line"><%= typeof customerAddress !== 'undefined' ? customerAddress : '' %></td>
     </tr>
   </table>
 
@@ -426,18 +432,18 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-        Unit #708 &amp; 709, 7th Floor, Gopal Heights, New Delhi - 110034<br/>
-        CIN: L28100MH1907PLC000252, &nbsp;&nbsp; Tel.: +91 33 2242 9510, &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
-        <span style="display:flex; justify-content:space-between; width:100%;">
+        19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
+        CIN: L28100MH1907PLC000252, Tel: +91 33 2242 9510, Fax: +91 33 2248 0861<br/>
+        <span class="email-website-row">
           <span>Email: salescal@josts.in</span>
-          <span>Website: www.josts.com</span>
+          <span class="website">Website: www.josts.com</span>
         </span>
-        <em>( Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001 )</em>
+        <em>(Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001)</em>
       </div>
     </div>
     <div class="header-qr">
-      <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
-        <img src="<%= qrUrl %>" alt="QR Code" />
+      <% if (typeof qrCodeUrl !== 'undefined' && qrCodeUrl) { %>
+        <img src="<%= qrCodeUrl %>" alt="QR Code" />
       <% } %>
     </div>
   </div>
@@ -490,6 +496,7 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
       <% if (typeof calibrationResults !== 'undefined' && calibrationResults && calibrationResults.length) { %>
         <% calibrationResults.forEach(function(param) { %>
           <%
+            // Count total rows for this parameter (rowspan)
             var totalRows = 0;
             (param.ranges || []).forEach(function(r) { totalRows += (r.rows || []).length; });
             var firstRow = true;

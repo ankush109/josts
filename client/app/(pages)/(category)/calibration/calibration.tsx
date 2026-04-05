@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, FC, KeyboardEvent } from "react";
 import { useGenerateCalibrationReport } from "@/app/hooks/mutation/useGenerateCalibrationReport";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/provider/AuthProvider";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
@@ -15,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +94,59 @@ interface FormError {
 const PREDEFINED_PARAMS: Record<string, string[]> = {
   "AC Voltage @50Hz": ["4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
   "DC Voltage":       ["400mV/0.1", "4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
+  "DC Current":       ["400µA/0.1", "4mA/0.001", "40mA/0.01", "400mA/0.1", "10A/0.01"],
+  "AC Current @50Hz": ["400µA/0.1", "4mA/0.001", "40mA/0.01", "400mA/0.1", "10A/0.01"],
+  "Resistance":       ["400Ω/0.1", "4kΩ/0.001", "40kΩ/0.01", "400kΩ/0.1", "4MΩ/0.001", "40MΩ/0.01"],
+};
+
+const PREDEFINED_UNITS: Record<string, string> = {
+  "AC Voltage @50Hz": "V",
+  "DC Voltage":       "V",
+  "DC Current":       "mA",
+  "AC Current @50Hz": "mA",
+  "Resistance":       "Ω",
+};
+
+// ─── Sample readings per predefined parameter → range index → measurement index ─
+// Each entry: [nomValue, [r1, r2, r3, r4, r5]]
+
+type SampleMeasurement = [string, string[]];
+const PREDEFINED_SAMPLES: Record<string, SampleMeasurement[][]> = {
+  "AC Voltage @50Hz": [
+    [["0.5",  ["0.497","0.498","0.499","0.496","0.495"]], ["3.5",  ["3.494","3.497","3.493","3.493","3.493"]]],
+    [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
+    [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
+    [["500",  ["498",  "499",  "498",  "497",  "498" ]], ["950",  ["947",  "948",  "948",  "946",  "946" ]]],
+  ],
+  "DC Voltage": [
+    [["0.1",  ["0.0997","0.0998","0.0996","0.0997","0.0995"]], ["0.35", ["0.3496","0.3497","0.3494","0.3495","0.3493"]]],
+    [["0.5",  ["0.497", "0.498", "0.499", "0.496", "0.497" ]], ["3.5",  ["3.494", "3.497", "3.493", "3.494", "3.493" ]]],
+    [["5",    ["4.97",  "4.98",  "4.99",  "4.94",  "4.97"  ]], ["35",   ["34.95", "34.96", "34.97", "34.94", "34.93" ]]],
+    [["50",   ["49.9",  "50.0",  "49.8",  "49.6",  "49.9"  ]], ["350",  ["349.8", "349.9", "349.7", "349.7", "349.6" ]]],
+    [["500",  ["498",   "499",   "498",   "497",   "498"   ]], ["950",  ["947",   "948",   "948",   "946",   "946"   ]]],
+  ],
+  "DC Current": [
+    [["100",  ["99.9", "99.8", "99.9", "99.7", "99.8"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
+    [["0.5",  ["0.497","0.498","0.499","0.496","0.497"]], ["3.5",  ["3.494","3.497","3.493","3.494","3.493"]]],
+    [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
+    [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
+    [["5",    ["4.97", "4.98", "4.99", "4.96", "4.97"]], ["9",    ["8.97", "8.98", "8.96", "8.97", "8.95"]]],
+  ],
+  "AC Current @50Hz": [
+    [["100",  ["99.8", "99.9", "99.7", "99.8", "99.6"]], ["350",  ["349.7","349.8","349.6","349.7","349.5"]]],
+    [["0.5",  ["0.496","0.497","0.498","0.495","0.496"]], ["3.5",  ["3.493","3.496","3.492","3.493","3.492"]]],
+    [["5",    ["4.96", "4.97", "4.98", "4.93", "4.96"]], ["35",   ["34.93","34.94","34.95","34.92","34.91"]]],
+    [["50",   ["49.8", "49.9", "49.7", "49.5", "49.8"]], ["350",  ["349.6","349.7","349.5","349.5","349.4"]]],
+    [["5",    ["4.96", "4.97", "4.98", "4.95", "4.96"]], ["9",    ["8.95", "8.96", "8.94", "8.95", "8.93"]]],
+  ],
+  "Resistance": [
+    [["100",  ["99.9", "99.8", "99.9", "99.7", "99.8"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
+    [["1",    ["0.999","0.998","0.999","0.997","0.998"]], ["3.5",  ["3.497","3.498","3.496","3.497","3.495"]]],
+    [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
+    [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
+    [["1",    ["0.998","0.999","0.997","0.998","0.996"]], ["3.5",  ["3.495","3.496","3.494","3.495","3.493"]]],
+    [["5",    ["4.96", "4.97", "4.95", "4.96", "4.94"]], ["35",   ["34.92","34.93","34.91","34.92","34.90"]]],
+  ],
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -131,9 +187,15 @@ function makeMeasurement(): Measurement {
 function makeParam(name = "", unit = ""): Parameter {
   const predefinedLabels = PREDEFINED_PARAMS[name];
   if (predefinedLabels) {
+    const samples = PREDEFINED_SAMPLES[name];
     return {
       id: uid(), name, unit, isPredefined: true,
-      ranges: predefinedLabels.map((label) => ({ id: uid(), label, measurements: [makeMeasurement(), makeMeasurement()] })),
+      ranges: predefinedLabels.map((label, ri) => ({
+        id: uid(), label,
+        measurements: (samples?.[ri] ?? []).length > 0
+          ? samples[ri].map(([nom, readings]) => ({ id: uid(), nomValue: nom, readings, corrected: "", computed: null }))
+          : [makeMeasurement(), makeMeasurement()],
+      })),
     };
   }
   return { id: uid(), name, unit, ranges: [{ id: uid(), label: "", measurements: [makeMeasurement(), makeMeasurement()] }] };
@@ -710,16 +772,21 @@ const AddInstrumentPanel: FC<{
   </div>
 );
 
-// ─── Add-parameter panel ──────────────────────────────────────────────────────
+// ─── Add-parameter dialog ─────────────────────────────────────────────────────
 
-const AddParamPanel: FC<{
+const AddParamDialog: FC<{
+  open: boolean;
   onCancel: () => void;
   onConfirm: (name: string, unit: string) => void;
-}> = ({ onCancel, onConfirm }) => {
+}> = ({ open, onCancel, onConfirm }) => {
   const [mode,  setMode]  = useState<"pick" | "custom">("pick");
   const [name,  setName]  = useState("");
   const [unit,  setUnit]  = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) { setMode("pick"); setName(""); setUnit(""); }
+  }, [open]);
 
   useEffect(() => { if (mode === "custom") setTimeout(() => nameRef.current?.focus(), 60); }, [mode]);
 
@@ -728,41 +795,44 @@ const AddParamPanel: FC<{
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">
-        New parameter
-      </div>
+    <Dialog open={open} onOpenChange={(o: boolean) => !o && onCancel()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New Parameter</DialogTitle>
+        </DialogHeader>
 
-      {mode === "pick" ? (
-        <>
-          {Object.keys(PREDEFINED_PARAMS).map((pName) => (
-            <button
-              key={pName}
-              onClick={() => onConfirm(pName, "V")}
-              className="text-left px-3 py-2.5 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
-            >
-              <div className="text-xs font-semibold">{pName}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">
-                {PREDEFINED_PARAMS[pName].join(" · ")}
+        <div className="flex flex-col gap-2 mt-1">
+          {mode === "pick" ? (
+            <>
+              {Object.keys(PREDEFINED_PARAMS).map((pName) => (
+                <button
+                  key={pName}
+                  onClick={() => onConfirm(pName, PREDEFINED_UNITS[pName] ?? "")}
+                  className="text-left px-3 py-2.5 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
+                >
+                  <div className="text-sm font-semibold">{pName}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {PREDEFINED_PARAMS[pName].join(" · ")}
+                  </div>
+                </button>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => setMode("custom")} className="w-full border-dashed justify-start mt-1">
+                + Custom parameter
+              </Button>
+            </>
+          ) : (
+            <>
+              <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKey} placeholder="Parameter name" className="text-xs" />
+              <Input value={unit} onChange={(e) => setUnit(e.target.value)} onKeyDown={handleKey} placeholder="Unit (V, mA, Ω…)" className="text-xs" />
+              <div className="flex gap-2 mt-1">
+                <Button variant="outline" size="sm" onClick={() => setMode("pick")} className="flex-1">Back</Button>
+                <Button size="sm" onClick={() => name.trim() && onConfirm(name.trim(), unit.trim())} disabled={!name.trim()} className="flex-1">Add</Button>
               </div>
-            </button>
-          ))}
-          <Button variant="outline" size="sm" onClick={() => setMode("custom")} className="w-full border-dashed justify-start">
-            + Custom parameter
-          </Button>
-          <Button variant="outline" size="sm" onClick={onCancel} className="w-full">Cancel</Button>
-        </>
-      ) : (
-        <>
-          <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKey} placeholder="Parameter name" className="text-xs" />
-          <Input value={unit} onChange={(e) => setUnit(e.target.value)} onKeyDown={handleKey} placeholder="Unit (V, mA, Ω…)" className="text-xs" />
-          <div className="flex gap-2 mt-1">
-            <Button variant="outline" size="sm" onClick={() => setMode("pick")} className="flex-1">Back</Button>
-            <Button size="sm" onClick={() => name.trim() && onConfirm(name.trim(), unit.trim())} disabled={!name.trim()} className="flex-1">Add</Button>
-          </div>
-        </>
-      )}
-    </div>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -869,7 +939,7 @@ interface CalibrationReportPageProps {
 
 export default function CalibrationReportPage({ reportId }: CalibrationReportPageProps) {
   const isEditMode = Boolean(reportId);
-
+  const { data, isLoading, isError, refetch } = useGetCalibrationReports();
   const router = useRouter();
   const { mutate: generateCalibrationReport, isPending: isCreating } = useGenerateCalibrationReport();
   const { mutate: updateCalibrationReport,   isPending: isUpdating  } = useUpdateCalibrationReport();
@@ -926,6 +996,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   const { user } = useAuth();
   const userId = user?.id ?? (user as any)?._id ?? null;
+  const queryClient = useQueryClient();
 
   function validate(): FormError[] {
     const errors: FormError[] = [];
@@ -990,6 +1061,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setFormErrors([]);
     setErrorPanelOpen(false);
     setTouchedFields(new Set());
+    refetch()
 
     const payload = buildPayload(instruments, status, userId);
 
@@ -999,6 +1071,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
     const onSuccess = () => {
       toast.success(successMsg);
+      queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
       if (status === "draft" && isEditMode) {
         setView("results");
         setHydrated(false); // re-hydrate to get computed values back
@@ -1155,11 +1228,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               currentMeta={activeInst.meta}
               onCancel={() => setPanel(null)}
               onConfirm={handleAddInstrumentConfirm}
-            />
-          ) : panel?.type === "addParam" ? (
-            <AddParamPanel
-              onCancel={() => setPanel(null)}
-              onConfirm={handleAddParamConfirm}
             />
           ) : (
             <Button variant="outline" className="w-full border-dashed" onClick={() => setPanel({ type: "addInstrument" })}>
@@ -1322,6 +1390,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>
         </div>
       </div>
+
+      {/* ── Add parameter dialog ── */}
+      <AddParamDialog
+        open={panel?.type === "addParam"}
+        onCancel={() => setPanel(null)}
+        onConfirm={handleAddParamConfirm}
+      />
 
       {/* ── Error panel (right) ── */}
       {formErrors.length > 0 && errorPanelOpen && (

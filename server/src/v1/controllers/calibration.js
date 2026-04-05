@@ -84,7 +84,10 @@ export const getAllCalibrationReports = async (req, res) => {
 
     if (status) filter.status = status;
 
-    if (createdBy) {
+    // Engineers only see their own reports; admins see all
+    if (req.user.userRole !== "admin") {
+      filter.createdBy = req.user.userId;
+    } else if (createdBy) {
       if (!mongoose.Types.ObjectId.isValid(createdBy)) {
         return res.status(400).json({ message: "invalid createdBy id" });
       }
@@ -193,6 +196,47 @@ export const updateCalibrationReport = async (req, res) => {
     if (err.code === 11000) {
       return res.status(409).json({ message: `CSR number '${req.body.csrNo}' already exists` });
     }
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── Verify / Reject report (admin only) ─────────────────────────────────────
+
+export const verifyOrRejectReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const { status } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(reportId)) {
+      return res.status(400).json({ message: "invalid report id" });
+    }
+
+    if (!["verified", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "status must be 'verified' or 'rejected'" });
+    }
+
+    const report = await CalibrationReport.findByIdAndUpdate(
+      reportId,
+      {
+        $set: {
+          status,
+          "signatures.verifiedBy": req.user.userId,
+          "signatures.verifiedAt": new Date(),
+        },
+      },
+      { new: true, runValidators: true }
+    )
+      .populate("createdBy",               "name email signatureName")
+      .populate("signatures.calibratedBy", "name email signatureName")
+      .populate("signatures.verifiedBy",   "name email signatureName")
+      .lean();
+
+    if (!report) {
+      return res.status(404).json({ message: "report not found" });
+    }
+
+    res.json(report);
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };

@@ -73,7 +73,7 @@ export function DropdownMenuDemo() {
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/home" className="flex items-center cursor-pointer">
+            <Link href="/calibration" className="flex items-center cursor-pointer">
               <FileText className="mr-2 h-4 w-4" />
               <span>My Reports</span>
             </Link>

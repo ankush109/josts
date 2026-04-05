@@ -17,5 +17,8 @@ export const getCalibrationReports = async () => {
         const res = data;
         return res;
       },
+       staleTime: 0,          // always treat data as stale
+    gcTime: 0,             // don't cache (React Query v5) — use `cacheTime: 0` if on v4
+    refetchOnMount: true,
     });
   

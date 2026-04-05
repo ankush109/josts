@@ -6,6 +6,7 @@ import { connectDB } from "./db/connection.js";
 import Report from "./db/models/report.js";
 import CalibrationReport from "./db/models/calibration.js";
 import path from "path";
+import fs from "fs";
 import ejs from "ejs";
 
 dotenv.config({ path: new URL(".env", import.meta.url).pathname });
@@ -91,6 +92,26 @@ function mapCalibrationToTemplateData(report) {
   }));
 
   return {
+   logoUrl: (() => {
+      try {
+        const buf = fs.readFileSync(path.join(process.cwd(), "logo2.png"));
+        return `data:image/png;base64,${buf.toString("base64")}`;
+      } catch { return ""; }
+    })(),
+
+    qrUrl: (() => {
+  try {
+    const filePath = path.join(process.cwd(), "qr.png");
+    console.log("Looking for QR at:", filePath, "exists:", fs.existsSync(filePath));
+    const buf = fs.readFileSync(filePath);
+    console.log("QR loaded, size:", buf.length, "bytes");
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch (err) {
+    console.error("QR load failed:", err.message);
+    return "";
+  }
+})(),
+
     certificateNo:          report.csrNo ?? "",
     certificateIssueDate:   formatDate(report.createdAt),
     totalPages:             "2",

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 const navLinks = [
   { href: "/calibration", label: "Calibration Reports", icon: FileText },
   { href: "/drafts", label: "Drafts", icon: FilePlus },
-  { href: "/templates", label: "Templates", icon: Layout },
+  // { href: "/templates", label: "Templates", icon: Layout },
 ];
 
 export default function Navbar() {
@@ -29,10 +29,10 @@ export default function Navbar() {
           <Link href="/" className="flex-shrink-0">
             <Image
               alt="Josts Technologies"
-              width={200}
+              width={250}
               height={80}
               src={jostLogo}
-              className="h-9 w-auto"
+              className="h-12 w-auto"
             />
           </Link>
 

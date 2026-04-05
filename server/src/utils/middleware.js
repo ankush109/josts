@@ -15,9 +15,15 @@ export const authMiddleware = (req, res, next) => {
   try {
     const decoded = verifyToken(token);
     req.user = decoded;
-    console.log("Authenticated user:", req.user);
     next();
   } catch (err) {
     res.status(401).json({ message: "Invalid token" });
   }
+};
+
+export const adminMiddleware = (req, res, next) => {
+  if (req.user?.userRole !== "admin") {
+    return res.status(403).json({ message: "Forbidden: admin access required" });
+  }
+  next();
 };

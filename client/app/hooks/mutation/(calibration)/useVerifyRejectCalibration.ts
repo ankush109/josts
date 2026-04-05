@@ -2,16 +2,16 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AUTH_API } from "../../client";
 import { ENDPOINTS } from "../../endpoints";
 
-export const updateCalibrationReport = async (data: any) => {
-  const { reportId, ...payload } = data;
-  const response = await AUTH_API.put(ENDPOINTS.UPDATE_CALIBRATION_REPORT(reportId), payload);
-  return response.data;
-};
-
-export const useUpdateCalibrationReport = () => {
+export const useVerifyRejectCalibration = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: updateCalibrationReport,
+    mutationFn: async ({ reportId, status }: { reportId: string; status: "verified" | "rejected" }) => {
+      const response = await AUTH_API.patch(
+        ENDPOINTS.VERIFY_REJECT_CALIBRATION_REPORT(reportId),
+        { status }
+      );
+      return response.data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
     },
