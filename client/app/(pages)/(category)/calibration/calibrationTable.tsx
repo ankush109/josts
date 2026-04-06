@@ -190,8 +190,17 @@ export default function CalibrationReportsTable() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
   const [viewingPdf, setViewingPdf] = useState<string | null>(null);
+  const [pendingPdfIds, setPendingPdfIds] = useState<Set<string>>(new Set());
 
   const allItems: ReportListItem[] = data?.items ?? [];
+
+  // ── Track reports awaiting PDF generation ──
+  useEffect(() => {
+    const pending = allItems
+      .filter((r) => r.status !== "draft" && !r.filePath)
+      .map((r) => r._id);
+    setPendingPdfIds(new Set(pending));
+  }, [allItems]);
 
   // ── Counts for stat cards ──
   const counts = useMemo(
@@ -364,6 +373,7 @@ export default function CalibrationReportsTable() {
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Calibrated By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Verified By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Date</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center" style={{ color: NAVY }}>PDF</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-5" style={{ color: NAVY }}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -371,7 +381,7 @@ export default function CalibrationReportsTable() {
               <TableBody>
                 {currentRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-20 text-center">
+                    <TableCell colSpan={9} className="py-20 text-center">
                       <div className="flex flex-col items-center gap-3 text-slate-400">
                         <div className="h-12 w-12 rounded-full flex items-center justify-center" style={{ backgroundColor: NAVY_LIGHT }}>
                           <FileText className="h-6 w-6" style={{ color: NAVY }} />
@@ -443,6 +453,29 @@ export default function CalibrationReportsTable() {
                           <p className="text-xs text-slate-400">{new Date(report.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} updated</p>
                         </div>
                       </TableCell>
+                      <TableCell className="text-center">
+                        {report.status === "draft" ? (
+                          <span className="text-xs text-slate-300">—</span>
+                        ) : pendingPdfIds.has(report._id) ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-amber-500 mx-auto" />
+                        ) : report.filePath ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-slate-500 hover:text-[#1e3a5f]"
+                            onClick={(e) => handleViewPdf(e, report._id)}
+                            disabled={viewingPdf === report._id}
+                          >
+                            {viewingPdf === report._id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right pr-5">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -494,7 +527,7 @@ export default function CalibrationReportsTable() {
               {processed.length > 0 && (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={8} className="text-xs text-slate-400 py-2.5 pl-5">
+                    <TableCell colSpan={9} className="text-xs text-slate-400 py-2.5 pl-5">
                       Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, processed.length)} of {processed.length} report{processed.length !== 1 ? "s" : ""}
                     </TableCell>
                   </TableRow>

@@ -8,7 +8,7 @@ export const register = async (req, res) => {
   try {
     const { email, password } = req.body;
     const name = email.split("@")[0];
-    if (!email.endsWith("@jost.com")) {
+    if (!email.endsWith("@josts.com")) {
       return res.status(400).json({ message: "Email must be a jost.com email" });
     }
     const existingUser = await User.findOne({ email });

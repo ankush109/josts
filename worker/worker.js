@@ -170,7 +170,7 @@ async function handleReportJob(reportId) {
   const html         = await renderTemplate(templatePath, report.payload);
   const pdfBuffer    = await createPdfBuffer(html);
 
-  const s3Key = `reports/${reportId}_${report.title}.pdf`;
+  const s3Key = `reports/${report.title}.pdf`;
   await uploadToS3(pdfBuffer, s3Key);
 
   await Report.findByIdAndUpdate(reportId, { status: "uploaded", filePath: s3Key });

@@ -21,7 +21,7 @@ const formSchema = z.object({
   email: z
     .string()
     .email("Email domain is not valid")
-    .endsWith("@jost.com", "Email must be a @jost.com address"),
+    .endsWith("@josts.com", "Email must be a @jost.com address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   confirmPassword: z.string().min(1, "Please confirm your password"),
 }).refine((data) => data.password === data.confirmPassword, {

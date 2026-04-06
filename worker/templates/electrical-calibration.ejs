@@ -46,11 +46,11 @@
       font-family: 'Times New Roman', Times, serif;
       margin-bottom: 2px;
     }
-    .header-company .company-meta {
-      font-size: 9pt;
-      color: #000;
-      line-height: 1.7;
-    }
+.header-company .company-meta {
+  font-size: 9pt;
+  color: #000;
+  line-height: 1.4;  /* was 1.7 — tighten this */
+}
     .header-qr {
       width: 95px;
       flex-shrink: 0;
@@ -237,10 +237,10 @@
       <td class="bold center" colspan="3">Customer Reference No.</td>
     </tr>
     <tr>
-      <td class="center"><%= typeof ducReceivedDate !== 'undefined' ? ducReceivedDate : '' %></td>
-      <td class="center"><%= typeof dateOfCalibration !== 'undefined' ? dateOfCalibration : '' %></td>
-      <td class="center"><%= typeof calibrationDueDate !== 'undefined' ? calibrationDueDate : '' %></td>
-      <td class="center" colspan="3"><%= typeof customerReferenceNo !== 'undefined' ? customerReferenceNo : '' %></td>
+      <td class="center">12/04/2026</td>
+      <td class="center">16/04/2026</td>
+      <td class="center">10/04/2026</td>
+      <td class="center" colspan="3">THJ2213FUUUUU2111</td>
     </tr>
   </table>
 
@@ -407,7 +407,6 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
       <div class="signature-role">Approved By : <%= typeof approvedByRole !== 'undefined' ? approvedByRole : 'Technical/Quality Manager' %></div>
     </div>
   </div>
-  <div class="doc-ref"><%= typeof docRef !== 'undefined' ? docRef : 'JECL/KOL/LAB/43B' %></div>
 
 </div>
 <!-- ═══════════════════ END PAGE 1 ════════════════════════════════════════════ -->
@@ -423,10 +422,12 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
         <img src="<%= logoUrl %>" alt="Josts Logo" />
       <% } %>
     </div>
+
+
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-        Unit #708 &amp; 709, 7th Floor, Gopal Heights, New Delhi - 110034<br/>
+          19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
         CIN: L28100MH1907PLC000252, &nbsp;&nbsp; Tel.: +91 33 2242 9510, &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
         <span style="display:flex; justify-content:space-between; width:100%;">
           <span>Email: salescal@josts.in</span>
