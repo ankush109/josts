@@ -7,9 +7,10 @@ import { useAuth } from "@/app/provider/AuthProvider";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { useUpdateCalibrationReport } from "@/app/hooks/mutation/(calibration)/updateCalibrationReport";
+import { useComputeCalibration } from "@/app/hooks/mutation/(calibration)/useComputeCalibration";
 import { useGetCalibrationReportById } from "@/app/hooks/query/(calibration)/useGetCalibReportById";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -254,6 +255,31 @@ const INSTRUMENT_PRESETS: Record<string, InstrumentPreset> = {
 const uid = (): string => Math.random().toString(36).slice(2, 9);
 const emptyReadings = (): string[] => Array(5).fill("");
 
+type ParamStatus = "empty" | "partial" | "error" | "ok";
+
+function getParamStatus(param: Parameter): ParamStatus {
+  const allMeasurements = param.ranges.flatMap((r) => r.measurements);
+  if (allMeasurements.length === 0) return "empty";
+  let hasAny = false;
+  for (const m of allMeasurements) {
+    for (let i = 0; i < m.readings.length; i++) {
+      if (isOutOfRange(m.readings[i], m.nomValue)) return "error";
+      if (m.readings[i] !== "") hasAny = true;
+    }
+  }
+  const allFilled = allMeasurements.every((m) => m.readings.every((v) => v !== ""));
+  if (allFilled) return "ok";
+  if (hasAny) return "partial";
+  return "empty";
+}
+
+const PARAM_STATUS_DOT: Record<ParamStatus, string> = {
+  ok:      "bg-emerald-500",
+  partial: "bg-amber-400",
+  error:   "bg-red-500",
+  empty:   "bg-zinc-300",
+};
+
 const isNumericInput = (v: string) => v === "" || /^-?\d*\.?\d*$/.test(v);
 
 // Reading is out of range if it reaches or exceeds nom + 1 (allows slight overshoot below that threshold)
@@ -399,7 +425,7 @@ const SelectField: FC<{
 // ─── Section divider ──────────────────────────────────────────────────────────
 
 const SectionLabel: FC<{ label: string }> = ({ label }) => (
-  <div className="col-span-4 pt-2 border-t border-zinc-100">
+  <div className="col-span-2 lg:col-span-4 pt-2 border-t border-zinc-100">
     <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">{label}</span>
   </div>
 );
@@ -413,7 +439,7 @@ const CollapsibleSection: FC<{
   children: React.ReactNode;
 }> = ({ label, open, onToggle, children }) => (
   <>
-    <div className="col-span-4 pt-1 border-t border-border">
+    <div className="col-span-2 lg:col-span-4 pt-1 border-t border-border">
       <Button type="button" variant="ghost" size="xs" onClick={onToggle} className="text-muted-foreground gap-1 px-1">
         {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
         <span className="text-[10px] font-semibold uppercase tracking-widest">{label}</span>
@@ -436,7 +462,7 @@ const MetaGrid: FC<{
   const [refOpen, setRefOpen] = useState(false);
   const sharedProps = { meta, showErrors, touched, onTouch, onChange };
   return (
-    <div className="grid grid-cols-4 gap-x-4 gap-y-3">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
       <Field label="CSR No"              k="csrNo"         {...sharedProps} required autoFocus={autoFocusCsr} />
       <Field label="Cal Date"            k="calDate"       {...sharedProps} type="date" />
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
@@ -750,7 +776,7 @@ const ResultsTable: FC<{ param: Parameter }> = ({ param }) => {
   const hasAny = param.ranges.some((r) => r.measurements.some((m) => m.computed));
   if (!hasAny) return (
     <div className="flex items-center justify-center h-40 text-sm text-zinc-400">
-      Save the report to compute uncertainty budget values.
+      Click <span className="mx-1 font-semibold text-violet-600">Compute</span> in the toolbar to preview the uncertainty budget.
     </div>
   );
 
@@ -801,6 +827,7 @@ const ResultsTable: FC<{ param: Parameter }> = ({ param }) => {
 
 const SbInstrument: FC<{
   inst: Instrument;
+  index: number;
   isActive: boolean;
   activeParamId: string;
   canAddParam: boolean;
@@ -809,26 +836,32 @@ const SbInstrument: FC<{
   onRemoveInstrument: (id: string) => void;
   onRemoveParam: (instId: string, paramId: string) => void;
   onAddParam: (instId: string) => void;
-}> = ({ inst, isActive, activeParamId, canAddParam, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
+}> = ({ inst, index, isActive, activeParamId, canAddParam, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
   const label = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
   const sub   = [inst.meta.make, inst.meta.modelType].filter(Boolean).join(" · ");
 
   return (
-    <div className="mb-1">
+    <div className={cn(
+      "mb-2 rounded-xl border transition-all",
+      isActive
+        ? "border-blue-200 bg-blue-50/40 shadow-sm"
+        : "border-zinc-200 bg-white hover:border-zinc-300"
+    )}>
       <div
         onClick={() => { onSelectInstrument(inst.id); if (inst.params[0]) onSelectParam(inst.id, inst.params[0].id); }}
-        className={cn(
-          "flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer group transition-all",
-          isActive
-            ? "bg-zinc-100 border border-zinc-200"
-            : "border border-transparent hover:bg-zinc-50 hover:border-zinc-100"
-        )}
+        className="flex items-center justify-between px-2.5 py-2.5 rounded-xl cursor-pointer group"
       >
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-zinc-900 truncate">{label}</div>
-          {sub && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</div>}
-          <div className="text-[10px] text-zinc-400 mt-0.5">
-            {inst.meta.csrNo || "No CSR yet"}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className={cn(
+            "shrink-0 h-5 w-5 rounded-md text-[10px] font-bold flex items-center justify-center",
+            isActive ? "bg-blue-600 text-white" : "bg-zinc-200 text-zinc-500"
+          )}>
+            {index + 1}
+          </span>
+          <div className="min-w-0">
+            <div className={cn("text-xs font-semibold truncate", isActive ? "text-blue-900" : "text-zinc-800")}>{label}</div>
+            {sub && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</div>}
+            <div className="text-[10px] text-zinc-400 mt-0.5 font-mono">{inst.meta.csrNo || "No CSR yet"}</div>
           </div>
         </div>
         <button
@@ -840,9 +873,10 @@ const SbInstrument: FC<{
       </div>
 
       {isActive && (
-        <div className="ml-3 mt-1 border-l border-zinc-200 pl-2">
+        <div className="mx-2.5 mb-2.5 border-t border-blue-100 pt-2 pl-1">
           {inst.params.map((p) => {
             const pActive = p.id === activeParamId;
+            const pStatus = getParamStatus(p);
             return (
               <div
                 key={p.id}
@@ -854,16 +888,19 @@ const SbInstrument: FC<{
                     : "border border-transparent hover:bg-zinc-50"
                 )}
               >
-                <div className="min-w-0 flex-1">
-                  <div className={cn(
-                    "text-xs truncate",
-                    pActive ? "font-semibold text-blue-700" : "text-zinc-500"
-                  )}>
-                    {p.name || "Unnamed parameter"}
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className={cn("shrink-0 h-2 w-2 rounded-full", PARAM_STATUS_DOT[pStatus])} />
+                  <div className="min-w-0">
+                    <div className={cn(
+                      "text-xs truncate",
+                      pActive ? "font-semibold text-blue-700" : "text-zinc-500"
+                    )}>
+                      {p.name || "Unnamed parameter"}
+                    </div>
+                    {p.unit && (
+                      <div className="text-[10px] text-zinc-400 font-mono">{p.unit}</div>
+                    )}
                   </div>
-                  {p.unit && (
-                    <div className="text-[10px] text-zinc-400 font-mono">{p.unit}</div>
-                  )}
                 </div>
                 {inst.params.length > 1 && (
                   <Button
@@ -903,7 +940,7 @@ const SbInstrument: FC<{
   );
 };
 
-// ─── Add-instrument choice panel ──────────────────────────────────────────────
+// ─── Add-instrument choice panel ─────────────────────────────────────────────
 
 const AddInstrumentPanel: FC<{
   currentMeta: InstrumentMeta;
@@ -1136,6 +1173,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const router = useRouter();
   const { mutate: generateCalibrationReport, isPending: isCreating } = useGenerateCalibrationReport();
   const { mutate: updateCalibrationReport,   isPending: isUpdating  } = useUpdateCalibrationReport();
+  const { mutate: computeCalibration,        isPending: isComputing } = useComputeCalibration();
   const isPending = isCreating || isUpdating;
 
   const { data: existingReport, isLoading: isLoadingReport } = useGetCalibrationReportById(reportId ?? "");
@@ -1154,6 +1192,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [errorPanelOpen, setErrorPanelOpen] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [reportMeta, setReportMeta] = useState<ReportMeta>({ ...BLANK_REPORT_META });
+  const [reportDetailsOpen, setReportDetailsOpen] = useState(!isEditMode);
 
   const updateReportMeta = useCallback(<K extends keyof ReportMeta>(key: K, val: ReportMeta[K]) => {
     setReportMeta((prev) => ({ ...prev, [key]: val }));
@@ -1201,6 +1240,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         errors.push({ message: "CSR No is required", instId: inst.id, fieldId: "field-csrNo" });
       if (!inst.meta.nomenclature.trim())
         errors.push({ message: "Nomenclature of DUC is required", instId: inst.id, fieldId: "field-nomenclature" });
+      if (inst.params.length === 0)
+        errors.push({ message: `Instrument "${inst.meta.nomenclature || inst.meta.make || "Unnamed"}" has no parameters — add at least one`, instId: inst.id });
       for (const p of inst.params) {
         if (!p.name.trim())
           errors.push({ message: `Parameter "${p.name || "unnamed"}" has no name`, instId: inst.id, paramId: p.id, fieldId: `param-name-${p.id}` });
@@ -1244,6 +1285,56 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const handleTouch = useCallback((key: string) => {
     setTouchedFields((prev) => { const next = new Set(prev); next.add(key); return next; });
   }, []);
+
+  function handleCompute(instId: string) {
+    const inst = instruments.find((i) => i.id === instId);
+    if (!inst) return;
+
+    // Build the same server-side instrument shape that injectComputed expects
+    const payload = {
+      make:        inst.meta.make,
+      modelType:   inst.meta.modelType,
+      parameters: inst.params.map((p) => ({
+        name:   p.name,
+        unit:   p.unit,
+        ranges: p.ranges.map((r) => ({
+          label: r.label,
+          measurements: r.measurements.map((m) => ({
+            nomValue: m.nomValue === "" ? null : Number(m.nomValue),
+            readings: m.readings.map((v) => (v === "" ? null : Number(v))),
+            corrected: m.corrected,
+          })),
+        })),
+      })),
+    };
+
+    computeCalibration(payload, {
+      onSuccess: (computed) => {
+        // Merge computed values back into frontend state by position
+        setInstruments((ins) =>
+          ins.map((i) => {
+            if (i.id !== instId) return i;
+            return {
+              ...i,
+              params: i.params.map((p, pi) => ({
+                ...p,
+                ranges: p.ranges.map((r, ri) => ({
+                  ...r,
+                  measurements: r.measurements.map((m, mi) => ({
+                    ...m,
+                    computed: computed.parameters?.[pi]?.ranges?.[ri]?.measurements?.[mi]?.computed ?? m.computed,
+                  })),
+                })),
+              })),
+            };
+          })
+        );
+        setView("results");
+        toast.success("Computed successfully");
+      },
+      onError: () => toast.error("Computation failed — check instrument make/model"),
+    });
+  }
 
   function handleSave(status: "draft" | "submitted") {
     if (!userId) { toast.error("You must be logged in to save a report"); return; }
@@ -1403,10 +1494,11 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
         {/* Instrument list */}
         <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {instruments.map((inst) => (
+          {instruments.map((inst, idx) => (
             <SbInstrument
               key={inst.id}
               inst={inst}
+              index={idx}
               isActive={inst.id === activeInstId}
               activeParamId={activeParamId}
               canAddParam={!!(inst.meta.make && inst.meta.modelType)}
@@ -1491,6 +1583,15 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             )}
 
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => handleCompute(activeInstId)}
+                disabled={isComputing || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
+                className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:border-violet-300"
+              >
+                {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
+                {isComputing ? "Computing…" : "Compute"}
+              </Button>
               <Button variant="outline" onClick={() => handleSave("draft")} disabled={isPending}>
                 {isPending ? <Loader2 className="animate-spin" /> : null}
                 {isPending ? "Saving…" : "Save draft"}
@@ -1517,33 +1618,47 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
           {/* Report Details section */}
           <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
-              <span className="text-sm font-semibold text-zinc-800">Report Details</span>
-              <span className="ml-2 text-xs text-zinc-400">· Customer · Dates · Certificate</span>
-            </div>
-            <div className="p-5">
-              <div className="grid grid-cols-4 gap-x-4 gap-y-3">
-                <RF label="Certificate No" value={reportMeta.certNo || (isEditMode ? "" : "Auto-generated on save")} readOnly placeholder="Auto-generated" />
-                <RF label="Customer Ref No (PO)" value={reportMeta.customerRefNo} onChange={(v) => updateReportMeta("customerRefNo", v)} />
-                <RF label="Customer Name" value={reportMeta.customerName} span2 onChange={(v) => updateReportMeta("customerName", v)} />
-                <RF label="Customer Address" value={reportMeta.customerAddress} span2 onChange={(v) => updateReportMeta("customerAddress", v)} />
-                <RF label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
-                <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Location</Label>
-                  <Select value={reportMeta.calibrationLocation} onValueChange={(v) => updateReportMeta("calibrationLocation", v as "onsite" | "at_lab")}>
-                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="onsite">Onsite</SelectItem>
-                      <SelectItem value="at_lab">At Lab</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <RF label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
-                  readOnly={reportMeta.calibrationLocation === "onsite"}
-                  onChange={reportMeta.calibrationLocation === "at_lab" ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
-                <RF label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date" readOnly />
+            <button
+              type="button"
+              onClick={() => setReportDetailsOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50 hover:bg-zinc-100/60 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                {reportDetailsOpen
+                  ? <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                  : <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />}
+                <span className="text-sm font-semibold text-zinc-800">Report Details</span>
+                <span className="text-xs text-zinc-400">· Customer · Dates · Certificate</span>
               </div>
-            </div>
+              {!reportDetailsOpen && reportMeta.customerName && (
+                <span className="text-xs text-zinc-500 font-medium truncate max-w-[200px]">{reportMeta.customerName}</span>
+              )}
+            </button>
+            {reportDetailsOpen && (
+              <div className="p-5">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
+                  <RF label="Certificate No" value={reportMeta.certNo || (isEditMode ? "" : "Auto-generated on save")} readOnly placeholder="Auto-generated" />
+                  <RF label="Customer Ref No (PO)" value={reportMeta.customerRefNo} onChange={(v) => updateReportMeta("customerRefNo", v)} />
+                  <RF label="Customer Name" value={reportMeta.customerName} span2 onChange={(v) => updateReportMeta("customerName", v)} />
+                  <RF label="Customer Address" value={reportMeta.customerAddress} span2 onChange={(v) => updateReportMeta("customerAddress", v)} />
+                  <RF label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Location</Label>
+                    <Select value={reportMeta.calibrationLocation} onValueChange={(v) => updateReportMeta("calibrationLocation", v as "onsite" | "at_lab")}>
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="onsite">Onsite</SelectItem>
+                        <SelectItem value="at_lab">At Lab</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <RF label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
+                    readOnly={reportMeta.calibrationLocation === "onsite"}
+                    onChange={reportMeta.calibrationLocation === "at_lab" ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
+                  <RF label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date" readOnly />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Instrument details section */}
@@ -1633,8 +1748,20 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               Signatures
             </div>
             <div className="flex justify-between max-w-lg">
-              {(["Calibration done by", "Verified by"] as const).map((label) => (
+              {([
+                {
+                  label: "Calibration done by",
+                  name: existingReport?.signatures?.calibratedBy?.signatureName || existingReport?.signatures?.calibratedBy?.name,
+                },
+                {
+                  label: "Verified by",
+                  name: existingReport?.signatures?.verifiedBy?.signatureName || existingReport?.signatures?.verifiedBy?.name,
+                },
+              ] as const).map(({ label, name }) => (
                 <div key={label} className="flex flex-col items-center min-w-[140px]">
+                  {name && (
+                    <span className="text-sm font-semibold text-zinc-700 mb-3">{name}</span>
+                  )}
                   <div className="w-full h-px bg-zinc-300 mb-2" />
                   <span className="text-xs text-zinc-500">{label}</span>
                 </div>

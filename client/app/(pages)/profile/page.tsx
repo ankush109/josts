@@ -4,50 +4,51 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
-import { User, MapPin, Mail, Bell, Save, Loader2 } from "lucide-react";
+import { User, MapPin, Mail, PenLine, Save, Loader2, BadgeCheck } from "lucide-react";
+import { AUTH_API } from "@/app/hooks/client";
+import { ENDPOINTS } from "@/app/hooks/endpoints";
+import { useAuth } from "@/app/provider/AuthProvider";
 
 export default function ProfilePage() {
+  const { user, setUser } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     location: "",
-    emailAlerts: false,
+    signatureName: "",
   });
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
+    if (user) {
       setFormData({
         name: user.name || "",
         email: user.email || "",
         location: user.location || "",
-        emailAlerts: user.emailAlerts || false,
+        signatureName: user.signatureName || "",
       });
     }
-  }, []);
+  }, [user]);
 
-  const handleInputChange = (field: string, value: string | boolean) => {
+  const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const updatedUser = {
-        ...JSON.parse(localStorage.getItem("user") || "{}"),
-        ...formData,
-      };
-      localStorage.setItem("user", JSON.stringify(updatedUser));
+      const res = await AUTH_API.put(ENDPOINTS.UPDATE_PROFILE(), {
+        signatureName: formData.signatureName.trim(),
+        location: formData.location.trim(),
+      });
+      const updatedUser = { ...user, ...res.data.user };
+      setUser(updatedUser);
       toast.success("Profile updated successfully!");
     } catch {
       toast.error("Failed to update profile");
@@ -62,6 +63,10 @@ export default function ProfilePage() {
       .map((n) => n[0])
       .join("")
       .toUpperCase() || "U";
+
+  const hasUnsavedChanges =
+    formData.signatureName !== (user?.signatureName || "") ||
+    formData.location !== (user?.location || "");
 
   return (
     <div className="min-h-screen bg-background pt-16 pb-12">
@@ -98,11 +103,28 @@ export default function ProfilePage() {
                 </Label>
                 <Input
                   id="name"
-                  placeholder="Enter your full name"
                   value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
+                  className="max-w-sm bg-muted/40"
+                  disabled
+                />
+                <p className="text-xs text-muted-foreground">Full name is set from your email and cannot be changed here.</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="signatureName" className="flex items-center gap-2 text-sm">
+                  <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
+                  Signature Name
+                </Label>
+                <Input
+                  id="signatureName"
+                  placeholder="Name to appear on calibration certificates"
+                  value={formData.signatureName}
+                  onChange={(e) => handleInputChange("signatureName", e.target.value)}
                   className="max-w-sm"
                 />
+                <p className="text-xs text-muted-foreground">
+                  This name appears on all calibration reports and PDFs under your signature.
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -114,7 +136,7 @@ export default function ProfilePage() {
                   id="email"
                   type="email"
                   value={formData.email}
-                  className="max-w-sm"
+                  className="max-w-sm bg-muted/40"
                   disabled
                 />
                 <p className="text-xs text-muted-foreground">Email cannot be changed</p>
@@ -127,35 +149,10 @@ export default function ProfilePage() {
                 </Label>
                 <Input
                   id="location"
-                  placeholder="e.g., Mumbai, India"
+                  placeholder="e.g., Kolkata, India"
                   value={formData.location}
                   onChange={(e) => handleInputChange("location", e.target.value)}
                   className="max-w-sm"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notifications */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base">Notifications</CardTitle>
-              <CardDescription>Manage how you receive notifications</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30">
-                <div className="flex items-start gap-3">
-                  <Bell className="h-4 w-4 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">Email Alerts</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Receive email notifications about report updates and status changes
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={formData.emailAlerts}
-                  onCheckedChange={(checked) => handleInputChange("emailAlerts", checked)}
                 />
               </div>
             </CardContent>
@@ -170,17 +167,19 @@ export default function ProfilePage() {
             <CardContent className="space-y-1">
               <div className="flex justify-between py-2.5">
                 <span className="text-sm text-muted-foreground">Account Status</span>
-                <span className="text-sm font-medium text-green-600">Active</span>
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600">
+                  <BadgeCheck className="h-3.5 w-3.5" /> Active
+                </span>
               </div>
               <Separator />
               <div className="flex justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Member Since</span>
-                <span className="text-sm font-medium">January 2025</span>
+                <span className="text-sm text-muted-foreground">Role</span>
+                <span className="text-sm font-medium capitalize">{user?.role ?? "—"}</span>
               </div>
               <Separator />
               <div className="flex justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Total Reports</span>
-                <span className="text-sm font-medium">0</span>
+                <span className="text-sm text-muted-foreground">Signature Name</span>
+                <span className="text-sm font-medium">{user?.signatureName || <span className="text-amber-500 text-xs">Not set</span>}</span>
               </div>
             </CardContent>
           </Card>
@@ -189,22 +188,19 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               onClick={() => {
-                const storedUser = localStorage.getItem("user");
-                if (storedUser) {
-                  const user = JSON.parse(storedUser);
-                  setFormData({
-                    name: user.name || "",
-                    email: user.email || "",
-                    location: user.location || "",
-                    emailAlerts: user.emailAlerts || false,
-                  });
-                  toast.info("Changes discarded");
-                }
+                setFormData({
+                  name: user?.name || "",
+                  email: user?.email || "",
+                  location: user?.location || "",
+                  signatureName: user?.signatureName || "",
+                });
+                toast.info("Changes discarded");
               }}
+              disabled={!hasUnsavedChanges}
             >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={isSaving || !hasUnsavedChanges}>
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

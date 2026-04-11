@@ -7,6 +7,8 @@ interface AuthUser {
   name: string;
   email: string;
   role: "user" | "admin";
+  signatureName?: string | null;
+  location?: string | null;
   [key: string]: any;
 }
 

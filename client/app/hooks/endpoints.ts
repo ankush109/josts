@@ -4,6 +4,7 @@ export const ENDPOINTS = {
   LOGIN:                      ()                              => `/auth/login`,
   REGISTER:                   ()                              => `/auth/register`,
   GET_LOGGED_USER:            ()                              => `/user/profile`,
+  UPDATE_PROFILE:             ()                              => `/user/profile`,
   GET_REPORTS:                (id?: string | number)          => id ? `/report/${id}` : `/report`,
   GET_DRAFTS:                 ()                              => `/report/drafts/all`,
   GET_DRAFT_BY_ID:            (reportId: string | number)    => `/report/drafts/${reportId}`,
@@ -18,4 +19,5 @@ export const ENDPOINTS = {
   UPDATE_CALIBRATION_REPORT:  (reportId: string)            => `/calibration-report/${reportId}`,
   DELETE_CALIBRATION_REPORT:          (reportId: string) => `/calibration-report/${reportId}`,
   VERIFY_REJECT_CALIBRATION_REPORT:   (reportId: string) => `/calibration-report/${reportId}/status`,
+  COMPUTE_CALIBRATION_PREVIEW:        ()                 => `/calibration-report/compute`,
 };

@@ -24,38 +24,51 @@
       display: flex;
       align-items: flex-start;
       margin-bottom: 4px;
+      gap: 0;
     }
+    /* Left: logo + taglines */
     .header-logo {
-      width: 140px;
+      width: 155px;
       flex-shrink: 0;
-      padding-top: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-right: 10px;
     }
     .header-logo img {
-      height: 135px;
+      height: 115px;
       width: auto;
     }
+    /* Center: company name + address */
     .header-company {
       flex: 1;
-      padding: 0 10px;
-      line-height: 1.55;
+      padding: 0 12px;
     }
     .header-company .company-name {
-      font-size: 20pt;
+      font-size: 18pt;
       font-weight: 700;
       color: #0a2351;
-      font-family: 'Times New Roman', Times, serif;
-      margin-bottom: 2px;
+      font-family: Arial, Helvetica, sans-serif;
+      margin-bottom: 6px;
+      line-height: 1.2;
     }
-.header-company .company-meta {
-  font-size: 9pt;
-  color: #000;
-  line-height: 1.4;  /* was 1.7 — tighten this */
-}
+    .header-company .company-meta {
+      font-size: 8.5pt;
+      color: #000;
+      line-height: 1.55;
+    }
+    .header-company .company-meta .meta-row {
+      display: flex;
+      justify-content: space-between;
+    }
+    /* Right: QR */
     .header-qr {
-      width: 95px;
+      width: 90px;
       flex-shrink: 0;
-      padding-top: 6px;
-      text-align: right;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding-top: 2px;
     }
     .header-qr img {
       height: 90px;
@@ -176,12 +189,43 @@
       font-weight: 700;
       margin-top: 10px;
     }
+
+    /* ── Watermark ── */
+    .page {
+      position: relative;
+    }
+    .watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-20deg);
+      width: 420px;
+      opacity: 0.07;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .watermark img {
+      width: 100%;
+      height: auto;
+    }
+    /* Ensure all page content sits above watermark */
+    .page > *:not(.watermark) {
+      position: relative;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════════════ PAGE 1 -->
 <div class="page">
+
+  <!-- Watermark -->
+  <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
+  <div class="watermark">
+    <img src="<%= logoUrl %>" alt="" />
+  </div>
+  <% } %>
 
   <!-- Header -->
   <div class="header">
@@ -193,13 +237,13 @@
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-        Unit #708 &amp; 709, 7th Floor, Gopal Heights, New Delhi - 110034<br/>
-        CIN: L28100MH1907PLC000252, &nbsp;&nbsp; Tel.: +91 33 2242 9510, &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
-        <span style="display:flex; justify-content:space-between; width:100%;">
+        19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
+        CIN: L28100MH1907PLC000252, &nbsp; Tel.: +91 33 2242 9510, &nbsp; Fax: +91 33 2248 0861<br/>
+        <span class="meta-row">
           <span>Email: salescal@josts.in</span>
           <span>Website: www.josts.com</span>
         </span>
-        <em>( Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001 )</em>
+        (Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001)
       </div>
     </div>
     <div class="header-qr">
@@ -411,6 +455,13 @@
 <!-- ═══════════════════════════════════════════════════════════════════ PAGE 2 -->
 <div class="page">
 
+  <!-- Watermark -->
+  <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
+  <div class="watermark">
+    <img src="<%= logoUrl %>" alt="" />
+  </div>
+  <% } %>
+
   <!-- Header -->
   <div class="header">
     <div class="header-logo">
@@ -418,18 +469,16 @@
         <img src="<%= logoUrl %>" alt="Josts Logo" />
       <% } %>
     </div>
-
-
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-          19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
-        CIN: L28100MH1907PLC000252, &nbsp;&nbsp; Tel.: +91 33 2242 9510, &nbsp;&nbsp; Fax: +91 33 2248 0861<br/>
-        <span style="display:flex; justify-content:space-between; width:100%;">
+        19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
+        CIN: L28100MH1907PLC000252, &nbsp; Tel.: +91 33 2242 9510, &nbsp; Fax: +91 33 2248 0861<br/>
+        <span class="meta-row">
           <span>Email: salescal@josts.in</span>
           <span>Website: www.josts.com</span>
         </span>
-        <em>( Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001 )</em>
+        (Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001)
       </div>
     </div>
     <div class="header-qr">

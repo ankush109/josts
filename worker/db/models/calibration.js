@@ -76,9 +76,17 @@ const calibrationReportSchema = new mongoose.Schema(
     status:     { type: String, enum: ["draft", "submitted", "verified", "rejected"], default: "draft" },
     createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     instruments: { type: [instrumentSchema], default: [] },
-    signatures: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+    signatures: {
+      type: new mongoose.Schema({
+        calibratedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        verifiedBy:   { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        calibratedAt: { type: Date },
+        verifiedAt:   { type: Date },
+      }, { _id: false }),
+      default: () => ({}),
+    },
     pdfReportId: { type: mongoose.Schema.Types.ObjectId, ref: "Report", default: null },
-    filePath:    { type: String, default: null },
+    filePaths:   { type: [String], default: [] },
   },
   { timestamps: true }
 );

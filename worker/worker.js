@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./db/connection.js";
 import Report from "./db/models/report.js";
 import CalibrationReport from "./db/models/calibration.js";
+import "./db/models/user.js";
 import path from "path";
 import fs from "fs";
 import ejs from "ejs";
@@ -219,10 +220,7 @@ async function handleCalibrationJob(reportId) {
     filePaths.push(s3Key);
   }
 
-  await CalibrationReport.findByIdAndUpdate(reportId, {
-    filePath:  filePaths[0] ?? null,
-    filePaths,
-  });
+  await CalibrationReport.findByIdAndUpdate(reportId, { filePaths });
   console.log(`Done: ${filePaths.join(", ")}`);
 }
 

@@ -60,6 +60,7 @@ import {
   Loader2,
   ShieldCheck,
   ShieldX,
+  PenLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
@@ -81,13 +82,15 @@ interface ReportListItem {
   status: ReportStatus;
   createdBy: { _id: string; name: string; email: string };
   instrumentCount: number;
+  instruments: { make: string; modelType: string }[];
   signatures: {
     calibratedBy?: { name: string; email: string };
     verifiedBy?: { name: string; email: string };
     calibratedAt?: string;
     verifiedAt?: string;
   };
-  filePath: string | null;
+  filePaths: string[];
+  customerName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -139,15 +142,19 @@ function StatusBadge({ status }: { status: ReportStatus }) {
 function StatCard({
   label,
   value,
+  total,
   icon,
   accent,
+  barColor,
   active,
   onClick,
 }: {
   label: string;
   value: number;
+  total: number;
   icon: React.ReactNode;
   accent: string;
+  barColor: string;
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -155,7 +162,7 @@ function StatCard({
     <button
       onClick={onClick}
       className={cn(
-        "flex-1 min-w-0 rounded-xl border p-4 text-left transition-all",
+        "flex-1 min-w-[120px] rounded-xl border p-4 text-left transition-all",
         active
           ? "border-[#1e3a5f]/40 shadow-sm ring-1 ring-[#1e3a5f]/20"
           : "border-slate-200 bg-white hover:border-[#1e3a5f]/20 hover:shadow-sm"
@@ -177,10 +184,29 @@ function StatCard({
 
 export default function CalibrationReportsTable() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const isAdmin = user?.role === "admin";
   const { data, isLoading, isError, refetch } = useGetCalibrationReports();
   const { mutate: verifyReject } = useVerifyRejectCalibration();
+
+  // ── First-login onboarding ──
+  const [sigName, setSigName] = useState("");
+  const [isSavingOnboard, setIsSavingOnboard] = useState(false);
+  const showOnboarding = !!user && !user.signatureName;
+
+  async function handleOnboardSave() {
+    if (!sigName.trim()) return;
+    setIsSavingOnboard(true);
+    try {
+      await AUTH_API.put(ENDPOINTS.UPDATE_PROFILE(), { signatureName: sigName.trim() });
+      setUser({ ...user!, signatureName: sigName.trim() });
+      toast.success("Welcome! Your profile is set up.");
+    } catch {
+      toast.error("Failed to save, please try again");
+    } finally {
+      setIsSavingOnboard(false);
+    }
+  }
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -190,17 +216,17 @@ export default function CalibrationReportsTable() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string | null>(null);
   const [viewingPdf, setViewingPdf] = useState<string | null>(null);
-  const [pendingPdfIds, setPendingPdfIds] = useState<Set<string>>(new Set());
-
   const allItems: ReportListItem[] = data?.items ?? [];
 
-  // ── Track reports awaiting PDF generation ──
-  useEffect(() => {
-    const pending = (data?.items ?? [])
-      .filter((r) => r.status !== "draft" && !r.filePath)
-      .map((r) => r._id);
-    setPendingPdfIds(new Set(pending));
-  }, [data]);
+  function isPdfFailed(report: ReportListItem) {
+    if (report.filePaths?.length) return false;
+    if (report.status === "draft") return false;
+    return Date.now() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000;
+  }
+
+  function isPdfPending(report: ReportListItem) {
+    return report.status !== "draft" && !report.filePaths?.length && !isPdfFailed(report);
+  }
 
   // ── Counts for stat cards ──
   const counts = useMemo(
@@ -251,12 +277,17 @@ export default function CalibrationReportsTable() {
 
   function confirmDelete(id: string) { setReportToDelete(id); setDeleteDialogOpen(true); }
 
-  async function handleViewPdf(e: React.MouseEvent, reportId: string) {
+  function toTitleCase(str: string) {
+    return str.replace(/\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+
+  async function handleViewPdf(e: React.MouseEvent, reportId: string, index = 0) {
     e.stopPropagation();
     setViewingPdf(reportId);
     try {
       const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(reportId, "calibration"));
-      window.open(res.data.fileUrl, "_blank");
+      const urls: string[] = res.data.fileUrls;
+      window.open(urls[index] ?? urls[0], "_blank");
     } catch {
       toast.error("Failed to load PDF");
     } finally {
@@ -323,12 +354,12 @@ export default function CalibrationReportsTable() {
         )}
       </div>
 
-      <div className="flex gap-3">
-        <StatCard label="Total Reports" value={counts.total} icon={<ClipboardList className="h-4 w-4" style={{ color: NAVY }} />} accent="bg-[#e8eef5]" active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
-        <StatCard label="Drafts" value={counts.draft} icon={<FileText className="h-4 w-4 text-slate-500" />} accent="bg-slate-100" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
-        <StatCard label="Submitted" value={counts.submitted} icon={<Clock className="h-4 w-4 text-sky-600" />} accent="bg-sky-50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
-        <StatCard label="Verified" value={counts.verified} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
-        <StatCard label="Rejected" value={counts.rejected} icon={<XCircle className="h-4 w-4 text-red-500" />} accent="bg-red-50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
+      <div className="flex flex-wrap gap-3">
+        <StatCard label="Total Reports" value={counts.total} total={counts.total} barColor="bg-[#1e3a5f]" icon={<ClipboardList className="h-4 w-4" style={{ color: NAVY }} />} accent="bg-[#e8eef5]" active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
+        <StatCard label="Drafts" value={counts.draft} total={counts.total} barColor="bg-slate-400" icon={<FileText className="h-4 w-4 text-slate-500" />} accent="bg-slate-100" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
+        <StatCard label="Submitted" value={counts.submitted} total={counts.total} barColor="bg-sky-500" icon={<Clock className="h-4 w-4 text-sky-600" />} accent="bg-sky-50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
+        <StatCard label="Verified" value={counts.verified} total={counts.total} barColor="bg-emerald-500" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
+        <StatCard label="Rejected" value={counts.rejected} total={counts.total} barColor="bg-red-400" icon={<XCircle className="h-4 w-4 text-red-500" />} accent="bg-red-50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
       </div>
 
       <Card className="shadow-sm border-slate-200">
@@ -370,6 +401,7 @@ export default function CalibrationReportsTable() {
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Status</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Created By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Instruments</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Customer</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Calibrated By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Verified By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Date</TableHead>
@@ -381,7 +413,7 @@ export default function CalibrationReportsTable() {
               <TableBody>
                 {currentRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-20 text-center">
+                    <TableCell colSpan={10} className="py-20 text-center">
                       <div className="flex flex-col items-center gap-3 text-slate-400">
                         <div className="h-12 w-12 rounded-full flex items-center justify-center" style={{ backgroundColor: NAVY_LIGHT }}>
                           <FileText className="h-6 w-6" style={{ color: NAVY }} />
@@ -402,7 +434,7 @@ export default function CalibrationReportsTable() {
                   </TableRow>
                 ) : (
                   currentRows.map((report) => (
-                    <TableRow key={report._id} className="hover:bg-[#f0f4f8]/60 transition-colors cursor-pointer group" onClick={() => router.push(`/calibration/${report._id}`)}>
+                    <TableRow key={report._id} className="hover:bg-[#f0f4f8]/80 transition-colors cursor-pointer group border-l-2 border-l-transparent hover:border-l-[#1e3a5f]/30" onClick={() => router.push(`/calibration/${report._id}`)}>
                       <TableCell className="pl-5">
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" style={{ backgroundColor: NAVY_LIGHT }}>
@@ -422,56 +454,102 @@ export default function CalibrationReportsTable() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <Layers className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="font-medium text-slate-700">{report.instrumentCount}</span>
-                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                          <Layers className="h-3 w-3" />
+                          {report.instrumentCount}
+                        </span>
                       </TableCell>
                       <TableCell>
-                        {report.signatures?.calibratedBy ? (
-                          <div>
-                            <p className="text-sm text-slate-700">{report.signatures.calibratedBy.name}</p>
-                            {report.signatures.calibratedAt && (
-                              <p className="text-xs text-slate-400">{new Date(report.signatures.calibratedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
-                            )}
-                          </div>
-                        ) : <span className="text-xs text-slate-300">—</span>}
+                        {report.customerName ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 max-w-[140px] truncate">
+                            {report.customerName}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {report.signatures?.verifiedBy ? (
-                          <div>
-                            <p className="text-sm text-slate-700">{report.signatures.verifiedBy.name}</p>
-                            {report.signatures.verifiedAt && (
-                              <p className="text-xs text-slate-400">{new Date(report.signatures.verifiedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
-                            )}
-                          </div>
-                        ) : <span className="text-xs text-slate-300">—</span>}
+                        {report.signatures?.calibratedBy
+                          ? <span className="text-sm font-medium text-slate-700">{report.signatures.calibratedBy.name}</span>
+                          : <span className="text-xs text-slate-300">—</span>}
                       </TableCell>
                       <TableCell>
-                        <div>
-                          <p className="text-sm text-slate-600">{new Date(report.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</p>
-                          <p className="text-xs text-slate-400">{new Date(report.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })} updated</p>
+                        {report.signatures?.verifiedBy
+                          ? <span className="text-sm font-medium text-slate-700">{report.signatures.verifiedBy.name}</span>
+                          : <span className="text-xs text-slate-300">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          className="flex flex-col gap-0.5"
+                          title={report.updatedAt !== report.createdAt
+                            ? `Updated ${new Date(report.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ${new Date(report.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`
+                            : undefined}
+                        >
+                          <span className="text-sm font-medium text-slate-700">
+                            {new Date(report.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                          <span className="text-xs text-slate-400">
+                            {new Date(report.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {report.status === "draft" ? (
                           <span className="text-xs text-slate-300">—</span>
-                        ) : pendingPdfIds.has(report._id) ? (
+                        ) : isPdfFailed(report) ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
+                            <XCircle className="h-3.5 w-3.5" /> Failed
+                          </span>
+                        ) : isPdfPending(report) ? (
                           <Loader2 className="h-4 w-4 animate-spin text-amber-500 mx-auto" />
-                        ) : report.filePath ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-slate-500 hover:text-[#1e3a5f]"
-                            onClick={(e) => handleViewPdf(e, report._id)}
-                            disabled={viewingPdf === report._id}
-                          >
-                            {viewingPdf === report._id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
+                        ) : report.filePaths.length > 0 ? (
+                          report.filePaths.length > 1 ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 px-2 gap-1 text-slate-500 hover:text-[#1e3a5f]"
+                                  onClick={(e) => e.stopPropagation()}
+                                  disabled={viewingPdf === report._id}
+                                >
+                                  {viewingPdf === report._id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Eye className="h-4 w-4" />
+                                      <span className="text-xs font-medium">{report.filePaths.length}</span>
+                                    </>
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="center" onClick={(e) => e.stopPropagation()}>
+                                {report.filePaths.map((_, i) => {
+                                  const inst = report.instruments[i];
+                                  const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
+                                  return (
+                                    <DropdownMenuItem key={i} onClick={(e) => handleViewPdf(e, report._id, i)}>
+                                      <Eye className="mr-2 h-4 w-4" /> {label}
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-slate-500 hover:text-[#1e3a5f]"
+                              onClick={(e) => handleViewPdf(e, report._id)}
+                              disabled={viewingPdf === report._id}
+                            >
+                              {viewingPdf === report._id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )
                         ) : (
                           <span className="text-xs text-slate-300">—</span>
                         )}
@@ -486,12 +564,24 @@ export default function CalibrationReportsTable() {
                           <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuLabel className="text-xs text-slate-400">Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => report.filePath ? handleViewPdf(e, report._id) : e.stopPropagation()}
-                              disabled={!report.filePath || viewingPdf === report._id}
-                            >
-                             <><Eye className="mr-2 h-4 w-4" />View PDF</>
-                            </DropdownMenuItem>
+                            {report.filePaths.length > 1 ? (
+                              report.filePaths.map((_, i) => {
+                                const inst = report.instruments[i];
+                                const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
+                                return (
+                                  <DropdownMenuItem key={i} onClick={(e) => handleViewPdf(e, report._id, i)} disabled={!report.filePaths.length || viewingPdf === report._id}>
+                                    <Eye className="mr-2 h-4 w-4" /> {label}
+                                  </DropdownMenuItem>
+                                );
+                              })
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={(e) => report.filePaths.length ? handleViewPdf(e, report._id) : e.stopPropagation()}
+                                disabled={!report.filePaths.length || viewingPdf === report._id}
+                              >
+                                <Eye className="mr-2 h-4 w-4" /> View PDF
+                              </DropdownMenuItem>
+                            )}
                             {!isAdmin && (
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/calibration/${report._id}`); }}>
                                 <Pencil className="mr-2 h-4 w-4" /> Edit report
@@ -527,7 +617,7 @@ export default function CalibrationReportsTable() {
               {processed.length > 0 && (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={9} className="text-xs text-slate-400 py-2.5 pl-5">
+                    <TableCell colSpan={10} className="text-xs text-slate-400 py-2.5 pl-5">
                       Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, processed.length)} of {processed.length} report{processed.length !== 1 ? "s" : ""}
                     </TableCell>
                   </TableRow>
@@ -578,6 +668,47 @@ export default function CalibrationReportsTable() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── First-login onboarding modal ── */}
+      {showOnboarding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="h-14 w-14 rounded-full flex items-center justify-center mb-1" style={{ backgroundColor: "#e8eef5" }}>
+                <PenLine className="h-6 w-6" style={{ color: "#1e3a5f" }} />
+              </div>
+              <h2 className="text-xl font-semibold tracking-tight" style={{ color: "#1e3a5f" }}>
+                One last step
+              </h2>
+              <p className="text-sm text-slate-500 max-w-xs">
+                Enter the name you&apos;d like to appear on calibration certificates and reports.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Signature / Display Name</label>
+              <Input
+                autoFocus
+                placeholder="e.g. Ankush Kumar"
+                value={sigName}
+                onChange={(e) => setSigName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleOnboardSave()}
+                className="h-10"
+              />
+              <p className="text-xs text-slate-400">This will be shown under your signature on all documents.</p>
+            </div>
+
+            <Button
+              onClick={handleOnboardSave}
+              disabled={!sigName.trim() || isSavingOnboard}
+              className="w-full h-10 text-white"
+              style={{ backgroundColor: "#1e3a5f" }}
+            >
+              {isSavingOnboard ? <Loader2 className="h-4 w-4 animate-spin" /> : "Get started →"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

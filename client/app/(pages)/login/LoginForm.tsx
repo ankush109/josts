@@ -92,6 +92,7 @@ export function LoginForm() {
       onSuccess: (response) => {
         localStorage.setItem("token", response.token);
         setUser(response.user);
+        setIsSubmitting(false);
         toast.success("Login successful!");
         router.push("/calibration");
       },
