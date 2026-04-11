@@ -17,9 +17,21 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ReportMeta {
+  certNo: string;
+  customerName: string;
+  customerAddress: string;
+  customerRefNo: string;
+  ducReceivedDate: string;
+  calibrationLocation: "onsite" | "at_lab";
+  dateOfCalibration: string;
+  calibrationDueDate: string;
+}
 
 interface InstrumentMeta {
   csrNo: string;
@@ -80,7 +92,7 @@ interface Instrument {
 type PanelState =
   | null
   | { type: "addInstrument" }
-  | { type: "addParam"; instId: string };
+  | { type: "addParam"; instId: string; instrumentKey: string };
 
 interface FormError {
   message: string;
@@ -89,65 +101,153 @@ interface FormError {
   fieldId?: string;
 }
 
-// ─── Predefined parameter → range labels ──────────────────────────────────────
+// ─── Parameter type keys ─────────────────────────────────────────────────────
+// Must stay in sync with PARAM_TYPES in server/src/v1/constants/voltage-ranges.js
 
-const PREDEFINED_PARAMS: Record<string, string[]> = {
-  "AC Voltage @50Hz": ["4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
-  "DC Voltage":       ["400mV/0.1", "4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
-  "DC Current":       ["400µA/0.1", "4mA/0.001", "40mA/0.01", "400mA/0.1", "10A/0.01"],
-  "AC Current @50Hz": ["400µA/0.1", "4mA/0.001", "40mA/0.01", "400mA/0.1", "10A/0.01"],
-  "Resistance":       ["400Ω/0.1", "4kΩ/0.001", "40kΩ/0.01", "400kΩ/0.1", "4MΩ/0.001", "40MΩ/0.01"],
+const PARAM_TYPES = {
+  DC_VOLTAGE:            "DC Voltage",
+  AC_VOLTAGE_50HZ:       "AC Voltage @50Hz",
+  DC_CURRENT:            "DC Current",
+  AC_CURRENT_50HZ:       "AC Current @50Hz",
+  RESISTANCE:            "Resistance",
+  CLAMP_AC_CURRENT_50HZ: "Clamp Meter AC Current @50Hz",
+  AC_VOLTAGE:            "AC Voltage",
+  AUX_DC_VOLTAGE:        "AUX. DC Voltage",
+} as const;
+
+// ─── modelType dropdown value → INSTRUMENT_CONSTANTS key ─────────────────────
+const MODEL_TO_INSTRUMENT_KEY: Record<string, string> = {
+  "8846A": "Fluke 8846A",
+  "780":   "SVERKER 780",
 };
 
-const PREDEFINED_UNITS: Record<string, string> = {
-  "AC Voltage @50Hz": "V",
-  "DC Voltage":       "V",
-  "DC Current":       "mA",
-  "AC Current @50Hz": "mA",
-  "Resistance":       "Ω",
-};
-
-// ─── Sample readings per predefined parameter → range index → measurement index ─
-// Each entry: [nomValue, [r1, r2, r3, r4, r5]]
+// ─── Per-instrument presets (ranges + units + sample readings) ────────────────
 
 type SampleMeasurement = [string, string[]];
-const PREDEFINED_SAMPLES: Record<string, SampleMeasurement[][]> = {
-  "AC Voltage @50Hz": [
-    [["0.5",  ["0.497","0.498","0.499","0.496","0.495"]], ["3.5",  ["3.494","3.497","3.493","3.493","3.493"]]],
-    [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
-    [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
-    [["500",  ["498",  "499",  "498",  "497",  "498" ]], ["950",  ["947",  "948",  "948",  "946",  "946" ]]],
-  ],
-  "DC Voltage": [
-    [["0.1",  ["0.0997","0.0998","0.0996","0.0997","0.0995"]], ["0.35", ["0.3496","0.3497","0.3494","0.3495","0.3493"]]],
-    [["0.5",  ["0.497", "0.498", "0.499", "0.496", "0.497" ]], ["3.5",  ["3.494", "3.497", "3.493", "3.494", "3.493" ]]],
-    [["5",    ["4.97",  "4.98",  "4.99",  "4.94",  "4.97"  ]], ["35",   ["34.95", "34.96", "34.97", "34.94", "34.93" ]]],
-    [["50",   ["49.9",  "50.0",  "49.8",  "49.6",  "49.9"  ]], ["350",  ["349.8", "349.9", "349.7", "349.7", "349.6" ]]],
-    [["500",  ["498",   "499",   "498",   "497",   "498"   ]], ["950",  ["947",   "948",   "948",   "946",   "946"   ]]],
-  ],
-  "DC Current": [
-    [["100",  ["99.9", "99.8", "99.9", "99.7", "99.8"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
-    [["0.5",  ["0.497","0.498","0.499","0.496","0.497"]], ["3.5",  ["3.494","3.497","3.493","3.494","3.493"]]],
-    [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
-    [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
-    [["5",    ["4.97", "4.98", "4.99", "4.96", "4.97"]], ["9",    ["8.97", "8.98", "8.96", "8.97", "8.95"]]],
-  ],
-  "AC Current @50Hz": [
-    [["100",  ["99.8", "99.9", "99.7", "99.8", "99.6"]], ["350",  ["349.7","349.8","349.6","349.7","349.5"]]],
-    [["0.5",  ["0.496","0.497","0.498","0.495","0.496"]], ["3.5",  ["3.493","3.496","3.492","3.493","3.492"]]],
-    [["5",    ["4.96", "4.97", "4.98", "4.93", "4.96"]], ["35",   ["34.93","34.94","34.95","34.92","34.91"]]],
-    [["50",   ["49.8", "49.9", "49.7", "49.5", "49.8"]], ["350",  ["349.6","349.7","349.5","349.5","349.4"]]],
-    [["5",    ["4.96", "4.97", "4.98", "4.95", "4.96"]], ["9",    ["8.95", "8.96", "8.94", "8.95", "8.93"]]],
-  ],
-  "Resistance": [
-    [["100",  ["99.9", "99.8", "99.9", "99.7", "99.8"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
-    [["1",    ["0.999","0.998","0.999","0.997","0.998"]], ["3.5",  ["3.497","3.498","3.496","3.497","3.495"]]],
-    [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
-    [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
-    [["1",    ["0.998","0.999","0.997","0.998","0.996"]], ["3.5",  ["3.495","3.496","3.494","3.495","3.493"]]],
-    [["5",    ["4.96", "4.97", "4.95", "4.96", "4.94"]], ["35",   ["34.92","34.93","34.91","34.92","34.90"]]],
-  ],
+
+interface InstrumentPreset {
+  params:  Record<string, string[]>;
+  units:   Record<string, string>;
+  samples: Record<string, SampleMeasurement[][]>;
+}
+
+const INSTRUMENT_PRESETS: Record<string, InstrumentPreset> = {
+  "Fluke 8846A": {
+    params: {
+      [PARAM_TYPES.AC_VOLTAGE_50HZ]: ["4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
+      [PARAM_TYPES.DC_VOLTAGE]:      ["400mV/0.1", "4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
+      [PARAM_TYPES.AC_CURRENT_50HZ]: ["40mA/0.01", "400mA/0.1", "4A/0.001", "10A/0.01"],
+      [PARAM_TYPES.DC_CURRENT]:      ["40mA/0.01", "400mA/0.1", "4A/0.001", "10A/0.01"],
+      [PARAM_TYPES.RESISTANCE]:      ["400Ω/0.1", "4KΩ/0.001", "40KΩ/0.01", "400KΩ/0.1"],
+    },
+    units: {
+      [PARAM_TYPES.AC_VOLTAGE_50HZ]: "V",
+      [PARAM_TYPES.DC_VOLTAGE]:      "V",
+      [PARAM_TYPES.AC_CURRENT_50HZ]: "mA",
+      [PARAM_TYPES.DC_CURRENT]:      "mA",
+      [PARAM_TYPES.RESISTANCE]:      "Ω",
+    },
+    samples: {
+      [PARAM_TYPES.AC_VOLTAGE_50HZ]: [
+        [["0.5",  ["0.497","0.498","0.499","0.496","0.495"]], ["3.5",  ["3.494","3.497","3.493","3.493","3.493"]]],
+        [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
+        [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
+        [["500",  ["498",  "499",  "498",  "497",  "498" ]], ["950",  ["947",  "948",  "948",  "946",  "946" ]]],
+      ],
+      [PARAM_TYPES.DC_VOLTAGE]: [
+        [["0.1",  ["0.0997","0.0998","0.0996","0.0997","0.0995"]], ["0.35", ["0.3496","0.3497","0.3494","0.3495","0.3493"]]],
+        [["0.5",  ["0.497", "0.498", "0.499", "0.496", "0.497" ]], ["3.5",  ["3.494", "3.497", "3.493", "3.494", "3.493" ]]],
+        [["5",    ["4.97",  "4.98",  "4.99",  "4.94",  "4.97"  ]], ["35",   ["34.95", "34.96", "34.97", "34.94", "34.93" ]]],
+        [["50",   ["49.9",  "50.0",  "49.8",  "49.6",  "49.9"  ]], ["350",  ["349.8", "349.9", "349.7", "349.7", "349.6" ]]],
+        [["500",  ["498",   "499",   "498",   "497",   "498"   ]], ["950",  ["947",   "948",   "948",   "946",   "946"   ]]],
+      ],
+      [PARAM_TYPES.AC_CURRENT_50HZ]: [
+        [["20",   ["19.97","19.98","19.96","19.97","19.95"]], ["35",   ["34.95","34.96","34.94","34.95","34.93"]]],
+        [["200",  ["199.8","199.9","199.7","199.8","199.6"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
+        [["2",    ["1.997","1.998","1.996","1.997","1.995"]], ["3.5",  ["3.495","3.496","3.494","3.495","3.493"]]],
+        [["5",    ["4.97", "4.98", "4.96", "4.97", "4.95"]], ["9",    ["8.97", "8.98", "8.96", "8.97", "8.95"]]],
+      ],
+      [PARAM_TYPES.DC_CURRENT]: [
+        [["20",   ["19.97","19.98","19.96","19.97","19.95"]], ["35",   ["34.95","34.96","34.94","34.95","34.93"]]],
+        [["200",  ["199.8","199.9","199.7","199.8","199.6"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
+        [["2",    ["1.997","1.998","1.996","1.997","1.995"]], ["3.5",  ["3.495","3.496","3.494","3.495","3.493"]]],
+        [["5",    ["4.97", "4.98", "4.96", "4.97", "4.95"]], ["9",    ["8.97", "8.98", "8.96", "8.97", "8.95"]]],
+      ],
+      [PARAM_TYPES.RESISTANCE]: [
+        [["100",  ["99.9", "100.0","99.8", "99.9", "99.7"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
+        [["1",    ["0.999","1.000","0.998","0.999","0.997"]], ["3.5",  ["3.496","3.497","3.495","3.496","3.494"]]],
+        [["10",   ["9.97", "9.98", "9.96", "9.97", "9.95"]], ["35",   ["34.93","34.94","34.92","34.93","34.91"]]],
+        [["100",  ["99.8", "99.9", "99.7", "99.8", "99.6"]], ["350",  ["349.6","349.7","349.5","349.6","349.4"]]],
+      ],
+    },
+  },
+
+  "SVERKER 780": {
+    params: {
+      [PARAM_TYPES.AC_CURRENT_50HZ]: ["40A/0.01", "100A/0.01"],
+      [PARAM_TYPES.AC_VOLTAGE]:      ["60V/1", "600V/1"],
+      [PARAM_TYPES.AUX_DC_VOLTAGE]:  ["130V/1", "220V/1"],
+      [PARAM_TYPES.RESISTANCE]:      ["10Ω/1", "100Ω/1", "1000Ω/1", "2.5kΩ/0.001"],
+    },
+    units: {
+      [PARAM_TYPES.AC_CURRENT_50HZ]: "A",
+      [PARAM_TYPES.AC_VOLTAGE]:      "V",
+      [PARAM_TYPES.AUX_DC_VOLTAGE]:  "V",
+      [PARAM_TYPES.RESISTANCE]:      "Ω",
+    },
+    samples: {
+      [PARAM_TYPES.AC_CURRENT_50HZ]: [
+        [["30",   ["29.98","30.28","30.18","29.58","29.88"]]],
+        [
+          ["50",  ["49.93","50.03","49.83","49.93","49.93"]],
+          ["60",  ["59.91","60.01","60.11","60.01","59.51"]],
+          ["80",  ["79.88","80.28","d",    "79.38","79.78"]],
+          ["100", ["99.79","100.19","99.59","99.59","99.79"]],
+        ],
+      ],
+      [PARAM_TYPES.AC_VOLTAGE]: [
+        [
+          ["30",  ["29.997","30.297","30.197","29.597","29.897"]],
+        ],
+        [
+          ["100", ["99.96", "100.06","99.86", "99.96", "99.96"]],
+          ["300", ["299.93","300.03","300.13","300.03","299.53"]],
+          ["450", ["449.91","453.91","451.91","444.91","448.91"]],
+          ["600", ["599.8", "603.8", "597.8", "597.8", "599.8"]],
+        ],
+      ],
+      [PARAM_TYPES.AUX_DC_VOLTAGE]: [
+        [
+          ["30",  ["29.998","30.298","30.198","29.598","29.898"]],
+          ["100", ["99.97", "100.07","99.87", "99.97", "99.97"]],
+        ],
+        [
+          ["150", ["149.96","150.06","150.16","150.06","149.56"]],
+          ["200", ["199.96","203.96","201.96","194.96","198.96"]],
+          ["220", ["219.93","223.93","217.93","217.93","219.93"]],
+        ],
+      ],
+      [PARAM_TYPES.RESISTANCE]: [
+        [
+          ["0.5", ["0.49", "0.52", "0.51", "0.45", "0.48"]],
+          ["1",   ["0.99", "1.00", "0.98", "0.99", "0.99"]],
+        ],
+        [
+          ["25",  ["24.98","25.02","25.00","24.93","24.97"]],
+          ["100", ["99.98","100.02","99.96","99.96","99.98"]],
+        ],
+        [
+          ["500", ["499.95","499.99","499.97","499.90","499.94"]],
+        ],
+        [
+          ["1",   ["0.9997","1.0001","0.9999","0.9992","0.9996"]],
+          ["3",   ["2.4994","2.4998","2.4996","2.4989","2.4993"]],
+        ],
+      ],
+    },
+  },
 };
+
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -156,14 +256,34 @@ const emptyReadings = (): string[] => Array(5).fill("");
 
 const isNumericInput = (v: string) => v === "" || /^-?\d*\.?\d*$/.test(v);
 
-// Reading must be ≤ its own nom value (DUC always reads slightly below the set reference value)
+// Reading is out of range if it reaches or exceeds nom + 1 (allows slight overshoot below that threshold)
 function isOutOfRange(val: string, nomValue: string): boolean {
   if (val === "" || nomValue === "") return false;
   const reading = parseFloat(val);
   const nom = parseFloat(nomValue);
   if (isNaN(reading) || isNaN(nom)) return false;
-  return reading > nom;
+  return reading >= nom + 1;
 }
+
+const BLANK_REPORT_META: ReportMeta = {
+  certNo: "", customerName: "", customerAddress: "",
+  customerRefNo: "", ducReceivedDate: "",
+  calibrationLocation: "at_lab", dateOfCalibration: "", calibrationDueDate: "",
+};
+
+// ─── Report-level field helper ─────────────────────────────────────────────────
+
+const RF: FC<{
+  label: string; value: string; span2?: boolean; readOnly?: boolean;
+  type?: string; placeholder?: string; onChange?: (v: string) => void;
+}> = ({ label, value, span2, readOnly, type = "text", placeholder, onChange }) => (
+  <div className={cn("flex flex-col gap-1", span2 && "col-span-2")}>
+    <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">{label}</Label>
+    <Input type={type} value={value} readOnly={readOnly} placeholder={placeholder}
+      onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+      className={cn("h-9 text-sm", readOnly && "bg-zinc-50 text-zinc-500 cursor-default")} />
+  </div>
+);
 
 const BLANK_META: InstrumentMeta = {
   csrNo: "", calDate: "", jobId: "", idNo: "NA",
@@ -184,12 +304,13 @@ function makeMeasurement(): Measurement {
   return { id: uid(), nomValue: "", readings: emptyReadings(), corrected: "", computed: null };
 }
 
-function makeParam(name = "", unit = ""): Parameter {
-  const predefinedLabels = PREDEFINED_PARAMS[name];
+function makeParam(name = "", unit = "", instrumentKey = ""): Parameter {
+  const preset = INSTRUMENT_PRESETS[instrumentKey];
+  const predefinedLabels = preset?.params[name];
   if (predefinedLabels) {
-    const samples = PREDEFINED_SAMPLES[name];
+    const samples = preset.samples[name];
     return {
-      id: uid(), name, unit, isPredefined: true,
+      id: uid(), name, unit: unit || preset.units[name] || "", isPredefined: true,
       ranges: predefinedLabels.map((label, ri) => ({
         id: uid(), label,
         measurements: (samples?.[ri] ?? []).length > 0
@@ -202,7 +323,7 @@ function makeParam(name = "", unit = ""): Parameter {
 }
 
 function makeInstrument(meta: InstrumentMeta = BLANK_META): Instrument {
-  return { id: uid(), meta: { ...meta }, params: [makeParam()] };
+  return { id: uid(), meta: { ...meta }, params: [] };
 }
 
 // ─── Field ────────────────────────────────────────────────────────────────────
@@ -242,6 +363,39 @@ const Field: FC<{
   );
 };
 
+const SelectField: FC<{
+  label: string;
+  k: keyof InstrumentMeta;
+  options: string[];
+  span2?: boolean;
+  locked?: boolean;
+  meta: InstrumentMeta;
+  onChange: (key: keyof InstrumentMeta, val: string) => void;
+}> = ({ label, k, options, span2, locked, meta, onChange }) => (
+  <div className={cn("flex flex-col gap-1.5", span2 && "col-span-2")}>
+    <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+      {label}
+    </Label>
+    {locked ? (
+      <div className="h-9 px-3 flex items-center rounded-md border border-zinc-200 bg-zinc-50 text-sm text-zinc-500 gap-1.5">
+        <span className="flex-1 truncate">{String(meta[k]) || `—`}</span>
+        <span className="text-[10px] text-zinc-400 font-medium shrink-0">locked</span>
+      </div>
+    ) : (
+      <Select value={meta[k]} onValueChange={(val) => onChange(k, val)}>
+        <SelectTrigger className="h-9 text-sm">
+          <SelectValue placeholder={`Select ${label}`} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )}
+  </div>
+);
+
 // ─── Section divider ──────────────────────────────────────────────────────────
 
 const SectionLabel: FC<{ label: string }> = ({ label }) => (
@@ -271,12 +425,13 @@ const CollapsibleSection: FC<{
 
 const MetaGrid: FC<{
   meta: InstrumentMeta;
+  modelLocked?: boolean;
   showErrors?: boolean;
   autoFocusCsr?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ meta, showErrors, autoFocusCsr, touched, onTouch, onChange }) => {
+}> = ({ meta, modelLocked, showErrors, autoFocusCsr, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const sharedProps = { meta, showErrors, touched, onTouch, onChange };
@@ -287,8 +442,8 @@ const MetaGrid: FC<{
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
-      <Field label="Make"                k="make"          {...sharedProps} />
-      <Field label="Model / Type"        k="modelType"     {...sharedProps} />
+      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER"]} locked={modelLocked} meta={meta} onChange={onChange} />
+      <SelectField label="Model / Type" k="modelType" options={["8846A", "780"]}   locked={modelLocked} meta={meta} onChange={onChange} />
       <Field label="Sl. No"              k="slNo"          {...sharedProps} />
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
 
@@ -648,19 +803,20 @@ const SbInstrument: FC<{
   inst: Instrument;
   isActive: boolean;
   activeParamId: string;
+  canAddParam: boolean;
   onSelectInstrument: (id: string) => void;
   onSelectParam: (instId: string, paramId: string) => void;
   onRemoveInstrument: (id: string) => void;
   onRemoveParam: (instId: string, paramId: string) => void;
   onAddParam: (instId: string) => void;
-}> = ({ inst, isActive, activeParamId, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
+}> = ({ inst, isActive, activeParamId, canAddParam, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
   const label = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
   const sub   = [inst.meta.make, inst.meta.modelType].filter(Boolean).join(" · ");
 
   return (
     <div className="mb-1">
       <div
-        onClick={() => { onSelectInstrument(inst.id); onSelectParam(inst.id, inst.params[0].id); }}
+        onClick={() => { onSelectInstrument(inst.id); if (inst.params[0]) onSelectParam(inst.id, inst.params[0].id); }}
         className={cn(
           "flex items-center justify-between px-2.5 py-2 rounded-lg cursor-pointer group transition-all",
           isActive
@@ -722,9 +878,25 @@ const SbInstrument: FC<{
             );
           })}
 
-          <Button variant="outline" size="xs" onClick={() => onAddParam(inst.id)} className="w-full border-dashed mt-1 text-muted-foreground">
-            <Plus />Add parameter
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-full mt-1 block">
+                <Button
+                  variant="outline" size="xs"
+                  onClick={() => onAddParam(inst.id)}
+                  disabled={!canAddParam}
+                  className="w-full border-dashed text-muted-foreground"
+                >
+                  <Plus />Add parameter
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!canAddParam && (
+              <TooltipContent side="right" className="text-xs max-w-[180px]">
+                Select Make &amp; Model Type first
+              </TooltipContent>
+            )}
+          </Tooltip>
         </div>
       )}
     </div>
@@ -776,9 +948,10 @@ const AddInstrumentPanel: FC<{
 
 const AddParamDialog: FC<{
   open: boolean;
+  instrumentKey: string;
   onCancel: () => void;
   onConfirm: (name: string, unit: string) => void;
-}> = ({ open, onCancel, onConfirm }) => {
+}> = ({ open, instrumentKey, onCancel, onConfirm }) => {
   const [mode,  setMode]  = useState<"pick" | "custom">("pick");
   const [name,  setName]  = useState("");
   const [unit,  setUnit]  = useState("");
@@ -804,15 +977,15 @@ const AddParamDialog: FC<{
         <div className="flex flex-col gap-2 mt-1">
           {mode === "pick" ? (
             <>
-              {Object.keys(PREDEFINED_PARAMS).map((pName) => (
+              {Object.entries(INSTRUMENT_PRESETS[instrumentKey]?.params ?? {}).map(([pName, labels]) => (
                 <button
                   key={pName}
-                  onClick={() => onConfirm(pName, PREDEFINED_UNITS[pName] ?? "")}
+                  onClick={() => onConfirm(pName, INSTRUMENT_PRESETS[instrumentKey]?.units[pName] ?? "")}
                   className="text-left px-3 py-2.5 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
                 >
                   <div className="text-sm font-semibold">{pName}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {PREDEFINED_PARAMS[pName].join(" · ")}
+                    {labels.join(" · ")}
                   </div>
                 </button>
               ))}
@@ -838,13 +1011,20 @@ const AddParamDialog: FC<{
 
 // ─── Payload mapper ───────────────────────────────────────────────────────────
 
-function buildPayload(instruments: Instrument[], status: "draft" | "submitted", createdBy: string) {
+function buildPayload(instruments: Instrument[], status: "draft" | "submitted", createdBy: string, rm: ReportMeta) {
   const csrNo = instruments[0]?.meta.csrNo ?? "";
 
   return {
     csrNo,
     status,
     createdBy,
+    customerName:        rm.customerName,
+    customerAddress:     rm.customerAddress,
+    customerRefNo:       rm.customerRefNo,
+    ducReceivedDate:     rm.ducReceivedDate  || undefined,
+    calibrationLocation: rm.calibrationLocation,
+    dateOfCalibration:   rm.dateOfCalibration  || undefined,
+    calibrationDueDate:  rm.calibrationDueDate || undefined,
     instruments: instruments.map((inst) => ({
       nomenclature:  inst.meta.nomenclature,
       make:          inst.meta.make,
@@ -913,7 +1093,7 @@ function mapApiToInstruments(apiReport: any): Instrument[] {
       id:          p._id ?? uid(),
       name:        p.name ?? "",
       unit:        p.unit ?? "",
-      isPredefined: Boolean(PREDEFINED_PARAMS[p.name]),
+      isPredefined: Object.values(INSTRUMENT_PRESETS).some((preset) => p.name in preset.params),
       ranges: (p.ranges ?? []).map((r: any) => ({
         id:    r._id ?? uid(),
         label: r.label ?? "",
@@ -929,6 +1109,19 @@ function mapApiToInstruments(apiReport: any): Instrument[] {
       })),
     })),
   }));
+}
+
+function mapApiToReportMeta(r: any): ReportMeta {
+  return {
+    certNo:              r.certNo ?? "",
+    customerName:        r.customerName ?? "",
+    customerAddress:     r.customerAddress ?? "",
+    customerRefNo:       r.customerRefNo ?? "",
+    ducReceivedDate:     r.ducReceivedDate  ? r.ducReceivedDate.slice(0, 10)  : "",
+    calibrationLocation: r.calibrationLocation ?? "at_lab",
+    dateOfCalibration:   r.dateOfCalibration  ? r.dateOfCalibration.slice(0, 10)  : "",
+    calibrationDueDate:  r.calibrationDueDate ? r.calibrationDueDate.slice(0, 10) : "",
+  };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -947,52 +1140,55 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   const { data: existingReport, isLoading: isLoadingReport } = useGetCalibrationReportById(reportId ?? "");
 
-  const blankInstrument = useMemo((): Instrument => {
-    const mkM = (nom: string, r: string[]): Measurement => ({
-      id: uid(), nomValue: nom, corrected: "", computed: null,
-      readings: r.slice(0, 5),
-    });
-    return {
-      id: uid(), meta: { ...BLANK_META },
-      params: [{
-        id: uid(), name: "AC Voltage @50Hz", unit: "V", isPredefined: true,
-        ranges: [
-          { id: uid(), label: "4V/0.001",  measurements: [mkM("0.5", ["0.497","0.498","0.499","0.496","0.495"]),  mkM("3.5",  ["3.494","3.497","3.493","3.493","3.493"])] },
-          { id: uid(), label: "40V/0.01",  measurements: [mkM("5",   ["4.97", "4.98", "4.99", "4.94", "4.97"]),   mkM("35",   ["34.95","34.96","34.97","34.94","34.93"])] },
-          { id: uid(), label: "400V/0.1",  measurements: [mkM("50",  ["49.9", "50.0", "49.8", "49.6", "49.9"]),   mkM("350",  ["349.8","349.9","349.7","349.7","349.6"])] },
-          { id: uid(), label: "1000V/1",   measurements: [mkM("500", ["498",  "499",  "498",  "497",  "498"]),    mkM("950",  ["947",  "948",  "948",  "946",  "946"])] },
-        ],
-      }],
-    };
+  const blankInstrument = useMemo((): Instrument => ({
+    id: uid(), meta: { ...BLANK_META }, params: [],
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }), []);
   const [instruments,   setInstruments]   = useState<Instrument[]>([blankInstrument]);
   const [activeInstId,  setActiveInstId]  = useState<string>(blankInstrument.id);
-  const [activeParamId, setActiveParamId] = useState<string>(blankInstrument.params[0].id);
+  const [activeParamId, setActiveParamId] = useState<string>("");
   const [panel,         setPanel]         = useState<PanelState>(null);
   const [hydrated,      setHydrated]      = useState(false);
   const [view,          setView]          = useState<"readings" | "results">("readings");
   const [formErrors,    setFormErrors]    = useState<FormError[]>([]);
   const [errorPanelOpen, setErrorPanelOpen] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [reportMeta, setReportMeta] = useState<ReportMeta>({ ...BLANK_REPORT_META });
+
+  const updateReportMeta = useCallback(<K extends keyof ReportMeta>(key: K, val: ReportMeta[K]) => {
+    setReportMeta((prev) => ({ ...prev, [key]: val }));
+  }, []);
+
+  // Auto-set dateOfCalibration when onsite
+  useEffect(() => {
+    if (reportMeta.calibrationLocation === "onsite" && reportMeta.ducReceivedDate) {
+      setReportMeta((prev) => ({ ...prev, dateOfCalibration: prev.ducReceivedDate }));
+    }
+  }, [reportMeta.calibrationLocation, reportMeta.ducReceivedDate]);
+
+  // Auto-compute calibrationDueDate = dateOfCalibration + 1 year
+  useEffect(() => {
+    if (!reportMeta.dateOfCalibration) return;
+    const d = new Date(reportMeta.dateOfCalibration);
+    if (isNaN(d.getTime())) return;
+    d.setFullYear(d.getFullYear() + 1);
+    setReportMeta((prev) => ({ ...prev, calibrationDueDate: d.toISOString().slice(0, 10) }));
+  }, [reportMeta.dateOfCalibration]);
 
   useEffect(() => {
     if (!existingReport || hydrated) return;
     const mapped = mapApiToInstruments(existingReport);
     if (!mapped.length) return;
-    // If the first instrument has only one unnamed/empty parameter, replace with AC default
     const first = mapped[0];
-    if (first.params.length === 1 && !first.params[0].name.trim()) {
-      first.params = blankInstrument.params.map((p) => ({ ...p, id: uid() }));
-    }
     setInstruments(mapped);
     setActiveInstId(first.id);
-    setActiveParamId(first.params[0].id);
+    if (first.params[0]) setActiveParamId(first.params[0].id);
+    setReportMeta(mapApiToReportMeta(existingReport));
     setHydrated(true);
-  }, [existingReport, hydrated, blankInstrument.params]);
+  }, [existingReport, hydrated]);
 
   const activeInst  = instruments.find((i) => i.id === activeInstId)  ?? instruments[0];
-  const activeParam = activeInst.params.find((p) => p.id === activeParamId) ?? activeInst.params[0];
+  const activeParam = activeInst.params.find((p) => p.id === activeParamId) ?? activeInst.params[0] ?? null;
 
   const { user } = useAuth();
   const userId = user?.id ?? (user as any)?._id ?? null;
@@ -1014,7 +1210,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             m.readings.forEach((v, ri) => {
               if (isOutOfRange(v, m.nomValue))
                 errors.push({
-                  message: `Reading ${v} > nom ${m.nomValue} in "${r.label}" column ${ri + 1}`,
+                  message: `Reading ${v} ≥ nom+1 (${Number(m.nomValue) + 1}) in "${r.label}" column ${ri + 1}`,
                   instId: inst.id, paramId: p.id, fieldId: `reading-${m.id}-${ri}`,
                 });
             });
@@ -1063,7 +1259,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setTouchedFields(new Set());
     refetch()
 
-    const payload = buildPayload(instruments, status, userId);
+    const payload = buildPayload(instruments, status, userId, reportMeta);
 
     const successMsg = status === "draft"
       ? "Draft saved successfully"
@@ -1110,7 +1306,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     if (instruments.length === 1) return;
     const rem = instruments.filter((i) => i.id !== id);
     setInstruments(rem);
-    if (activeInstId === id) { setActiveInstId(rem[0].id); setActiveParamId(rem[0].params[0].id); }
+    if (activeInstId === id) { setActiveInstId(rem[0].id); if (rem[0].params[0]) setActiveParamId(rem[0].params[0].id); }
   };
 
   const removeParam = (instId: string, paramId: string) => {
@@ -1132,18 +1328,19 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     const newInst = makeInstrument(meta);
     setInstruments((ins) => [...ins, newInst]);
     setActiveInstId(newInst.id);
-    setActiveParamId(newInst.params[0].id);
     setPanel(null);
   };
 
   const handleAddParam = (instId: string) => {
     setActiveInstId(instId);
-    setPanel({ type: "addParam", instId });
+    const inst = instruments.find((i) => i.id === instId);
+    const instrumentKey = MODEL_TO_INSTRUMENT_KEY[inst?.meta.modelType ?? ""] ?? "";
+    setPanel({ type: "addParam", instId, instrumentKey });
   };
 
   const handleAddParamConfirm = (name: string, unit: string) => {
     if (panel?.type !== "addParam") return;
-    const p = makeParam(name, unit);
+    const p = makeParam(name, unit, panel.instrumentKey);
     setInstruments((ins) =>
       ins.map((i) => i.id !== panel.instId ? i : { ...i, params: [...i.params, p] })
     );
@@ -1212,6 +1409,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               inst={inst}
               isActive={inst.id === activeInstId}
               activeParamId={activeParamId}
+              canAddParam={!!(inst.meta.make && inst.meta.modelType)}
               onSelectInstrument={(id) => { setActiveInstId(id); setPanel(null); }}
               onSelectParam={(instId, paramId) => { setActiveInstId(instId); setActiveParamId(paramId); setPanel(null); }}
               onRemoveInstrument={removeInstrument}
@@ -1262,20 +1460,25 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 );
               })()}
             </div>
-            <input
-              id={`param-name-${activeParam.id}`}
-              value={activeParam.name}
-              onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
-              readOnly={activeParam.isPredefined}
-              placeholder="Parameter name"
-              className="text-lg font-semibold text-zinc-900 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300"
-            />
+            {activeParam ? (
+              <input
+                id={`param-name-${activeParam.id}`}
+                value={activeParam.name}
+                onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
+                readOnly={activeParam.isPredefined}
+                placeholder="Parameter name"
+                className="text-lg font-semibold text-zinc-900 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300"
+              />
+            ) : (
+              <div className="text-lg font-semibold text-zinc-300">No parameters yet</div>
+            )}
             <div className="text-xs text-zinc-400 mt-0.5">
               JECL/KOL/LAB/FM/36B · {activeInst.meta.calDate || "No date set"}
             </div>
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
+            {activeParam && (
             <div className="flex items-center gap-1.5 border-r border-zinc-200 pr-3">
               <span className="text-xs text-zinc-400">Unit</span>
               <input
@@ -1285,6 +1488,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 className="w-16 h-8 font-mono text-sm text-center rounded-lg border border-zinc-200 bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
               />
             </div>
+            )}
 
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => handleSave("draft")} disabled={isPending}>
@@ -1311,6 +1515,37 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         {/* Content area */}
         <div className="flex-1 px-8 py-6 space-y-4">
 
+          {/* Report Details section */}
+          <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
+              <span className="text-sm font-semibold text-zinc-800">Report Details</span>
+              <span className="ml-2 text-xs text-zinc-400">· Customer · Dates · Certificate</span>
+            </div>
+            <div className="p-5">
+              <div className="grid grid-cols-4 gap-x-4 gap-y-3">
+                <RF label="Certificate No" value={reportMeta.certNo || (isEditMode ? "" : "Auto-generated on save")} readOnly placeholder="Auto-generated" />
+                <RF label="Customer Ref No (PO)" value={reportMeta.customerRefNo} onChange={(v) => updateReportMeta("customerRefNo", v)} />
+                <RF label="Customer Name" value={reportMeta.customerName} span2 onChange={(v) => updateReportMeta("customerName", v)} />
+                <RF label="Customer Address" value={reportMeta.customerAddress} span2 onChange={(v) => updateReportMeta("customerAddress", v)} />
+                <RF label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Location</Label>
+                  <Select value={reportMeta.calibrationLocation} onValueChange={(v) => updateReportMeta("calibrationLocation", v as "onsite" | "at_lab")}>
+                    <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="onsite">Onsite</SelectItem>
+                      <SelectItem value="at_lab">At Lab</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <RF label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
+                  readOnly={reportMeta.calibrationLocation === "onsite"}
+                  onChange={reportMeta.calibrationLocation === "at_lab" ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
+                <RF label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date" readOnly />
+              </div>
+            </div>
+          </div>
+
           {/* Instrument details section */}
           <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
@@ -1325,6 +1560,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             <div className="p-5">
               <MetaGrid
                 meta={activeInst.meta}
+                modelLocked={activeInst.params.length > 0}
                 showErrors={formErrors.length > 0}
                 autoFocusCsr={!isEditMode}
                 touched={touchedFields}
@@ -1334,8 +1570,25 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             </div>
           </div>
 
+          {/* Empty state — no params yet */}
+          {!activeParam && (
+            <div className="bg-white rounded-xl border border-dashed border-zinc-300 flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <FlaskConical className="h-8 w-8 text-zinc-300" />
+              <div className="text-sm font-semibold text-zinc-500">No parameters added yet</div>
+              {activeInst.meta.make && activeInst.meta.modelType ? (
+                <div className="text-xs text-zinc-400">
+                  Click <span className="font-semibold">+ Add parameter</span> in the sidebar to get started
+                </div>
+              ) : (
+                <div className="text-xs text-zinc-400">
+                  Select <span className="font-semibold">Make</span> and <span className="font-semibold">Model / Type</span> above, then add a parameter
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Measurement / Results tabs */}
-          <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          {activeParam && <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-zinc-800">
@@ -1372,7 +1625,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 <ResultsTable param={activeParam} />
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Signatures */}
           <div className="bg-white rounded-xl border border-zinc-200 px-6 py-5">
@@ -1394,6 +1647,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       {/* ── Add parameter dialog ── */}
       <AddParamDialog
         open={panel?.type === "addParam"}
+        instrumentKey={panel?.type === "addParam" ? panel.instrumentKey : ""}
         onCancel={() => setPanel(null)}
         onConfirm={handleAddParamConfirm}
       />

@@ -237,10 +237,10 @@
       <td class="bold center" colspan="3">Customer Reference No.</td>
     </tr>
     <tr>
-      <td class="center">12/04/2026</td>
-      <td class="center">16/04/2026</td>
-      <td class="center">10/04/2026</td>
-      <td class="center" colspan="3">THJ2213FUUUUU2111</td>
+      <td class="center"><%= typeof ducReceivedDate !== 'undefined' ? ducReceivedDate : '' %></td>
+      <td class="center"><%= typeof dateOfCalibration !== 'undefined' ? dateOfCalibration : '' %></td>
+      <td class="center"><%= typeof calibrationDueDate !== 'undefined' ? calibrationDueDate : '' %></td>
+      <td class="center" colspan="3"><%= typeof customerReferenceNo !== 'undefined' ? customerReferenceNo : '' %></td>
     </tr>
   </table>
 
@@ -248,11 +248,7 @@
   <table>
     <tr>
       <td class="bold" style="width:30%">Name &amp; Address of the Customer :</td>
-      <td style="white-space:pre-line">
-        Assam Electricity Grid Corporation Limited
-O/o The Assistant General Manager
-T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
-      </td>
+      <td style="white-space:pre-line"><% if (typeof customerName !== 'undefined' && customerName) { %><strong><%= customerName %></strong><br/><% } %><%= typeof customerAddress !== 'undefined' ? customerAddress : '' %></td>
     </tr>
   </table>
 
@@ -387,7 +383,7 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
       <% } else { %>
         <div style="height:60px;"></div>
       <% } %>
-      <div class="signature-name"><%= typeof calibratedByName !== 'undefined' ? calibratedByName : 'Debasish Roy' %></div>
+      <div class="signature-name"><%= typeof calibratedByName !== 'undefined' ? calibratedByName : '' %></div>
       <div class="signature-role">Calibrated By : <%= typeof calibratedByRole !== 'undefined' ? calibratedByRole : 'Calibration Engineer' %></div>
     </div>
     <div class="stamp-block">
@@ -403,7 +399,7 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
       <% } else { %>
         <div style="height:60px;"></div>
       <% } %>
-      <div class="signature-name"><%= typeof approvedByName !== 'undefined' ? approvedByName : 'Santi Pada Sinha' %></div>
+      <div class="signature-name"><%= typeof approvedByName !== 'undefined' ? approvedByName : '' %></div>
       <div class="signature-role">Approved By : <%= typeof approvedByRole !== 'undefined' ? approvedByRole : 'Technical/Quality Manager' %></div>
     </div>
   </div>
@@ -531,7 +527,7 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
       <% } else { %>
         <div style="height:60px;"></div>
       <% } %>
-      <div class="signature-name"><%= typeof calibratedByName !== 'undefined' ? calibratedByName : 'Debasish Roy' %></div>
+      <div class="signature-name"><%= typeof calibratedByName !== 'undefined' ? calibratedByName : '' %></div>
       <div class="signature-role">Calibrated By : <%= typeof calibratedByRole !== 'undefined' ? calibratedByRole : 'Calibration Engineer' %></div>
     </div>
     <div class="stamp-block">
@@ -547,7 +543,7 @@ T & C Division, AEGCL, Hukanpukhuri, Makum Road, Tinsukia - 786146
       <% } else { %>
         <div style="height:60px;"></div>
       <% } %>
-      <div class="signature-name"><%= typeof approvedByName !== 'undefined' ? approvedByName : 'Santi Pada Sinha' %></div>
+      <div class="signature-name"><%= typeof approvedByName !== 'undefined' ? approvedByName : '' %></div>
       <div class="signature-role">Approved By : <%= typeof approvedByRole !== 'undefined' ? approvedByRole : 'Technical/Quality Manager' %></div>
     </div>
   </div>

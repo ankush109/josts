@@ -11,7 +11,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+        <body style={{ fontFamily: '"Times New Roman", Times, serif' }}>
         <RootProvider>{children}</RootProvider>
       </body>
     </html>

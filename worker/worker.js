@@ -71,8 +71,8 @@ function formatDate(date) {
   });
 }
 
-function mapCalibrationToTemplateData(report) {
-  const inst = report.instruments?.[0] ?? {};
+function mapCalibrationToTemplateData(report, instIndex = 0) {
+  const inst = report.instruments?.[instIndex] ?? {};
   const ref  = inst.refStandard ?? {};
 
   const calibrationResults = (inst.parameters ?? []).map((param) => ({
@@ -112,15 +112,16 @@ function mapCalibrationToTemplateData(report) {
   }
 })(),
 
-    certificateNo:          report.csrNo ?? "",
+    certificateNo:          report.certNo || report.csrNo || "",
     certificateIssueDate:   formatDate(report.createdAt),
     totalPages:             "2",
 
-    ducReceivedDate:        "",
-    dateOfCalibration:      formatDate(inst.calDate),
-    calibrationDueDate:     "",
-    customerReferenceNo:    "",
-    customerAddress:        "",
+    ducReceivedDate:        formatDate(report.ducReceivedDate),
+    dateOfCalibration:      formatDate(report.dateOfCalibration || inst.calDate),
+    calibrationDueDate:     formatDate(report.calibrationDueDate),
+    customerReferenceNo:    report.customerRefNo ?? "",
+    customerName:           report.customerName ?? "",
+    customerAddress:        report.customerAddress ?? "",
 
     ducName:                inst.nomenclature ?? "",
     ducSerialNo:            inst.slNo ?? "",
@@ -129,7 +130,7 @@ function mapCalibrationToTemplateData(report) {
     ducRange:               "As Per Instrument Spec.",
     accuracy:               "As per Manufacturer's Specification",
     conditionOfItem:        "Satisfactory",
-    locationOfCalibration:  "At Site",
+    locationOfCalibration:  report.calibrationLocation === "onsite" ? "At Site" : "At Lab",
 
     recommendedTemp:        "25±4 °C",
     recommendedHumidity:    "55±15 %",
@@ -153,6 +154,11 @@ function mapCalibrationToTemplateData(report) {
 
     calibrationType:    "Electro - Technical Calibration",
     calibrationResults,
+
+    calibratedByName: report.signatures?.calibratedBy?.signatureName || report.signatures?.calibratedBy?.name || "",
+    calibratedByRole: "Calibration Engineer",
+    approvedByName:   report.signatures?.verifiedBy?.signatureName   || report.signatures?.verifiedBy?.name   || "",
+    approvedByRole:   "Technical/Quality Manager",
   };
 }
 
@@ -178,22 +184,46 @@ async function handleReportJob(reportId) {
 }
 
 async function handleCalibrationJob(reportId) {
-  const report = await CalibrationReport.findById(reportId).lean();
+  const report = await CalibrationReport.findById(reportId)
+    .populate("signatures.calibratedBy", "name signatureName")
+    .populate("signatures.verifiedBy",   "name signatureName")
+    .lean();
   if (!report) {
     console.warn(`CalibrationReport ${reportId} not found, skipping`);
     return;
   }
 
+  console.log("[cal-job] report fields:", JSON.stringify({
+    csrNo:               report.csrNo,
+    certNo:              report.certNo,
+    customerName:        report.customerName,
+    customerAddress:     report.customerAddress,
+    customerRefNo:       report.customerRefNo,
+    ducReceivedDate:     report.ducReceivedDate,
+    dateOfCalibration:   report.dateOfCalibration,
+    calibrationDueDate:  report.calibrationDueDate,
+    calibrationLocation: report.calibrationLocation,
+  }, null, 2));
+
   const templatePath = path.join(process.cwd(), "templates", "electrical-calibration.ejs");
-  const data         = mapCalibrationToTemplateData(report);
-  const html         = await renderTemplate(templatePath, data);
-  const pdfBuffer    = await createPdfBuffer(html);
+  const instruments  = report.instruments?.length ? report.instruments : [{}];
+  const filePaths    = [];
 
-  const s3Key = `calibration/${reportId}_${report.csrNo}.pdf`;
-  await uploadToS3(pdfBuffer, s3Key);
+  for (let i = 0; i < instruments.length; i++) {
+    const data      = mapCalibrationToTemplateData(report, i);
+    const html      = await renderTemplate(templatePath, data);
+    const pdfBuffer = await createPdfBuffer(html);
+    const suffix    = instruments.length > 1 ? `_${i + 1}` : "";
+    const s3Key     = `calibration/${reportId}_${report.csrNo}${suffix}.pdf`;
+    await uploadToS3(pdfBuffer, s3Key);
+    filePaths.push(s3Key);
+  }
 
-  await CalibrationReport.findByIdAndUpdate(reportId, { filePath: s3Key });
-  console.log(`Done: ${s3Key}`);
+  await CalibrationReport.findByIdAndUpdate(reportId, {
+    filePath:  filePaths[0] ?? null,
+    filePaths,
+  });
+  console.log(`Done: ${filePaths.join(", ")}`);
 }
 
 // ─── Worker loop ──────────────────────────────────────────────────────────────

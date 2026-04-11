@@ -196,11 +196,11 @@ export default function CalibrationReportsTable() {
 
   // ── Track reports awaiting PDF generation ──
   useEffect(() => {
-    const pending = allItems
+    const pending = (data?.items ?? [])
       .filter((r) => r.status !== "draft" && !r.filePath)
       .map((r) => r._id);
     setPendingPdfIds(new Set(pending));
-  }, [allItems]);
+  }, [data]);
 
   // ── Counts for stat cards ──
   const counts = useMemo(

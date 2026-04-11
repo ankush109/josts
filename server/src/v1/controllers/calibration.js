@@ -1,38 +1,74 @@
 import mongoose from "mongoose";
 import CalibrationReport from "../../db/models/calibration.js";
+import User from "../../db/models/user.js";
 import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
-import { RANGE_CONSTANTS } from "../constants/voltage-ranges.js";
+import { getInstrumentLookup } from "../constants/voltage-ranges.js";
 import { pushPdfJobToRedis } from "../../utils/func-utils.js";
+
+// ─── Certificate No generator ─────────────────────────────────────────────────
+// Format: JK/DDMMYY/CustomerFirstLetter/EngineerInitials/SequentialNo
+
+function getInitials(name = "") {
+  return name.trim().split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("");
+}
+
+async function generateCertNo(userId, customerName) {
+  const [user, count] = await Promise.all([
+    User.findById(userId).lean(),
+    CalibrationReport.countDocuments(),
+  ]);
+  const d      = new Date();
+  const ddmmyy = `${String(d.getDate()).padStart(2,"0")}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getFullYear()).slice(-2)}`;
+  const cust   = (customerName?.trim()[0] ?? "X").toUpperCase();
+  const eng    = getInitials(user?.name ?? "ENG");
+  const seq    = String(count + 1).padStart(3, "0");
+  return `JK/${ddmmyy}/${cust}/${eng}/${seq}`;
+}
 
 // ─── Inject computed uncertainty budget into every measurement ─────────────────
 
 function injectComputed(instruments) {
   if (!Array.isArray(instruments)) return instruments;
-  return instruments.map((inst) => ({
-    ...inst,
-    parameters: (inst.parameters ?? []).map((param) => ({
-      ...param,
-      ranges: (param.ranges ?? []).map((range) => {
-        const constants = RANGE_CONSTANTS[param.name]?.[range.label];
-        return {
-          ...range,
-          measurements: (range.measurements ?? []).map((m) => {
-            if (!constants || m.nomValue == null) return { ...m, computed: null };
-            const budget = computeUncertaintyBudget({
-              nomValue:   m.nomValue,
-              readings:   (m.readings ?? []).filter((r) => r != null && !isNaN(r)),
-              stdUncPct:  constants.stdUncPct,
-              accPct:     constants.accPct,
-              accOffset:  constants.accOffset,
-              leastCount: constants.leastCount,
-              scopePct:   constants.scopePct,
-            });
-            return { ...m, computed: budget };
-          }),
-        };
-      }),
-    })),
-  }));
+ 
+  return instruments.map((inst) => {
+    // Build param → label → constants lookup for THIS instrument
+    const instrumentName = inst.make + " " + inst.modelType
+    console.log(instrumentName,"instrument")
+    const lookup = getInstrumentLookup(instrumentName);
+ 
+    return {
+      ...inst,
+      parameters: (inst.parameters ?? []).map((param) => ({
+        ...param,
+        ranges: (param.ranges ?? []).map((range) => {
+          const constants = lookup[param.name]?.[range.label];
+ 
+          return {
+            ...range,
+            measurements: (range.measurements ?? []).map((m) => {
+              if (!constants || m.nomValue == null) {
+                return { ...m, computed: null };
+              }
+ 
+              const budget = computeUncertaintyBudget({
+                nomValue:   m.nomValue,
+                readings:   (m.readings ?? []).filter(
+                  (r) => r != null && !isNaN(r)
+                ),
+                stdUncPct:  constants.stdUncPct,
+                accPct:     constants.accPct,
+                accOffset:  constants.accOffset,
+                leastCount: constants.leastCount,
+                scopePct:   constants.scopePct,
+              });
+ 
+              return { ...m, computed: budget };
+            }),
+          };
+        }),
+      })),
+    };
+  });
 }
 
 
@@ -40,7 +76,11 @@ function injectComputed(instruments) {
 
 export const createCalibrationReport = async (req, res) => {
   try {
-    const { csrNo, createdBy, instruments, formatNo, status, signatures } = req.body;
+    const {
+      csrNo, createdBy, instruments, formatNo, status, signatures,
+      customerName, customerAddress, customerRefNo,
+      ducReceivedDate, calibrationLocation, dateOfCalibration, calibrationDueDate,
+    } = req.body;
 
     if (!csrNo?.trim()) {
       return res.status(400).json({ message: "csrNo is required" });
@@ -50,13 +90,21 @@ export const createCalibrationReport = async (req, res) => {
       return res.status(400).json({ message: "valid createdBy user id is required" });
     }
 
+    const certNo = await generateCertNo(createdBy, customerName);
+
     const report = await CalibrationReport.create({
       csrNo: csrNo.trim(),
+      certNo,
+      customerName, customerAddress, customerRefNo,
+      ducReceivedDate: ducReceivedDate || null,
+      calibrationLocation: calibrationLocation || "at_lab",
+      dateOfCalibration:  dateOfCalibration  || null,
+      calibrationDueDate: calibrationDueDate || null,
       formatNo,
       status,
       createdBy,
       instruments: injectComputed(instruments ?? []),
-      signatures:  signatures  ?? {},
+      signatures:  signatures ?? {},
     });
 
     if (report.status !== "draft") {

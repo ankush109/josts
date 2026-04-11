@@ -247,6 +247,18 @@ const calibrationReportSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    filePaths: {
+      type: [String],
+      default: [],
+    },
+    certNo:              { type: String, trim: true, default: "" },
+    customerName:        { type: String, trim: true, default: "" },
+    customerAddress:     { type: String, trim: true, default: "" },
+    customerRefNo:       { type: String, trim: true, default: "" },
+    ducReceivedDate:     { type: Date,   default: null },
+    calibrationLocation: { type: String, enum: ["onsite", "at_lab"], default: "at_lab" },
+    dateOfCalibration:   { type: Date,   default: null },
+    calibrationDueDate:  { type: Date,   default: null },
   },
   { timestamps: true }
 );
