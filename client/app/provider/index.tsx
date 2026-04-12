@@ -1,5 +1,6 @@
 "use client";
 
+import { ThemeProvider } from "next-themes";
 import ReactQueryProvider from "./ReactQueryProvider";
 import { ToasterProvider } from "./ToastProvider";
 import { AuthProvider } from "./AuthProvider";
@@ -11,12 +12,14 @@ export default function RootProvider({
   children: React.ReactNode;
 }) {
   return (
-    <ReactQueryProvider>
-      <AuthProvider>
-        <ToasterProvider />
-        {children}
-        <ReactQueryDevtools initialIsOpen={false} />
-      </AuthProvider>
-    </ReactQueryProvider>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <ReactQueryProvider>
+        <AuthProvider>
+          <ToasterProvider />
+          {children}
+          <ReactQueryDevtools initialIsOpen={false} />
+        </AuthProvider>
+      </ReactQueryProvider>
+    </ThemeProvider>
   );
 }

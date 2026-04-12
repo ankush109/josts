@@ -10,8 +10,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-        <body style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+    <html lang="en" suppressHydrationWarning>
+      <body style={{ fontFamily: '"Times New Roman", Times, serif' }}>
         <RootProvider>{children}</RootProvider>
       </body>
     </html>

@@ -15,9 +15,10 @@ import mongoose             from "mongoose";
 import CalibrationReport    from "../models/Calibration.js";
 import User                 from "../models/User.js";
 import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
-import { getInstrumentLookup }      from "../constants/instrument-specs.js";
+import { getInstrumentLookup, MAKE_TO_INSTRUMENT_KEY } from "../constants/instrument-specs.js";
 import { pushPdfJobToRedis }        from "../lib/redis.js";
 import logger                       from "../lib/logger.js";
+import { logAudit, computeDiff, getAuditLog } from "./audit.service.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -72,11 +73,11 @@ export function injectComputed(instruments) {
   if (!Array.isArray(instruments)) return instruments;
 
   return instruments.map((inst) => {
-    const instrumentName = `${inst.make} ${inst.modelType}`.trim();
+    const instrumentName = MAKE_TO_INSTRUMENT_KEY[inst.make] ?? `${inst.make} ${inst.modelType}`.trim();
     const lookup         = getInstrumentLookup(instrumentName);
 
     if (!lookup || Object.keys(lookup).length === 0) {
-      logger.warn("No calibration constants found for instrument", { instrumentName });
+      logger.warn("No calibration constants found for instrument", { instrumentName, make: inst.make });
     }
 
     return {
@@ -136,6 +137,8 @@ export async function createReport(data, userId) {
     },
   });
 
+  await logAudit({ reportId: report._id, action: "created", performedBy: userId });
+
   if (report.status !== "draft") {
     await pushPdfJobToRedis({ reportId: report._id, action: "create", type: "calibration" });
   }
@@ -157,7 +160,7 @@ export async function listReports(query, reqUser) {
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
   const skip  = (page - 1) * limit;
 
-  const filter = {};
+  const filter = { deletedAt: null };
   if (status) filter.status = status;
 
   if (reqUser.userRole !== "admin") {
@@ -252,10 +255,17 @@ export async function updateReport(reportId, updates) {
   }
 
   // Strip fields that must never be overwritten by the client
-  const { _id, createdBy, createdAt, __v, ...safeUpdates } = updates;
+  const { _id, createdBy, createdAt, __v, signatures: _sig, _updatedBy, ...safeUpdates } = updates;
 
   if (safeUpdates.instruments) {
     safeUpdates.instruments = injectComputed(safeUpdates.instruments);
+  }
+
+  // Fetch old doc for diff + calibratedBy backfill
+  const existing = await CalibrationReport.findById(reportId).select("signatures createdBy status customerName customerAddress customerRefNo calibrationLocation ducReceivedDate dateOfCalibration calibrationDueDate instruments").lean();
+  if (existing && !existing.signatures?.calibratedBy) {
+    safeUpdates["signatures.calibratedBy"] = existing.createdBy;
+    safeUpdates["signatures.calibratedAt"] = safeUpdates["signatures.calibratedAt"] ?? new Date();
   }
 
   const report = await CalibrationReport.findByIdAndUpdate(
@@ -272,6 +282,15 @@ export async function updateReport(reportId, updates) {
     const err = new Error("Report not found");
     err.statusCode = 404;
     throw err;
+  }
+
+  // Audit log — pass userId via updates._updatedBy (stripped before $set)
+  const performedBy = updates._updatedBy;
+  if (performedBy && existing) {
+    const changes = computeDiff(existing, report);
+    if (changes.length > 0) {
+      await logAudit({ reportId: report._id, action: "updated", performedBy, changes });
+    }
   }
 
   if (report.status !== "draft") {
@@ -319,6 +338,13 @@ export async function verifyOrReject(reportId, status, adminId) {
     throw err;
   }
 
+  await logAudit({
+    reportId: report._id,
+    action: "status_changed",
+    performedBy: adminId,
+    changes: [{ field: "Status", from: status === "verified" ? "submitted" : "submitted", to: status }],
+  });
+
   return report;
 }
 
@@ -349,7 +375,7 @@ export async function deleteReport(reportId) {
     throw err;
   }
 
-  const report = await CalibrationReport.findById(reportId);
+  const report = await CalibrationReport.findOne({ _id: reportId, deletedAt: null });
 
   if (!report) {
     const err = new Error("Report not found");
@@ -357,11 +383,6 @@ export async function deleteReport(reportId) {
     throw err;
   }
 
-  if (report.status !== "draft") {
-    const err = new Error("Only draft reports can be deleted");
-    err.statusCode = 403;
-    throw err;
-  }
-
-  await report.deleteOne();
+  report.deletedAt = new Date();
+  await report.save();
 }

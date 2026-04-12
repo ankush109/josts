@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo, FC, KeyboardEvent } from "react";
+import dynamic from "next/dynamic";
+import type { Step, EventData, TooltipRenderProps } from "react-joyride";
+const Joyride = dynamic(() => import("react-joyride").then((m) => ({ default: m.Joyride })), { ssr: false });
 import { useGenerateCalibrationReport } from "@/app/hooks/mutation/useGenerateCalibrationReport";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/provider/AuthProvider";
@@ -10,7 +13,7 @@ import { useUpdateCalibrationReport } from "@/app/hooks/mutation/(calibration)/u
 import { useComputeCalibration } from "@/app/hooks/mutation/(calibration)/useComputeCalibration";
 import { useGetCalibrationReportById } from "@/app/hooks/query/(calibration)/useGetCalibReportById";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useGetAuditLog, type AuditEntry } from "@/app/hooks/query/(calibration)/useGetAuditLog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
 
@@ -116,10 +120,13 @@ const PARAM_TYPES = {
   AUX_DC_VOLTAGE:        "AUX. DC Voltage",
 } as const;
 
-// ─── modelType dropdown value → INSTRUMENT_CONSTANTS key ─────────────────────
-const MODEL_TO_INSTRUMENT_KEY: Record<string, string> = {
-  "8846A": "Fluke 8846A",
-  "780":   "SVERKER 780",
+// ─── UI make → INSTRUMENT_CONSTANTS key (backend uncertainty params) ──────────
+// UI shows the selected make/model as-is; internally this maps to the key
+// used in INSTRUMENT_CONSTANTS on the server for uncertainty budget lookup.
+const MAKE_TO_INSTRUMENT_KEY: Record<string, string> = {
+  "Fluke":   "Fluke 8846A",
+  "SVERKER": "SVERKER 780",
+  "Motwane": "Motwane DCM45A",
 };
 
 // ─── Per-instrument presets (ranges + units + sample readings) ────────────────
@@ -301,11 +308,11 @@ const BLANK_REPORT_META: ReportMeta = {
 
 const RF: FC<{
   label: string; value: string; span2?: boolean; readOnly?: boolean;
-  type?: string; placeholder?: string; onChange?: (v: string) => void;
-}> = ({ label, value, span2, readOnly, type = "text", placeholder, onChange }) => (
+  type?: string; placeholder?: string; id?: string; onChange?: (v: string) => void;
+}> = ({ label, value, span2, readOnly, type = "text", placeholder, id, onChange }) => (
   <div className={cn("flex flex-col gap-1", span2 && "col-span-2")}>
     <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">{label}</Label>
-    <Input type={type} value={value} readOnly={readOnly} placeholder={placeholder}
+    <Input id={id} type={type} value={value} readOnly={readOnly} placeholder={placeholder}
       onChange={onChange ? (e) => onChange(e.target.value) : undefined}
       className={cn("h-9 text-sm", readOnly && "bg-zinc-50 text-zinc-500 cursor-default")} />
   </div>
@@ -330,7 +337,7 @@ function makeMeasurement(): Measurement {
   return { id: uid(), nomValue: "", readings: emptyReadings(), corrected: "", computed: null };
 }
 
-function makeParam(name = "", unit = "", instrumentKey = ""): Parameter {
+function makeParam(name = "", unit = "", instrumentKey = "", loadExamples = false): Parameter {
   const preset = INSTRUMENT_PRESETS[instrumentKey];
   const predefinedLabels = preset?.params[name];
   if (predefinedLabels) {
@@ -339,7 +346,7 @@ function makeParam(name = "", unit = "", instrumentKey = ""): Parameter {
       id: uid(), name, unit: unit || preset.units[name] || "", isPredefined: true,
       ranges: predefinedLabels.map((label, ri) => ({
         id: uid(), label,
-        measurements: (samples?.[ri] ?? []).length > 0
+        measurements: (loadExamples && (samples?.[ri] ?? []).length > 0)
           ? samples[ri].map(([nom, readings]) => ({ id: uid(), nomValue: nom, readings, corrected: "", computed: null }))
           : [makeMeasurement(), makeMeasurement()],
       })),
@@ -468,8 +475,8 @@ const MetaGrid: FC<{
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
-      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER"]} locked={modelLocked} meta={meta} onChange={onChange} />
-      <SelectField label="Model / Type" k="modelType" options={["8846A", "780"]}   locked={modelLocked} meta={meta} onChange={onChange} />
+      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} meta={meta} onChange={onChange} />
+      <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} meta={meta} onChange={onChange} />
       <Field label="Sl. No"              k="slNo"          {...sharedProps} />
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
 
@@ -753,6 +760,281 @@ const MeasureTable: FC<{
   );
 };
 
+// ─── Uncertainty formula reference modal ──────────────────────────────────────
+
+const FORMULA_STEPS = [
+  {
+    symbol: "J",
+    label: "Mean Value",
+    formula: "J = mean(r₁, r₂, r₃, r₄, r₅)",
+    description: "Arithmetic mean of the 5 repeated readings taken on the DUC.",
+  },
+  {
+    symbol: "K",
+    label: "Type A Uncertainty (Std. U/c of Mean)",
+    formula: "K = s(r) / √n",
+    description: "Standard deviation of the readings divided by √n. Captures repeatability of the measurement process.",
+  },
+  {
+    symbol: "M",
+    label: "Std. Uncertainty of Ref. Std.",
+    formula: "M = (stdUncPct / 100) × |nomValue|",
+    description: "Derived from the reference standard's certificate. stdUncPct is the stated standard uncertainty percentage.",
+  },
+  {
+    symbol: "N",
+    label: "U/c of Ref. Std.",
+    formula: "N = M / 2",
+    description: "The reference standard certificate reports expanded uncertainty (k=2). Dividing by 2 converts to standard uncertainty.",
+  },
+  {
+    symbol: "O",
+    label: "U/c due to Accuracy of Ref. Std.",
+    formula: "O = (accPct% × |nomValue| + accOffset) / √3",
+    description: "Accuracy specification of the reference standard modelled as a rectangular distribution. Dividing by √3 gives standard uncertainty.",
+  },
+  {
+    symbol: "P",
+    label: "U/c due to Least Count of DUC",
+    formula: "P = leastCount / (2√3)",
+    description: "Resolution of the DUC's display modelled as a rectangular distribution (half-width = leastCount / 2).",
+  },
+  {
+    symbol: "Q",
+    label: "Combined Standard Uncertainty",
+    formula: "Q = √(K² + N² + O² + P²)",
+    description: "Root-sum-square of all independent uncertainty components (Type A + Type B sources).",
+  },
+  {
+    symbol: "R",
+    label: "Effective Degrees of Freedom",
+    formula: "R = Q⁴ / Σ(uᵢ⁴ / νᵢ)  [Welch–Satterthwaite]",
+    description: "Estimates the equivalent degrees of freedom for the combined uncertainty using the Welch–Satterthwaite equation.",
+  },
+  {
+    symbol: "S",
+    label: "Coverage Factor (k)",
+    formula: "S = t(R, 95%)  [capped at 2.0 for DoF > 30]",
+    description: "Student's t-value at 95% confidence for the effective DoF. For DoF > 30 the normal approximation k = 2.0 is used.",
+  },
+  {
+    symbol: "T",
+    label: "Expanded Uncertainty",
+    formula: "T = S × Q",
+    description: "Expanded uncertainty at 95% confidence level. This is the primary uncertainty figure reported.",
+  },
+  {
+    symbol: "U",
+    label: "Scope Claimed",
+    formula: "U = (scopePct / 100) × |nomValue|",
+    description: "Minimum uncertainty floor declared in the laboratory's scope of accreditation for this measurement range.",
+  },
+  {
+    symbol: "V",
+    label: "Resulted Expanded U/C",
+    formula: "V = max(T, U)",
+    description: "The reported expanded uncertainty is the larger of the computed expanded uncertainty and the scope-claimed floor.",
+  },
+  {
+    symbol: "W",
+    label: "% Uncertainty",
+    formula: "W = (V / |nomValue|) × 100",
+    description: "Resulted expanded uncertainty expressed as a percentage of the nominal value.",
+  },
+];
+
+// ─── Audit history panel ──────────────────────────────────────────────────────
+
+const ACTION_META: Record<AuditEntry["action"], { label: string; color: string }> = {
+  created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700" },
+  updated:        { label: "Updated",        color: "bg-blue-100 text-blue-700" },
+  status_changed: { label: "Status changed", color: "bg-violet-100 text-violet-700" },
+  deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700" },
+};
+
+const AuditHistoryPanel: FC<{ open: boolean; onClose: () => void; log: AuditEntry[] | undefined; loading: boolean }> = ({ open, onClose, log, loading }) => (
+  <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
+      <DialogHeader className="flex-shrink-0">
+        <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+          <History className="h-4 w-4 text-zinc-400" /> Audit History
+        </DialogTitle>
+      </DialogHeader>
+
+      <div className="flex-1 overflow-y-auto mt-2 pr-1">
+        {loading ? (
+          <div className="flex items-center justify-center h-32 text-sm text-zinc-400 gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        ) : !log?.length ? (
+          <div className="flex flex-col items-center justify-center h-32 gap-2 text-zinc-400">
+            <History className="h-6 w-6 opacity-30" />
+            <span className="text-sm">No history yet</span>
+          </div>
+        ) : (
+          <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
+            {log.map((entry, i) => {
+              const baseMeta = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600" };
+              const meta = entry.action === "status_changed"
+                ? entry.changes[0]?.to === "verified"
+                  ? { label: "Verified", color: "bg-emerald-100 text-emerald-700" }
+                  : entry.changes[0]?.to === "rejected"
+                  ? { label: "Rejected", color: "bg-red-100 text-red-700" }
+                  : baseMeta
+                : baseMeta;
+              const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
+              const initials = name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+              const date = new Date(entry.createdAt);
+              const dateStr = date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+              const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+              return (
+                <li key={entry._id} className={cn("ml-6 pb-5", i === log.length - 1 && "pb-0")}>
+                  <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white" />
+                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">{initials}</div>
+                        <span className="text-xs font-semibold text-zinc-800">{name}</span>
+                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 whitespace-nowrap">{dateStr} · {timeStr}</span>
+                    </div>
+                    {entry.changes.length > 0 && (
+                      <div className="space-y-1 pt-1 border-t border-zinc-200">
+                        {entry.changes.map((c, ci) => (
+                          <div key={ci} className="flex items-start gap-1.5 text-[11px]">
+                            <span className="text-zinc-500 font-medium min-w-[110px] shrink-0">{c.field}</span>
+                            <span className="text-zinc-400 line-through truncate max-w-[70px]">{c.from}</span>
+                            <ArrowRight className="h-3 w-3 text-zinc-300 flex-shrink-0 mt-0.5" />
+                            <span className="text-zinc-800 font-medium truncate">{c.to}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </DialogContent>
+  </Dialog>
+);
+
+// ─── Tour tooltip ─────────────────────────────────────────────────────────────
+
+const STEP_ICONS = ["👋", "📋", "🔬", "⚙️", "➕", "📊", "⚡", "✅"];
+
+const TourTooltip: FC<TooltipRenderProps> = ({
+  index, size, step, isLastStep,
+  primaryProps, backProps, skipProps,
+}) => (
+  <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-[340px] overflow-hidden border border-zinc-100 dark:border-zinc-800">
+    {/* Top accent bar */}
+    <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-violet-500 to-indigo-500" />
+
+    <div className="p-5">
+      {/* Step icon + counter */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{STEP_ICONS[index] ?? "📍"}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+            Step {index + 1} of {size}
+          </span>
+        </div>
+        <button {...skipProps} className="text-[11px] text-zinc-400 hover:text-zinc-600 transition-colors px-1">
+          Skip tour
+        </button>
+      </div>
+
+      {/* Progress dots */}
+      <div className="flex gap-1 mb-4">
+        {Array.from({ length: size }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "h-1 rounded-full transition-all duration-300",
+              i === index ? "flex-[2] bg-blue-500" : i < index ? "flex-1 bg-blue-200" : "flex-1 bg-zinc-200 dark:bg-zinc-700"
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Title */}
+      {step.title && (
+        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-1.5 leading-snug">
+          {step.title as string}
+        </h3>
+      )}
+
+      {/* Content */}
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
+        {step.content as string}
+      </p>
+
+      {/* Actions */}
+      <div className="flex items-center justify-between mt-5">
+        {index > 0 ? (
+          <button
+            {...backProps}
+            className="text-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 font-medium transition-colors"
+          >
+            ← Back
+          </button>
+        ) : <span />}
+
+        <button
+          {...primaryProps}
+          className="flex items-center gap-1.5 bg-[#1e3a5f] hover:bg-[#16304f] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm"
+        >
+          {isLastStep ? "Got it — add a parameter" : "Next →"}
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const UncertaintyFormulaModal: FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => (
+  <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle className="text-base font-semibold text-zinc-900">
+          Uncertainty Budget — Calculation Reference
+        </DialogTitle>
+        <p className="text-xs text-zinc-500 mt-1">
+          Each row in the Results table corresponds to a step below. Constants (stdUncPct, accPct, accOffset, leastCount, scopePct) are sourced from the reference standard's calibration certificate.
+        </p>
+      </DialogHeader>
+
+      <div className="mt-4 space-y-2">
+        {FORMULA_STEPS.map((step) => (
+          <div key={step.symbol} className="flex gap-3 p-3 rounded-lg border border-zinc-100 bg-zinc-50/60">
+            <div className="flex-shrink-0 w-7 h-7 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[11px] font-bold font-mono">
+              {step.symbol}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-zinc-700 mb-0.5">{step.label}</div>
+              <div className="font-mono text-[11px] text-violet-700 bg-violet-50 border border-violet-100 rounded px-2 py-0.5 inline-block mb-1">
+                {step.formula}
+              </div>
+              <div className="text-[11px] text-zinc-500 leading-relaxed">{step.description}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 p-3 rounded-lg border border-blue-100 bg-blue-50/60">
+        <p className="text-[11px] text-blue-700 font-medium mb-0.5">Reference Standard</p>
+        <p className="text-[11px] text-blue-600">
+          All Type B uncertainty components (N, O, P) are evaluated assuming rectangular or normal distributions as per
+          <span className="font-semibold"> JCGM 100:2008 (GUM)</span>. The coverage probability is <span className="font-semibold">95%</span>.
+        </p>
+      </div>
+    </DialogContent>
+  </Dialog>
+);
+
 // ─── Results table (computed uncertainty budget) ──────────────────────────────
 
 const RESULT_ROWS: { key: keyof ComputedBudget; label: string; decimals: number }[] = [
@@ -917,7 +1199,7 @@ const SbInstrument: FC<{
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="w-full mt-1 block">
+              <span data-tour="add-param-btn" className="w-full mt-1 block">
                 <Button
                   variant="outline" size="xs"
                   onClick={() => onAddParam(inst.id)}
@@ -987,21 +1269,29 @@ const AddParamDialog: FC<{
   open: boolean;
   instrumentKey: string;
   onCancel: () => void;
-  onConfirm: (name: string, unit: string) => void;
+  onConfirm: (name: string, unit: string, loadExamples: boolean) => void;
 }> = ({ open, instrumentKey, onCancel, onConfirm }) => {
-  const [mode,  setMode]  = useState<"pick" | "custom">("pick");
-  const [name,  setName]  = useState("");
-  const [unit,  setUnit]  = useState("");
+  const [mode,         setMode]         = useState<"pick" | "choose" | "custom">("pick");
+  const [pendingName,  setPendingName]  = useState("");
+  const [pendingUnit,  setPendingUnit]  = useState("");
+  const [name,         setName]         = useState("");
+  const [unit,         setUnit]         = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!open) { setMode("pick"); setName(""); setUnit(""); }
+    if (!open) { setMode("pick"); setName(""); setUnit(""); setPendingName(""); setPendingUnit(""); }
   }, [open]);
 
   useEffect(() => { if (mode === "custom") setTimeout(() => nameRef.current?.focus(), 60); }, [mode]);
 
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && name.trim()) onConfirm(name.trim(), unit.trim());
+    if (e.key === "Enter" && name.trim()) onConfirm(name.trim(), unit.trim(), false);
+  };
+
+  const selectPreset = (pName: string, pUnit: string) => {
+    setPendingName(pName);
+    setPendingUnit(pUnit);
+    setMode("choose");
   };
 
   return (
@@ -1012,31 +1302,57 @@ const AddParamDialog: FC<{
         </DialogHeader>
 
         <div className="flex flex-col gap-2 mt-1">
-          {mode === "pick" ? (
+          {mode === "pick" && (
             <>
               {Object.entries(INSTRUMENT_PRESETS[instrumentKey]?.params ?? {}).map(([pName, labels]) => (
                 <button
                   key={pName}
-                  onClick={() => onConfirm(pName, INSTRUMENT_PRESETS[instrumentKey]?.units[pName] ?? "")}
+                  onClick={() => selectPreset(pName, INSTRUMENT_PRESETS[instrumentKey]?.units[pName] ?? "")}
                   className="text-left px-3 py-2.5 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
                 >
                   <div className="text-sm font-semibold">{pName}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {labels.join(" · ")}
-                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{(labels as string[]).join(" · ")}</div>
                 </button>
               ))}
               <Button variant="outline" size="sm" onClick={() => setMode("custom")} className="w-full border-dashed justify-start mt-1">
                 + Custom parameter
               </Button>
             </>
-          ) : (
+          )}
+
+          {mode === "choose" && (
+            <>
+              <div className="px-3 py-2 rounded-lg bg-muted/50 border border-border mb-1">
+                <p className="text-sm font-semibold">{pendingName}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">How do you want to add this parameter?</p>
+              </div>
+              <button
+                onClick={() => onConfirm(pendingName, pendingUnit, true)}
+                className="text-left px-3 py-3 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
+              >
+                <div className="text-sm font-semibold">Load example values</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Pre-fills ranges with sample readings — useful for testing calculations</div>
+              </button>
+              <button
+                onClick={() => onConfirm(pendingName, pendingUnit, false)}
+                className="text-left px-3 py-3 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
+              >
+                <div className="text-sm font-semibold">Manual entry</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Start with empty fields and enter your own readings</div>
+              </button>
+              <Button variant="ghost" size="sm" onClick={() => setMode("pick")} className="w-full mt-1 text-muted-foreground">
+                ← Back
+              </Button>
+            </>
+          )}
+
+          {mode === "custom" && (
             <>
               <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKey} placeholder="Parameter name" className="text-xs" />
               <Input value={unit} onChange={(e) => setUnit(e.target.value)} onKeyDown={handleKey} placeholder="Unit (V, mA, Ω…)" className="text-xs" />
               <div className="flex gap-2 mt-1">
                 <Button variant="outline" size="sm" onClick={() => setMode("pick")} className="flex-1">Back</Button>
-                <Button size="sm" onClick={() => name.trim() && onConfirm(name.trim(), unit.trim())} disabled={!name.trim()} className="flex-1">Add</Button>
+                <Button size="sm" onClick={() => name.trim() && onConfirm(name.trim(), unit.trim(), false)} disabled={!name.trim()} className="flex-1">Add</Button>
               </div>
             </>
           )}
@@ -1097,7 +1413,6 @@ function buildPayload(instruments: Instrument[], status: "draft" | "submitted", 
         })),
       })),
     })),
-    signatures: {},
   };
 }
 
@@ -1188,11 +1503,75 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [panel,         setPanel]         = useState<PanelState>(null);
   const [hydrated,      setHydrated]      = useState(false);
   const [view,          setView]          = useState<"readings" | "results">("readings");
+  const [showFormulas,  setShowFormulas]  = useState(false);
+  const [showHistory,   setShowHistory]   = useState(false);
+  const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(isEditMode ? reportId ?? null : null);
   const [formErrors,    setFormErrors]    = useState<FormError[]>([]);
   const [errorPanelOpen, setErrorPanelOpen] = useState(false);
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [reportMeta, setReportMeta] = useState<ReportMeta>({ ...BLANK_REPORT_META });
   const [reportDetailsOpen, setReportDetailsOpen] = useState(!isEditMode);
+  const [tourRun, setTourRun] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const tourSteps: Step[] = useMemo(() => [
+    {
+      target: "body",
+      placement: "center",
+      disableBeacon: true,
+      title: "Welcome to Calibration Reports",
+      content: "This tour walks you through creating your first calibration report — adding instruments, entering readings, computing the uncertainty budget, and submitting.",
+    },
+    {
+      target: "[data-tour='report-details']",
+      placement: "right",
+      disableBeacon: true,
+      title: "Report Details",
+      content: "Start by expanding this section to fill in customer info, calibration dates, and location. These appear on the final PDF certificate.",
+    },
+    {
+      target: "[data-tour='instrument-sidebar']",
+      placement: "right",
+      disableBeacon: true,
+      title: "Instruments",
+      content: "Each report can hold multiple instruments. The first one is already created. Click an instrument to make it active.",
+    },
+    {
+      target: "[data-tour='instrument-meta']",
+      placement: "right",
+      disableBeacon: true,
+      title: "Instrument Details",
+      content: "Fill in the Make, Model, CSR No, and Serial No. Make and model must be set before you can add parameters.",
+    },
+    {
+      target: "[data-tour='add-param-btn']",
+      placement: "right",
+      disableBeacon: true,
+      title: "Add a Parameter",
+      content: "Click here to add a measurement parameter — DC Voltage, AC Voltage, Resistance, etc. You can load example values to test the calculations, or enter your own readings.",
+    },
+    {
+      target: "[data-tour='add-instrument-btn']",
+      placement: "top",
+      disableBeacon: true,
+      title: "Multiple Instruments",
+      content: "Need to calibrate more than one instrument in the same job? Add more here. Each gets its own set of parameters.",
+    },
+    {
+      target: "[data-tour='compute-btn']",
+      placement: "bottom",
+      disableBeacon: true,
+      title: "Compute Uncertainty Budget",
+      content: "After entering readings, click Compute to run the Welch-Satterthwaite calculation. Switch to the Results tab to see the full uncertainty budget breakdown.",
+    },
+    {
+      target: "[data-tour='save-submit']",
+      placement: "bottom",
+      disableBeacon: true,
+      title: "Save or Submit",
+      content: "Save as draft anytime — no fields are required. When everything is filled in, click Submit to generate the PDF certificate and send the report for verification.",
+    },
+  ], []);
 
   const updateReportMeta = useCallback(<K extends keyof ReportMeta>(key: K, val: ReportMeta[K]) => {
     setReportMeta((prev) => ({ ...prev, [key]: val }));
@@ -1233,18 +1612,61 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const userId = user?.id ?? (user as any)?._id ?? null;
   const queryClient = useQueryClient();
 
-  function validate(): FormError[] {
+  function validate(status: "draft" | "submitted"): FormError[] {
+    if (status === "draft") return [];
+
     const errors: FormError[] = [];
+
+    // ── Report-level fields ──────────────────────────────────────────────────
+    if (!reportMeta.customerName.trim())
+      errors.push({ message: "Customer Name is required", fieldId: "report-customerName" });
+    if (!reportMeta.customerAddress.trim())
+      errors.push({ message: "Customer Address is required", fieldId: "report-customerAddress" });
+    if (!reportMeta.customerRefNo.trim())
+      errors.push({ message: "Customer Ref No (PO) is required", fieldId: "report-customerRefNo" });
+    if (!reportMeta.ducReceivedDate)
+      errors.push({ message: "DUC Received Date is required", fieldId: "report-ducReceivedDate" });
+    if (!reportMeta.dateOfCalibration)
+      errors.push({ message: "Date of Calibration is required", fieldId: "report-dateOfCalibration" });
+
+    // ── Per-instrument fields ────────────────────────────────────────────────
     for (const inst of instruments) {
+      const lbl = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
       if (!inst.meta.csrNo.trim())
-        errors.push({ message: "CSR No is required", instId: inst.id, fieldId: "field-csrNo" });
+        errors.push({ message: `[${lbl}] CSR No is required`, instId: inst.id, fieldId: "field-csrNo" });
       if (!inst.meta.nomenclature.trim())
-        errors.push({ message: "Nomenclature of DUC is required", instId: inst.id, fieldId: "field-nomenclature" });
+        errors.push({ message: `[${lbl}] Nomenclature of DUC is required`, instId: inst.id, fieldId: "field-nomenclature" });
+      if (!inst.meta.make.trim())
+        errors.push({ message: `[${lbl}] Make is required`, instId: inst.id });
+      if (!inst.meta.modelType.trim())
+        errors.push({ message: `[${lbl}] Model / Type is required`, instId: inst.id });
+      if (!inst.meta.calDate)
+        errors.push({ message: `[${lbl}] Calibration Date is required`, instId: inst.id, fieldId: "field-calDate" });
+      if (!inst.meta.slNo.trim())
+        errors.push({ message: `[${lbl}] Serial No is required`, instId: inst.id, fieldId: "field-slNo" });
+      if (!inst.meta.supplyVoltage.trim())
+        errors.push({ message: `[${lbl}] Supply Voltage is required`, instId: inst.id, fieldId: "field-supplyVoltage" });
+      if (!inst.meta.temperature.trim())
+        errors.push({ message: `[${lbl}] Temperature is required`, instId: inst.id, fieldId: "field-temperature" });
+      if (!inst.meta.humidity.trim())
+        errors.push({ message: `[${lbl}] Humidity is required`, instId: inst.id, fieldId: "field-humidity" });
+      if (!inst.meta.refStandard.trim())
+        errors.push({ message: `[${lbl}] Ref. Standard name is required`, instId: inst.id, fieldId: "field-refStandard" });
+      if (!inst.meta.refMake.trim())
+        errors.push({ message: `[${lbl}] Ref. Standard Make is required`, instId: inst.id, fieldId: "field-refMake" });
+      if (!inst.meta.refModel.trim())
+        errors.push({ message: `[${lbl}] Ref. Standard Model is required`, instId: inst.id, fieldId: "field-refModel" });
+      if (!inst.meta.refSrNo.trim())
+        errors.push({ message: `[${lbl}] Ref. Standard Sr. No is required`, instId: inst.id, fieldId: "field-refSrNo" });
+      if (!inst.meta.refCalDue)
+        errors.push({ message: `[${lbl}] Ref. Standard Cal Due Date is required`, instId: inst.id, fieldId: "field-refCalDue" });
+      if (!inst.meta.refTraceability.trim())
+        errors.push({ message: `[${lbl}] Ref. Standard Traceability is required`, instId: inst.id, fieldId: "field-refTraceability" });
       if (inst.params.length === 0)
-        errors.push({ message: `Instrument "${inst.meta.nomenclature || inst.meta.make || "Unnamed"}" has no parameters — add at least one`, instId: inst.id });
+        errors.push({ message: `[${lbl}] has no parameters — add at least one`, instId: inst.id });
       for (const p of inst.params) {
         if (!p.name.trim())
-          errors.push({ message: `Parameter "${p.name || "unnamed"}" has no name`, instId: inst.id, paramId: p.id, fieldId: `param-name-${p.id}` });
+          errors.push({ message: `[${lbl}] A parameter has no name`, instId: inst.id, paramId: p.id, fieldId: `param-name-${p.id}` });
         for (const r of p.ranges) {
           for (const m of r.measurements) {
             if (!m.nomValue) continue;
@@ -1262,14 +1684,14 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     return errors;
   }
 
-  // Re-run validation live whenever instruments change (only while errors exist)
+  // Re-run validation live whenever form data changes (only while errors exist from a submit attempt)
   useEffect(() => {
     if (formErrors.length === 0) return;
-    const next = validate();
+    const next = validate("submitted");
     setFormErrors(next);
     if (next.length === 0) setErrorPanelOpen(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instruments]);
+  }, [instruments, reportMeta]);
 
   function focusError(err: FormError) {
     if (err.instId) setActiveInstId(err.instId);
@@ -1338,7 +1760,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   function handleSave(status: "draft" | "submitted") {
     if (!userId) { toast.error("You must be logged in to save a report"); return; }
-    const errors = validate();
+    const errors = validate(status);
     if (errors.length) {
       setFormErrors(errors);
       setErrorPanelOpen(true);
@@ -1379,6 +1801,19 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       generateCalibrationReport(payload, { onSuccess, onError });
     }
   }
+
+  const handleTourCallback = useCallback((data: EventData) => {
+    const { status, action } = data;
+    if (status === "finished" || status === "skipped" || action === "close") {
+      setTourRun(false);
+      // At end of tour, open the add-param dialog so user can try it
+      if (status === "finished") {
+        const inst = instruments.find((i) => i.id === activeInstId);
+        const instrumentKey = MAKE_TO_INSTRUMENT_KEY[inst?.meta.make ?? ""] ?? "";
+        setPanel({ type: "addParam", instId: activeInstId, instrumentKey });
+      }
+    }
+  }, [activeInstId, instruments]);
 
   const updateMeta = useCallback((key: keyof InstrumentMeta, val: string) => {
     setInstruments((ins) =>
@@ -1425,13 +1860,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const handleAddParam = (instId: string) => {
     setActiveInstId(instId);
     const inst = instruments.find((i) => i.id === instId);
-    const instrumentKey = MODEL_TO_INSTRUMENT_KEY[inst?.meta.modelType ?? ""] ?? "";
+    const instrumentKey = MAKE_TO_INSTRUMENT_KEY[inst?.meta.make ?? ""] ?? "";
     setPanel({ type: "addParam", instId, instrumentKey });
   };
 
-  const handleAddParamConfirm = (name: string, unit: string) => {
+  const handleAddParamConfirm = (name: string, unit: string, loadExamples: boolean) => {
     if (panel?.type !== "addParam") return;
-    const p = makeParam(name, unit, panel.instrumentKey);
+    const p = makeParam(name, unit, panel.instrumentKey, loadExamples);
     setInstruments((ins) =>
       ins.map((i) => i.id !== panel.instId ? i : { ...i, params: [...i.params, p] })
     );
@@ -1453,10 +1888,21 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-50">
+    <div className="flex min-h-screen bg-background">
+
+      {/* ── Mobile backdrop ── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* ── Sidebar ── */}
-      <div className="w-60 shrink-0 bg-white border-r border-zinc-200 flex flex-col min-h-screen shadow-sm">
+      <div className={cn(
+        "fixed lg:relative inset-y-0 left-0 z-40 w-64 lg:w-60 shrink-0 bg-white border-r border-zinc-200 flex flex-col min-h-screen shadow-sm transition-transform duration-200 ease-in-out",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+      )}>
 
         {/* Brand header */}
         <div className="px-4 py-4 border-b border-zinc-100">
@@ -1467,23 +1913,50 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
+            {/* Close button on mobile */}
+            <button
+              className="lg:hidden ml-auto p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </button>
             <div className="min-w-0">
               <div className="text-sm font-semibold text-zinc-900 truncate">Jost's Engineering</div>
               <div className="text-[11px] text-zinc-400">Calibration Lab · Kolkata</div>
             </div>
           </div>
-          <span className={cn(
-            "inline-flex text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border",
-            isEditMode
-              ? "bg-amber-50 text-amber-600 border-amber-200"
-              : "bg-blue-50 text-blue-600 border-blue-200"
-          )}>
-            {isEditMode ? "Editing report" : "New report"}
-          </span>
+          <div className="flex items-center gap-2">
+            {isEditMode && (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+              >
+                <History className="h-3 w-3" />
+                History
+              </button>
+            )}
+            {!isEditMode && (
+              <button
+                onClick={() => setTourRun(true)}
+                className="flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-800 px-2.5 py-1 rounded-full border border-blue-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+              >
+                <MapPin className="h-3 w-3" />
+                Tour
+              </button>
+            )}
+            <span className={cn(
+              "inline-flex text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border",
+              isEditMode
+                ? "bg-amber-50 text-amber-600 border-amber-200"
+                : "bg-blue-50 text-blue-600 border-blue-200"
+            )}>
+              {isEditMode ? "Editing report" : "New report"}
+            </span>
+          </div>
         </div>
 
         {/* Instruments label */}
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+        <div data-tour="instrument-sidebar" className="px-4 pt-4 pb-2 flex items-center justify-between">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
             Instruments
           </span>
@@ -1520,7 +1993,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               onConfirm={handleAddInstrumentConfirm}
             />
           ) : (
-            <Button variant="outline" className="w-full border-dashed" onClick={() => setPanel({ type: "addInstrument" })}>
+            <Button data-tour="add-instrument-btn" variant="outline" className="w-full border-dashed" onClick={() => setPanel({ type: "addInstrument" })}>
               <Plus />Add instrument
             </Button>
           )}
@@ -1531,7 +2004,15 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       <div className="flex-1 overflow-x-auto flex flex-col">
 
         {/* Sticky top bar */}
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-zinc-200 px-8 py-3.5 flex items-center justify-between gap-4 shadow-sm">
+        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-zinc-200 px-4 lg:px-8 py-3 lg:py-3.5 flex items-center justify-between gap-2 lg:gap-4 shadow-sm">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* Mobile sidebar toggle */}
+            <button
+              className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all shrink-0"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-4 w-4" />
+            </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
               <FlaskConical className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
@@ -1564,14 +2045,15 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             ) : (
               <div className="text-lg font-semibold text-zinc-300">No parameters yet</div>
             )}
-            <div className="text-xs text-zinc-400 mt-0.5">
+            <div className="text-xs text-zinc-400 mt-0.5 hidden sm:block">
               JECL/KOL/LAB/FM/36B · {activeInst.meta.calDate || "No date set"}
             </div>
           </div>
+          </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 lg:gap-3 shrink-0">
             {activeParam && (
-            <div className="flex items-center gap-1.5 border-r border-zinc-200 pr-3">
+            <div className="hidden sm:flex items-center gap-1.5 border-r border-zinc-200 pr-3">
               <span className="text-xs text-zinc-400">Unit</span>
               <input
                 value={activeParam.unit}
@@ -1582,23 +2064,26 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 lg:gap-2" data-tour="save-submit">
               <Button
+                data-tour="compute-btn"
                 variant="outline"
+                size="sm"
                 onClick={() => handleCompute(activeInstId)}
                 disabled={isComputing || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
-                className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:border-violet-300"
+                className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:border-violet-300 px-2.5 lg:px-3"
               >
                 {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
-                {isComputing ? "Computing…" : "Compute"}
+                <span className="hidden sm:inline">{isComputing ? "Computing…" : "Compute"}</span>
               </Button>
-              <Button variant="outline" onClick={() => handleSave("draft")} disabled={isPending}>
-                {isPending ? <Loader2 className="animate-spin" /> : null}
-                {isPending ? "Saving…" : "Save draft"}
+              <Button variant="outline" size="sm" onClick={() => handleSave("draft")} disabled={isPending} className="px-2.5 lg:px-3">
+                {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                <span className="hidden sm:inline ml-1">{isPending ? "Saving…" : "Save draft"}</span>
               </Button>
               <div className="relative">
-                <Button onClick={() => handleSave("submitted")} disabled={isPending}>
-                  Submit report
+                <Button size="sm" onClick={() => handleSave("submitted")} disabled={isPending} className="px-2.5 lg:px-3">
+                  <Send className="h-3.5 w-3.5 sm:hidden" />
+                  <span className="hidden sm:inline">Submit report</span>
                 </Button>
                 {formErrors.length > 0 && (
                   <span
@@ -1614,10 +2099,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         </div>
 
         {/* Content area */}
-        <div className="flex-1 px-8 py-6 space-y-4">
+        <div className="flex-1 px-4 py-4 lg:px-8 lg:py-6 space-y-4">
 
           {/* Report Details section */}
-          <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div data-tour="report-details" className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
             <button
               type="button"
               onClick={() => setReportDetailsOpen((v) => !v)}
@@ -1638,10 +2123,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               <div className="p-5">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
                   <RF label="Certificate No" value={reportMeta.certNo || (isEditMode ? "" : "Auto-generated on save")} readOnly placeholder="Auto-generated" />
-                  <RF label="Customer Ref No (PO)" value={reportMeta.customerRefNo} onChange={(v) => updateReportMeta("customerRefNo", v)} />
-                  <RF label="Customer Name" value={reportMeta.customerName} span2 onChange={(v) => updateReportMeta("customerName", v)} />
-                  <RF label="Customer Address" value={reportMeta.customerAddress} span2 onChange={(v) => updateReportMeta("customerAddress", v)} />
-                  <RF label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
+                  <RF id="report-customerRefNo" label="Customer Ref No (PO)" value={reportMeta.customerRefNo} onChange={(v) => updateReportMeta("customerRefNo", v)} />
+                  <RF id="report-customerName" label="Customer Name" value={reportMeta.customerName} span2 onChange={(v) => updateReportMeta("customerName", v)} />
+                  <RF id="report-customerAddress" label="Customer Address" value={reportMeta.customerAddress} span2 onChange={(v) => updateReportMeta("customerAddress", v)} />
+                  <RF id="report-ducReceivedDate" label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
                   <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Location</Label>
                     <Select value={reportMeta.calibrationLocation} onValueChange={(v) => updateReportMeta("calibrationLocation", v as "onsite" | "at_lab")}>
@@ -1652,7 +2137,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                       </SelectContent>
                     </Select>
                   </div>
-                  <RF label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
+                  <RF id="report-dateOfCalibration" label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
                     readOnly={reportMeta.calibrationLocation === "onsite"}
                     onChange={reportMeta.calibrationLocation === "at_lab" ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
                   <RF label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date" readOnly />
@@ -1662,7 +2147,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>
 
           {/* Instrument details section */}
-          <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div data-tour="instrument-meta" className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
               <div>
                 <span className="text-sm font-semibold text-zinc-800">Instrument Details</span>
@@ -1715,19 +2200,34 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   </span>
                 )}
               </div>
-              <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-[11px] font-medium">
-                <button
-                  onClick={() => setView("readings")}
-                  className={cn("px-3 py-1.5 transition-colors", view === "readings" ? "bg-zinc-900 text-white" : "text-zinc-500 hover:bg-zinc-50")}
-                >
-                  Readings
-                </button>
-                <button
-                  onClick={() => setView("results")}
-                  className={cn("px-3 py-1.5 transition-colors border-l border-zinc-200", view === "results" ? "bg-zinc-900 text-white" : "text-zinc-500 hover:bg-zinc-50")}
-                >
-                  Results
-                </button>
+              <div className="flex items-center gap-2">
+                {view === "results" && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setShowFormulas(true)}
+                        className="p-1.5 rounded-md text-zinc-400 hover:text-violet-600 hover:bg-violet-50 transition-colors"
+                      >
+                        <Info size={14} />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="text-xs">View calculation formulas</TooltipContent>
+                  </Tooltip>
+                )}
+                <div className="flex rounded-lg border border-zinc-200 overflow-hidden text-[11px] font-medium">
+                  <button
+                    onClick={() => setView("readings")}
+                    className={cn("px-3 py-1.5 transition-colors", view === "readings" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}
+                  >
+                    Readings
+                  </button>
+                  <button
+                    onClick={() => setView("results")}
+                    className={cn("px-3 py-1.5 transition-colors border-l border-border", view === "results" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted")}
+                  >
+                    Results
+                  </button>
+                </div>
               </div>
             </div>
             {view === "readings" ? (
@@ -1814,6 +2314,21 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>
         </div>
       )}
+
+      <UncertaintyFormulaModal open={showFormulas} onClose={() => setShowFormulas(false)} />
+      <AuditHistoryPanel open={showHistory} onClose={() => setShowHistory(false)} log={auditLog} loading={auditLoading} />
+
+      <Joyride
+        steps={tourSteps}
+        run={tourRun}
+        continuous
+        onEvent={handleTourCallback}
+        tooltipComponent={TourTooltip}
+        options={{
+          zIndex: 10000,
+          overlayColor: "rgba(0,0,0,0.45)",
+        }}
+      />
     </div>
   );
 }

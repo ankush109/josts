@@ -214,8 +214,10 @@ async function handleCalibrationJob(reportId) {
     const data      = mapCalibrationToTemplateData(report, i);
     const html      = await renderTemplate(templatePath, data);
     const pdfBuffer = await createPdfBuffer(html);
+    const inst      = instruments[i];
+    const instName  = [inst.make, inst.modelType].filter(Boolean).join("_").replace(/\s+/g, "_");
     const suffix    = instruments.length > 1 ? `_${i + 1}` : "";
-    const s3Key     = `calibration/${reportId}_${report.csrNo}${suffix}.pdf`;
+    const s3Key     = `calibration/${report.csrNo}${instName ? `_${instName}` : ""}${suffix}.pdf`;
     await uploadToS3(pdfBuffer, s3Key);
     filePaths.push(s3Key);
   }

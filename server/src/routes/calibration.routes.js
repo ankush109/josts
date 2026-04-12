@@ -33,5 +33,6 @@ router.get(   "/:reportId",        authMiddleware,                              
 router.put(   "/:reportId",        authMiddleware,                                                              CalibrationController.updateReport);
 router.patch( "/:reportId/status", authMiddleware, adminMiddleware,        validate(verifyRejectSchema),        CalibrationController.verifyOrReject);
 router.delete("/:reportId",        authMiddleware,                                                              CalibrationController.deleteReport);
+router.get(   "/:reportId/history",authMiddleware,                                                              CalibrationController.getHistory);
 
 export default router;

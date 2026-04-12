@@ -83,38 +83,92 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.015 264);
-  --foreground: oklch(0.97 0.005 264);
-  --card: oklch(0.18 0.015 264);
-  --card-foreground: oklch(0.97 0.005 264);
-  --popover: oklch(0.18 0.015 264);
-  --popover-foreground: oklch(0.97 0.005 264);
-  --primary: oklch(0.62 0.2 262);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.24 0.02 264);
-  --secondary-foreground: oklch(0.97 0.005 264);
-  --muted: oklch(0.24 0.02 264);
-  --muted-foreground: oklch(0.65 0.03 264);
-  --accent: oklch(0.28 0.03 264);
-  --accent-foreground: oklch(0.85 0.05 264);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.62 0.2 262);
-  --chart-1: oklch(0.62 0.2 262);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.18 0.015 264);
-  --sidebar-foreground: oklch(0.97 0.005 264);
-  --sidebar-primary: oklch(0.62 0.2 262);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.28 0.03 264);
-  --sidebar-accent-foreground: oklch(0.85 0.05 264);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.2 262);
+  /* Deep navy-slate — not pure black */
+  --background:           oklch(0.17 0.022 255);
+  --foreground:           oklch(0.93 0.008 255);
+  --card:                 oklch(0.21 0.022 255);
+  --card-foreground:      oklch(0.93 0.008 255);
+  --popover:              oklch(0.21 0.022 255);
+  --popover-foreground:   oklch(0.93 0.008 255);
+  --primary:              oklch(0.60 0.20 262);
+  --primary-foreground:   oklch(0.98 0 0);
+  --secondary:            oklch(0.26 0.022 255);
+  --secondary-foreground: oklch(0.93 0.008 255);
+  --muted:                oklch(0.26 0.022 255);
+  --muted-foreground:     oklch(0.60 0.028 255);
+  --accent:               oklch(0.29 0.028 255);
+  --accent-foreground:    oklch(0.87 0.04 255);
+  --destructive:          oklch(0.68 0.19 22);
+  --border:               oklch(0.33 0.025 255);
+  --input:                oklch(0.29 0.022 255);
+  --ring:                 oklch(0.60 0.20 262);
+  --chart-1:              oklch(0.60 0.20 262);
+  --chart-2:              oklch(0.70 0.17 162);
+  --chart-3:              oklch(0.77 0.19 70);
+  --chart-4:              oklch(0.63 0.26 304);
+  --chart-5:              oklch(0.65 0.25 16);
+  --sidebar:              oklch(0.19 0.022 255);
+  --sidebar-foreground:   oklch(0.93 0.008 255);
+  --sidebar-primary:      oklch(0.60 0.20 262);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent:       oklch(0.29 0.028 255);
+  --sidebar-accent-foreground: oklch(0.87 0.04 255);
+  --sidebar-border:       oklch(0.33 0.025 255);
+  --sidebar-ring:         oklch(0.60 0.20 262);
 }
+
+/* ── Dark mode overrides for hardcoded utility classes ──────────────────────
+   These are unlayered so they win over @layer utilities via the CSS cascade.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Backgrounds */
+.dark .bg-white           { background-color: oklch(0.21 0.022 255); }
+.dark .bg-white\/95       { background-color: oklch(0.21 0.022 255 / 95%); }
+.dark .bg-zinc-50         { background-color: oklch(0.19 0.020 255); }
+.dark .bg-zinc-50\/60     { background-color: oklch(0.195 0.020 255 / 60%); }
+.dark .bg-zinc-50\/40     { background-color: oklch(0.195 0.020 255 / 40%); }
+.dark .bg-zinc-50\/50     { background-color: oklch(0.195 0.020 255 / 50%); }
+.dark .bg-zinc-100        { background-color: oklch(0.24 0.022 255); }
+.dark .bg-zinc-100\/60    { background-color: oklch(0.24 0.022 255 / 60%); }
+.dark .bg-zinc-200        { background-color: oklch(0.28 0.022 255); }
+
+/* Borders */
+.dark .border-zinc-100    { border-color: oklch(0.30 0.022 255); }
+.dark .border-zinc-200    { border-color: oklch(0.33 0.025 255); }
+.dark .border-zinc-300    { border-color: oklch(0.38 0.025 255); }
+.dark .border-dashed      { border-color: oklch(0.36 0.025 255); }
+
+/* Ring */
+.dark .ring-white         { --tw-ring-color: oklch(0.21 0.022 255); }
+
+/* Text */
+.dark .text-zinc-900      { color: oklch(0.93 0.008 255); }
+.dark .text-zinc-800      { color: oklch(0.88 0.010 255); }
+.dark .text-zinc-700      { color: oklch(0.78 0.018 255); }
+.dark .text-zinc-600      { color: oklch(0.68 0.022 255); }
+.dark .text-zinc-500      { color: oklch(0.58 0.022 255); }
+.dark .text-zinc-400      { color: oklch(0.50 0.020 255); }
+
+/* Dividers */
+.dark .divide-zinc-100    > * + * { border-color: oklch(0.30 0.022 255); }
+.dark .divide-zinc-200    > * + * { border-color: oklch(0.33 0.025 255); }
+
+/* Sticky table cells that explicitly have bg-white need card color so they don't ghost */
+.dark td.sticky,
+.dark th.sticky           { background-color: oklch(0.21 0.022 255); }
+
+/* Slate utilities used in some search/input borders */
+.dark .border-slate-200   { border-color: oklch(0.33 0.025 255); }
+.dark .text-slate-700     { color: oklch(0.78 0.018 255); }
+.dark .text-slate-500     { color: oklch(0.58 0.022 255); }
+.dark .text-slate-400     { color: oklch(0.50 0.020 255); }
+
+/* bg-zinc-300 used as separator line and status dot */
+.dark .bg-zinc-300        { background-color: oklch(0.33 0.025 255); }
+
+/* Arbitrary hardcoded page backgrounds */
+.dark .bg-\[#f0f4f8\]     { background-color: oklch(0.17 0.022 255); }
+.dark .bg-\[#f0f4f8\]\/80 { background-color: oklch(0.17 0.022 255 / 80%); }
 
 @layer base {
   * {

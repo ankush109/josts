@@ -9,13 +9,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
-import { User, MapPin, Mail, PenLine, Save, Loader2, BadgeCheck } from "lucide-react";
+import { User, MapPin, Mail, PenLine, Save, Loader2, BadgeCheck, Sun, Moon, Monitor } from "lucide-react";
 import { AUTH_API } from "@/app/hooks/client";
 import { ENDPOINTS } from "@/app/hooks/endpoints";
 import { useAuth } from "@/app/provider/AuthProvider";
+import { useTheme } from "next-themes";
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -155,6 +157,43 @@ export default function ProfilePage() {
                   className="max-w-sm"
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Appearance */}
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base">Appearance</CardTitle>
+              <CardDescription>Choose how the app looks to you</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  { value: "light", label: "Light", icon: Sun },
+                  { value: "dark",  label: "Dark",  icon: Moon },
+                  { value: "system", label: "System", icon: Monitor },
+                ] as const).map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => setTheme(value)}
+                    className={`flex flex-col items-center gap-2.5 rounded-xl border-2 p-4 transition-all ${
+                      theme === value
+                        ? "border-primary bg-primary/5"
+                        : "border-border bg-muted/30 hover:bg-muted/60"
+                    }`}
+                  >
+                    <div className={`rounded-lg p-2 ${theme === value ? "bg-primary/10" : "bg-background"}`}>
+                      <Icon className={`h-5 w-5 ${theme === value ? "text-primary" : "text-muted-foreground"}`} />
+                    </div>
+                    <span className={`text-sm font-medium ${theme === value ? "text-primary" : "text-muted-foreground"}`}>
+                      {label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Your preference is saved locally on this device.
+              </p>
             </CardContent>
           </Card>
 

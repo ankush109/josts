@@ -5,6 +5,7 @@
  */
 
 import * as CalibrationService from "../services/calibration.service.js";
+import { getAuditLog } from "../services/audit.service.js";
 
 /**
  * POST /calibration-report
@@ -59,7 +60,7 @@ export async function getReport(req, res, next) {
  */
 export async function updateReport(req, res, next) {
   try {
-    const report = await CalibrationService.updateReport(req.params.reportId, req.body);
+    const report = await CalibrationService.updateReport(req.params.reportId, { ...req.body, _updatedBy: req.user.userId });
     res.json(report);
   } catch (err) {
     next(err);
@@ -110,6 +111,15 @@ export async function deleteReport(req, res, next) {
   try {
     await CalibrationService.deleteReport(req.params.reportId);
     res.json({ message: "Report deleted" });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getHistory(req, res, next) {
+  try {
+    const logs = await getAuditLog(req.params.reportId);
+    res.json(logs);
   } catch (err) {
     next(err);
   }

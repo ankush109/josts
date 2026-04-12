@@ -106,9 +106,60 @@ export const INSTRUMENT_CONSTANTS = {
       { label: "2.5kΩ/0.001", stdUncPct: 0.03,  accPct: 0.05, accOffset: 0.0002, leastCount: 0.001, scopePct: 0.014 },
     ],
   },
-
+// ═══════════════════════════════════════════════════════════════════════════
+  // Motwane DCM45A — Digital Clamp Meter
+  //
+  // Sections:
+  //   1. AC Voltage @50Hz  — 4V, 40V, 400V, 600V
+  //   2. DC Voltage        — 4V, 40V, 400V, 600V
+  //   3. AC Current @50Hz  — 40A, 400A, 1000A  (clamp)
+  //   4. DC Current        — 40A, 400A, 1000A
+  //   5. Resistance        — 400Ω, 4KΩ, 40KΩ, 400KΩ
+  //
+  // Note: Current ranges use clamp measurement (PARAM_TYPES.CLAMP_AC_CURRENT_50HZ
+  // for AC, DC_CURRENT for DC). Units are in A for all current ranges.
+  // ═══════════════════════════════════════════════════════════════════════════
+  "Motwane DCM45A": {
+    [PARAM_TYPES.AC_VOLTAGE_50HZ]: [
+      { label: "4V/0.001",  stdUncPct: 0.005, accPct: 0.03, accOffset: 60e-6,    leastCount: 0.001, scopePct: 0.079 },
+      { label: "40V/0.01",  stdUncPct: 0.008, accPct: 0.05, accOffset: 3000e-6,  leastCount: 0.01,  scopePct: 0.079 },
+      { label: "400V/0.1",  stdUncPct: 0.008, accPct: 0.05, accOffset: 3000e-6,  leastCount: 0.1,   scopePct: 0.079 },
+      { label: "600V/1",    stdUncPct: 0.008, accPct: 0.05, accOffset: 20000e-6, leastCount: 1,     scopePct: 0.061 },
+    ],
+    [PARAM_TYPES.DC_VOLTAGE]: [
+      { label: "4V/0.001",  stdUncPct: 0.001, accPct: 0.005,  accOffset: 5e-6,    leastCount: 0.001, scopePct: 0.062 },
+      { label: "40V/0.01",  stdUncPct: 0.001, accPct: 0.0055, accOffset: 500e-6,  leastCount: 0.01,  scopePct: 0.066 },
+      { label: "400V/0.1",  stdUncPct: 0.001, accPct: 0.0055, accOffset: 500e-6,  leastCount: 0.1,   scopePct: 0.066 },
+      { label: "600V/1",    stdUncPct: 0.001, accPct: 0.0055, accOffset: 1500e-6, leastCount: 1,     scopePct: 0.066 },
+    ],
+    [PARAM_TYPES.CLAMP_AC_CURRENT_50HZ]: [
+      { label: "40A/0.01",   stdUncPct: 0.7,  accPct: 0.05, accOffset: 100e-6,  leastCount: 0.01, scopePct: 0.77  },
+      { label: "400A/0.1",   stdUncPct: 0.7,  accPct: 0.06, accOffset: 2000e-6, leastCount: 0.1,  scopePct: 0.77  },
+      { label: "1000A/1",    stdUncPct: 0.7,  accPct: 0.06, accOffset: 2000e-6, leastCount: 1,    scopePct: 0.77  },
+    ],
+    [PARAM_TYPES.DC_CURRENT]: [
+      { label: "40A/0.01",   stdUncPct: 0.8,  accPct: 0.05, accOffset: 100e-6,  leastCount: 0.1,  scopePct: 0.77  },
+      { label: "400A/0.1",   stdUncPct: 0.8,  accPct: 0.06, accOffset: 2000e-6, leastCount: 0.1,  scopePct: 0.77  },
+      { label: "1000A/1",    stdUncPct: 0.8,  accPct: 0.06, accOffset: 2000e-6, leastCount: 1,    scopePct: 0.77  },
+    ],
+    [PARAM_TYPES.RESISTANCE]: [
+      { label: "400Ω/0.1",   stdUncPct: 0.005, accPct: 0.012, accOffset: 0.015,  leastCount: 0.1,   scopePct: 0.17  },
+      { label: "4KΩ/0.001",  stdUncPct: 0.002, accPct: 0.009, accOffset: 0.2e-3, leastCount: 0.001, scopePct: 0.014 },
+      { label: "40KΩ/0.01",  stdUncPct: 0.002, accPct: 0.009, accOffset: 1e-3,   leastCount: 0.01,  scopePct: 0.014 },
+      { label: "400KΩ/0.1",  stdUncPct: 0.002, accPct: 0.012, accOffset: 10e-3,  leastCount: 0.1,   scopePct: 0.02  },
+    ],
+  },
   // Add more instruments below following the same pattern.
   // "Keysight 34465A": { ... },
+};
+
+// ─── Make → canonical INSTRUMENT_CONSTANTS key ───────────────────────────────
+// Regardless of what modelType the client sends, we always use this key for
+// uncertainty budget lookup. Unsupported makes resolve to null (computed = null).
+export const MAKE_TO_INSTRUMENT_KEY = {
+  "Fluke":   "Fluke 8846A",
+  "SVERKER": "SVERKER 780",
+  "Motwane": "Motwane DCM45A",
 };
 
 // ─── Lookup helper ────────────────────────────────────────────────────────────

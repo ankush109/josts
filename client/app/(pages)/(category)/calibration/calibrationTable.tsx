@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useTheme } from "next-themes";
 import {
   Table,
   TableBody,
@@ -61,6 +62,8 @@ import {
   ShieldCheck,
   ShieldX,
   PenLine,
+  History,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
@@ -70,6 +73,9 @@ import { AUTH_API } from "@/app/hooks/client";
 import { ENDPOINTS } from "@/app/hooks/endpoints";
 import { useAuth } from "@/app/provider/AuthProvider";
 import { useVerifyRejectCalibration } from "@/app/hooks/mutation/(calibration)/useVerifyRejectCalibration";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useGetAuditLog, type AuditEntry } from "@/app/hooks/query/(calibration)/useGetAuditLog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,9 +101,56 @@ interface ReportListItem {
   updatedAt: string;
 }
 
-const NAVY = "#1e3a5f";
+const NAVY       = "#1e3a5f";
+const NAVY_DARK  = "#4a7bb5";   // lighter navy for dark mode
 const NAVY_LIGHT = "#e8eef5";
+const NAVY_LIGHT_DARK = "oklch(0.26 0.03 255)"; // muted dark header row
 const NAVY_MEDIUM = "#c7d5e5";
+
+// ─── Audit row component ───────────────────────────────────────────────────────
+
+const ACTION_META: Record<AuditEntry["action"], { label: string; color: string }> = {
+  created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700" },
+  updated:        { label: "Updated",        color: "bg-blue-100 text-blue-700" },
+  status_changed: { label: "Status changed", color: "bg-violet-100 text-violet-700" },
+  deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700" },
+};
+
+function AuditRow({ entry, isLast }: { entry: AuditEntry; isLast: boolean }) {
+  const baseMeta = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600" };
+  const meta = entry.action === "status_changed"
+    ? entry.changes[0]?.to === "verified"
+      ? { label: "Verified",  color: "bg-emerald-100 text-emerald-700" }
+      : entry.changes[0]?.to === "rejected"
+      ? { label: "Rejected",  color: "bg-red-100 text-red-700" }
+      : baseMeta
+    : baseMeta;
+  const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
+  const initials = name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+  const date = new Date(entry.createdAt);
+  const dateStr = date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  return (
+    <li className={cn("ml-6 pb-6", isLast && "pb-0")}>
+      {/* dot */}
+      <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white" />
+
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">
+              {initials}
+            </div>
+            <span className="text-xs font-semibold text-zinc-800">{name}</span>
+            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
+          </div>
+          <span className="text-[10px] text-zinc-400 whitespace-nowrap">{dateStr} · {timeStr}</span>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 const STATUS_CONFIG: Record<
   ReportStatus,
@@ -158,20 +211,25 @@ function StatCard({
   active?: boolean;
   onClick?: () => void;
 }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const cardNavy = isDark ? NAVY_DARK : NAVY;
+  const cardNavyLight = isDark ? NAVY_LIGHT_DARK : NAVY_LIGHT;
+
   return (
     <button
       onClick={onClick}
       className={cn(
         "flex-1 min-w-[120px] rounded-xl border p-4 text-left transition-all",
         active
-          ? "border-[#1e3a5f]/40 shadow-sm ring-1 ring-[#1e3a5f]/20"
+          ? isDark ? "border-[#4a7bb5]/40 shadow-sm ring-1 ring-[#4a7bb5]/20" : "border-[#1e3a5f]/40 shadow-sm ring-1 ring-[#1e3a5f]/20"
           : "border-slate-200 bg-white hover:border-[#1e3a5f]/20 hover:shadow-sm"
       )}
-      style={active ? { backgroundColor: NAVY_LIGHT } : undefined}
+      style={active ? { backgroundColor: cardNavyLight } : undefined}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className={cn("p-2 rounded-lg", accent)}>{icon}</div>
-        <span className="text-2xl font-bold tabular-nums" style={{ color: NAVY }}>
+        <span className="text-2xl font-bold tabular-nums" style={{ color: cardNavy }}>
           {value}
         </span>
       </div>
@@ -184,10 +242,25 @@ function StatCard({
 
 export default function CalibrationReportsTable() {
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const navy      = isDark ? NAVY_DARK      : NAVY;
+  const navyLight = isDark ? NAVY_LIGHT_DARK : NAVY_LIGHT;
   const { user, setUser } = useAuth();
   const isAdmin = user?.role === "admin";
   const { data, isLoading, isError, refetch } = useGetCalibrationReports();
   const { mutate: verifyReject } = useVerifyRejectCalibration();
+  const queryClient = useQueryClient();
+  const { mutate: deleteReport, isPending: isDeleting } = useMutation({
+    mutationFn: (reportId: string) => AUTH_API.delete(ENDPOINTS.DELETE_CALIBRATION_REPORT(reportId)),
+    onSuccess: () => {
+      toast.success("Report deleted");
+      setDeleteDialogOpen(false);
+      setReportToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+    },
+    onError: () => toast.error("Failed to delete report"),
+  });
 
   // ── First-login onboarding ──
   const [sigName, setSigName] = useState("");
@@ -214,8 +287,10 @@ export default function CalibrationReportsTable() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<ReportListItem | null>(null);
   const [viewingPdf, setViewingPdf] = useState<string | null>(null);
+  const [auditReportId, setAuditReportId] = useState<string | null>(null);
+  const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(auditReportId);
   const allItems: ReportListItem[] = data?.items ?? [];
 
   function isPdfFailed(report: ReportListItem) {
@@ -275,7 +350,7 @@ export default function CalibrationReportsTable() {
     setCurrentPage(1);
   }
 
-  function confirmDelete(id: string) { setReportToDelete(id); setDeleteDialogOpen(true); }
+  function confirmDelete(report: ReportListItem) { setReportToDelete(report); setDeleteDialogOpen(true); }
 
   function toTitleCase(str: string) {
     return str.replace(/\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -297,10 +372,7 @@ export default function CalibrationReportsTable() {
 
   function handleDelete() {
     if (!reportToDelete) return;
-    toast.success("Report deleted");
-    setDeleteDialogOpen(false);
-    setReportToDelete(null);
-    refetch();
+    deleteReport(reportToDelete._id);
   }
 
   function handleVerifyReject(e: React.MouseEvent, reportId: string, status: "verified" | "rejected") {
@@ -331,9 +403,9 @@ export default function CalibrationReportsTable() {
         <Card className="w-full max-w-sm">
           <CardContent className="pt-6 flex flex-col items-center gap-2 text-center">
             <AlertCircle className="h-10 w-10 text-red-400" />
-            <p className="font-semibold" style={{ color: NAVY }}>Failed to load reports</p>
+            <p className="font-semibold" style={{ color: navy }}>Failed to load reports</p>
             <p className="text-sm text-slate-500">Please refresh and try again</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-2" style={{ borderColor: NAVY, color: NAVY }}>Retry</Button>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-2" style={{ borderColor: navy, color: navy }}>Retry</Button>
           </CardContent>
         </Card>
       </div>
@@ -344,18 +416,18 @@ export default function CalibrationReportsTable() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: NAVY }}>Calibration Reports</h1>
+          <h1 className="text-xl font-bold" style={{ color: navy }}>Calibration Reports</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage and track all calibration report records</p>
         </div>
         {!isAdmin && (
-          <Button onClick={() => router.push("/calibration/create")} className="h-9 gap-2 text-white" style={{ backgroundColor: NAVY }}>
+          <Button onClick={() => router.push("/calibration/create")} className="h-9 gap-2 text-white" style={{ backgroundColor: navy }}>
             <Plus className="h-4 w-4" /> New Report
           </Button>
         )}
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <StatCard label="Total Reports" value={counts.total} total={counts.total} barColor="bg-[#1e3a5f]" icon={<ClipboardList className="h-4 w-4" style={{ color: NAVY }} />} accent="bg-[#e8eef5]" active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
+        <StatCard label="Total Reports" value={counts.total} total={counts.total} barColor={isDark ? "bg-[#4a7bb5]" : "bg-[#1e3a5f]"} icon={<ClipboardList className="h-4 w-4" style={{ color: navy }} />} accent={isDark ? "bg-[#1e3a5f]/30" : "bg-[#e8eef5]"} active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
         <StatCard label="Drafts" value={counts.draft} total={counts.total} barColor="bg-slate-400" icon={<FileText className="h-4 w-4 text-slate-500" />} accent="bg-slate-100" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
         <StatCard label="Submitted" value={counts.submitted} total={counts.total} barColor="bg-sky-500" icon={<Clock className="h-4 w-4 text-sky-600" />} accent="bg-sky-50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
         <StatCard label="Verified" value={counts.verified} total={counts.total} barColor="bg-emerald-500" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
@@ -396,17 +468,17 @@ export default function CalibrationReportsTable() {
           <div className="overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent" style={{ backgroundColor: NAVY_LIGHT }}>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide pl-5" style={{ color: NAVY }}>CSR No</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Status</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Created By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Instruments</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Customer</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Calibrated By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Verified By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>Date</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center" style={{ color: NAVY }}>PDF</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-5" style={{ color: NAVY }}>Actions</TableHead>
+                <TableRow className="hover:bg-transparent" style={{ backgroundColor: navyLight }}>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide pl-5" style={{ color: navy }}>CSR No</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Status</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Created By</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Instruments</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Customer</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Calibrated By</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Verified By</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Date</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center" style={{ color: navy }}>PDF</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-5" style={{ color: navy }}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -415,17 +487,17 @@ export default function CalibrationReportsTable() {
                   <TableRow>
                     <TableCell colSpan={10} className="py-20 text-center">
                       <div className="flex flex-col items-center gap-3 text-slate-400">
-                        <div className="h-12 w-12 rounded-full flex items-center justify-center" style={{ backgroundColor: NAVY_LIGHT }}>
-                          <FileText className="h-6 w-6" style={{ color: NAVY }} />
+                        <div className="h-12 w-12 rounded-full flex items-center justify-center" style={{ backgroundColor: navyLight }}>
+                          <FileText className="h-6 w-6" style={{ color: navy }} />
                         </div>
                         <div>
-                          <p className="font-semibold text-sm" style={{ color: NAVY }}>No reports found</p>
+                          <p className="font-semibold text-sm" style={{ color: navy }}>No reports found</p>
                           <p className="text-xs text-slate-400 mt-1">
                             {searchQuery || statusFilter !== "all" ? "Try adjusting your search or filters" : "Create your first calibration report"}
                           </p>
                         </div>
                         {!isAdmin && !searchQuery && statusFilter === "all" && (
-                          <Button size="sm" variant="outline" onClick={() => router.push("/calibration/create")} className="gap-1.5 mt-1" style={{ borderColor: NAVY, color: NAVY }}>
+                          <Button size="sm" variant="outline" onClick={() => router.push("/calibration/create")} className="gap-1.5 mt-1" style={{ borderColor: navy, color: navy }}>
                             <Plus className="h-3.5 w-3.5" /> New Report
                           </Button>
                         )}
@@ -434,14 +506,14 @@ export default function CalibrationReportsTable() {
                   </TableRow>
                 ) : (
                   currentRows.map((report) => (
-                    <TableRow key={report._id} className="hover:bg-[#f0f4f8]/80 transition-colors cursor-pointer group border-l-2 border-l-transparent hover:border-l-[#1e3a5f]/30" onClick={() => router.push(`/calibration/${report._id}`)}>
+                    <TableRow key={report._id} className="hover:bg-accent/40 transition-colors cursor-pointer group border-l-2 border-l-transparent hover:border-l-primary/30" onClick={() => router.push(`/calibration/${report._id}`)}>
                       <TableCell className="pl-5">
                         <div className="flex items-center gap-2.5">
-                          <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" style={{ backgroundColor: NAVY_LIGHT }}>
-                            <FlaskConical className="h-3.5 w-3.5" style={{ color: NAVY }} />
+                          <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" style={{ backgroundColor: navyLight }}>
+                            <FlaskConical className="h-3.5 w-3.5" style={{ color: navy }} />
                           </div>
                           <div>
-                            <p className="font-semibold text-sm" style={{ color: NAVY }}>{report.csrNo}</p>
+                            <p className="font-semibold text-sm" style={{ color: navy }}>{report.csrNo}</p>
                             <p className="text-xs text-slate-400">{report.formatNo}</p>
                           </div>
                         </div>
@@ -479,12 +551,7 @@ export default function CalibrationReportsTable() {
                           : <span className="text-xs text-slate-300">—</span>}
                       </TableCell>
                       <TableCell>
-                        <div
-                          className="flex flex-col gap-0.5"
-                          title={report.updatedAt !== report.createdAt
-                            ? `Updated ${new Date(report.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} ${new Date(report.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`
-                            : undefined}
-                        >
+                        <div className="flex flex-col gap-0.5">
                           <span className="text-sm font-medium text-slate-700">
                             {new Date(report.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </span>
@@ -587,6 +654,9 @@ export default function CalibrationReportsTable() {
                                 <Pencil className="mr-2 h-4 w-4" /> Edit report
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setAuditReportId(report._id); }}>
+                              <History className="mr-2 h-4 w-4" /> History
+                            </DropdownMenuItem>
                             {isAdmin && report.status === "submitted" && (
                               <>
                                 <DropdownMenuSeparator />
@@ -601,7 +671,7 @@ export default function CalibrationReportsTable() {
                             {!isAdmin && (
                               <>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmDelete(report._id); }} disabled={report.status !== "draft"} className="text-red-600 focus:text-red-600 focus:bg-red-50">
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmDelete(report); }} className="text-red-600 focus:text-red-600 focus:bg-red-50">
                                   <Trash2 className="mr-2 h-4 w-4" /> Delete
                                 </DropdownMenuItem>
                               </>
@@ -643,7 +713,7 @@ export default function CalibrationReportsTable() {
                         size="sm"
                         onClick={() => setCurrentPage(page)}
                         className={cn("h-8 min-w-[32px]", currentPage === page ? "text-white" : "border-slate-200")}
-                        style={currentPage === page ? { backgroundColor: NAVY } : undefined}
+                        style={currentPage === page ? { backgroundColor: navy } : undefined}
                       >{page}</Button>
                     </div>
                   ))}
@@ -657,27 +727,94 @@ export default function CalibrationReportsTable() {
       </Card>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this report?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. The report will be permanently removed. Only draft reports can be deleted.</AlertDialogDescription>
+        <AlertDialogContent className="max-w-sm p-5">
+          <AlertDialogHeader className="mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-7 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="h-3.5 w-3.5 text-red-600" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-sm font-semibold text-zinc-900 leading-tight">Delete Report</AlertDialogTitle>
+                <p className="text-xs text-zinc-400">This cannot be undone</p>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+
+          <AlertDialogDescription asChild>
+            <div className="space-y-2">
+              {reportToDelete && (
+                <>
+                  <div className="flex items-center justify-between py-1.5 border-b border-zinc-100">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">CSR No</span>
+                    <span className="text-sm font-bold text-zinc-900 font-mono">{reportToDelete.csrNo}</span>
+                  </div>
+                  {reportToDelete.instruments?.length > 0 && (
+                    <div className="flex items-start justify-between py-1.5">
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mt-1">
+                        {reportToDelete.instruments.length > 1 ? "Instruments" : "Instrument"}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 justify-end max-w-[60%]">
+                        {reportToDelete.instruments.map((inst, i) => (
+                          <span key={i} className="px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-700 text-xs font-medium">
+                            {[inst.make, inst.modelType].filter(Boolean).join(" ") || "Unknown"}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </AlertDialogDescription>
+
+          <AlertDialogFooter className="mt-4 gap-2">
+            <AlertDialogCancel disabled={isDeleting} className="flex-1 h-9 text-sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="flex-1 h-9 text-sm bg-red-600 hover:bg-red-700">
+              {isDeleting ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Deleting…</> : "Delete"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Audit history dialog ── */}
+      <Dialog open={!!auditReportId} onOpenChange={(o) => { if (!o) setAuditReportId(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <History className="h-4 w-4 text-zinc-500" /> Audit History
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-1 mt-2">
+            {auditLoading ? (
+              <div className="flex items-center justify-center h-32 text-sm text-zinc-400">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+              </div>
+            ) : !auditLog?.length ? (
+              <div className="flex flex-col items-center justify-center h-32 text-sm text-zinc-400 gap-2">
+                <History className="h-6 w-6 opacity-30" />
+                No history yet
+              </div>
+            ) : (
+              <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
+                {auditLog.map((entry, i) => (
+                  <AuditRow key={entry._id} entry={entry} isLast={i === auditLog.length - 1} />
+                ))}
+              </ol>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── First-login onboarding modal ── */}
       {showOnboarding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6">
             <div className="flex flex-col items-center gap-2 text-center">
-              <div className="h-14 w-14 rounded-full flex items-center justify-center mb-1" style={{ backgroundColor: "#e8eef5" }}>
-                <PenLine className="h-6 w-6" style={{ color: "#1e3a5f" }} />
+              <div className="h-14 w-14 rounded-full flex items-center justify-center mb-1" style={{ backgroundColor: navyLight }}>
+                <PenLine className="h-6 w-6" style={{ color: navy }} />
               </div>
-              <h2 className="text-xl font-semibold tracking-tight" style={{ color: "#1e3a5f" }}>
+              <h2 className="text-xl font-semibold tracking-tight" style={{ color: navy }}>
                 One last step
               </h2>
               <p className="text-sm text-slate-500 max-w-xs">
@@ -702,7 +839,7 @@ export default function CalibrationReportsTable() {
               onClick={handleOnboardSave}
               disabled={!sigName.trim() || isSavingOnboard}
               className="w-full h-10 text-white"
-              style={{ backgroundColor: "#1e3a5f" }}
+              style={{ backgroundColor: navy }}
             >
               {isSavingOnboard ? <Loader2 className="h-4 w-4 animate-spin" /> : "Get started →"}
             </Button>
