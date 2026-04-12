@@ -25,14 +25,14 @@ export const createCalibrationSchema = z.object({
   dateOfCalibration:   z.string().optional(),
   calibrationDueDate:  z.string().optional(),
   instruments:         z.array(z.any()).optional(),
-  signatures:          z.record(z.any()).optional(),
+  signatures:          z.record(z.string(), z.any()).optional(),
 });
 
 /**
  * Schema for the POST /calibration-report/compute (preview) endpoint.
  */
 export const computePreviewSchema = z.object({
-  instrument: z.record(z.any()),
+  instrument: z.record(z.string(), z.any()),
 });
 
 /**

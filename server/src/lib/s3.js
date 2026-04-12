@@ -37,3 +37,20 @@ export async function getSignedDownloadUrl(key) {
   });
   return getSignedUrl(s3Client, command, { expiresIn: 3600 });
 }
+
+/**
+ * Generates a pre-signed GET URL that forces the browser to download the file.
+ *
+ * @param {string} key      - S3 object key.
+ * @param {string} filename - The filename the browser will save as.
+ * @returns {Promise<string>} Pre-signed URL string with attachment disposition.
+ */
+export async function getSignedDownloadUrlAttachment(key, filename) {
+  const command = new GetObjectCommand({
+    Bucket:                        process.env.AWS_S3_BUCKET,
+    Key:                           key,
+    ResponseContentDisposition:    `attachment; filename="${filename}"`,
+    ResponseContentType:           "application/pdf",
+  });
+  return getSignedUrl(s3Client, command, { expiresIn: 3600 });
+}

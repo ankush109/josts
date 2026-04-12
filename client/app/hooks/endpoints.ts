@@ -12,7 +12,13 @@ export const ENDPOINTS = {
   CHANGE_REPORT_STATUS:       (reportId: string | number, status: string) => `/report/${reportId}/${status}`,
   DELETE_DRAFT:               (reportId: string | number)    => `/report/${reportId}`,
 
-  GET_REPORT_URL:             (id: string, type?: string)   => type ? `/report/url/${id}?type=${type}` : `/report/url/${id}`,
+  GET_REPORT_URL:             (id: string, type?: string, download?: boolean) => {
+    const params = new URLSearchParams();
+    if (type) params.set("type", type);
+    if (download) params.set("download", "true");
+    const qs = params.toString();
+    return qs ? `/report/url/${id}?${qs}` : `/report/url/${id}`;
+  },
   GET_CALIBRATION_REPORTS:    ()                             => `/calibration-report`,
   GET_CALIBRATION_REPORTS_BY_ID: (reportId: string)         => `/calibration-report/${reportId}`,
   CREATE_CALIBRATION_REPORT:  ()                             => `/calibration-report`,

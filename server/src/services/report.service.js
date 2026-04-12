@@ -12,7 +12,7 @@
 
 import Report             from "../models/Report.js";
 import CalibrationReport  from "../models/Calibration.js";
-import { getSignedDownloadUrl } from "../lib/s3.js";
+import { getSignedDownloadUrl, getSignedDownloadUrlAttachment } from "../lib/s3.js";
 import { pushPdfJobToRedis }    from "../lib/redis.js";
 
 // ─── Report CRUD ──────────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ export async function changeApprovalStatus(reportId, status, adminId) {
  * @returns {Promise<{ fileUrl?: string, fileUrls?: string[] }>}
  * @throws {Error} With `statusCode: 400` if the PDF is not ready yet.
  */
-export async function getReportSignedUrl(reportId, isCalibration) {
+export async function getReportSignedUrl(reportId, isCalibration, forDownload = false) {
   if (isCalibration) {
     const report = await CalibrationReport.findById(reportId);
     if (!report) {
@@ -213,7 +213,13 @@ export async function getReportSignedUrl(reportId, isCalibration) {
       err.statusCode = 400;
       throw err;
     }
-    const fileUrls = await Promise.all(report.filePaths.map(getSignedDownloadUrl));
+    const fileUrls = await Promise.all(
+      report.filePaths.map((key, i) => {
+        if (!forDownload) return getSignedDownloadUrl(key);
+        const filename = `${report.csrNo || reportId}_instrument_${i + 1}.pdf`.replace(/\s+/g, "_");
+        return getSignedDownloadUrlAttachment(key, filename);
+      })
+    );
     return { fileUrls };
   }
 

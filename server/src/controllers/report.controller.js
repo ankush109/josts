@@ -45,7 +45,8 @@ export async function listReports(req, res, next) {
 export async function getReportUrl(req, res, next) {
   try {
     const isCalibration = req.query.type === "calibration";
-    const result = await ReportService.getReportSignedUrl(req.params.id, isCalibration);
+    const forDownload   = req.query.download === "true";
+    const result = await ReportService.getReportSignedUrl(req.params.id, isCalibration, forDownload);
     res.json(result);
   } catch (err) {
     next(err);

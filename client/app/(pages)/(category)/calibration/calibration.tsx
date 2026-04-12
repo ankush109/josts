@@ -14,7 +14,6 @@ import { useComputeCalibration } from "@/app/hooks/mutation/(calibration)/useCom
 import { useGetCalibrationReportById } from "@/app/hooks/query/(calibration)/useGetCalibReportById";
 import { cn } from "@/lib/utils";
 import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send } from "lucide-react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -410,7 +409,7 @@ const SelectField: FC<{
       {label}
     </Label>
     {locked ? (
-      <div className="h-9 px-3 flex items-center rounded-md border border-zinc-200 bg-zinc-50 text-sm text-zinc-500 gap-1.5">
+      <div className="h-9 px-3 flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-500 dark:text-zinc-400 gap-1.5">
         <span className="flex-1 truncate">{String(meta[k]) || `—`}</span>
         <span className="text-[10px] text-zinc-400 font-medium shrink-0">locked</span>
       </div>
@@ -432,7 +431,7 @@ const SelectField: FC<{
 // ─── Section divider ──────────────────────────────────────────────────────────
 
 const SectionLabel: FC<{ label: string }> = ({ label }) => (
-  <div className="col-span-2 lg:col-span-4 pt-2 border-t border-zinc-100">
+  <div className="col-span-2 lg:col-span-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
     <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">{label}</span>
   </div>
 );
@@ -568,10 +567,10 @@ const MeasureTable: FC<{
         <thead>
           {/* Row 1: range labels */}
           <tr>
-            <th rowSpan={2} className="px-3 py-2.5 bg-zinc-50 border border-zinc-200 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wide">
+            <th rowSpan={2} className="px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-left text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
               Reading
             </th>
-            <th rowSpan={2} className="px-2 py-2.5 bg-zinc-50 border border-zinc-200 text-center text-[11px] font-semibold text-zinc-500">
+            <th rowSpan={2} className="px-2 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-center text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
               #
             </th>
             {param.ranges.map((r, i) => (
@@ -637,13 +636,13 @@ const MeasureTable: FC<{
         </thead>
         <tbody>
           {Array.from({ length: 5 }, (_, ri) => (
-            <tr key={ri} className={ri % 2 === 1 ? "bg-zinc-50/60" : ""}>
-              <td className="px-3 py-1.5 border border-zinc-200 text-[11px] text-zinc-400">
+            <tr key={ri} className={ri % 2 === 1 ? "bg-zinc-50/60 dark:bg-zinc-800/30" : ""}>
+              <td className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 text-[11px] text-zinc-400 dark:text-zinc-500">
                 {ri === 0 && (
                   <span className="text-[10px] uppercase tracking-wide">Measured value</span>
                 )}
               </td>
-              <td className="px-2 py-1.5 border border-zinc-200 text-center font-mono text-[11px] text-zinc-400">
+              <td className="px-2 py-1.5 border border-zinc-200 dark:border-zinc-700 text-center font-mono text-[11px] text-zinc-400 dark:text-zinc-500">
                 {ri + 1}
               </td>
               {param.ranges.flatMap((r) =>
@@ -710,8 +709,8 @@ const MeasureTable: FC<{
           </tr>
 
           {/* Mean row */}
-          <tr className="bg-blue-50/70 border-t-2 border-blue-100">
-            <td colSpan={2} className="px-3 py-2.5 border border-zinc-200 font-semibold text-xs text-zinc-700">
+          <tr className="bg-blue-50/70 dark:bg-blue-950/20 border-t-2 border-blue-100 dark:border-blue-900">
+            <td colSpan={2} className="px-3 py-2.5 border border-zinc-200 dark:border-zinc-700 font-semibold text-xs text-zinc-700 dark:text-zinc-300">
               Mean value
             </td>
             {param.ranges.flatMap((r) =>
@@ -721,8 +720,8 @@ const MeasureTable: FC<{
                   <td
                     key={m.id}
                     className={cn(
-                      "border border-zinc-200 text-center font-mono text-xs font-semibold py-2",
-                      mean ? "text-blue-700" : "text-zinc-300"
+                      "border border-zinc-200 dark:border-zinc-700 text-center font-mono text-xs font-semibold py-2",
+                      mean ? "text-blue-700 dark:text-blue-400" : "text-zinc-300 dark:text-zinc-600"
                     )}
                   >
                     {mean ?? "—"}
@@ -734,14 +733,14 @@ const MeasureTable: FC<{
           </tr>
 
           {/* Corrected value row */}
-          <tr className="border-t border-zinc-200">
-            <td colSpan={2} className="px-3 py-2.5 border border-zinc-200">
-              <div className="font-semibold text-xs text-zinc-700">Corrected value</div>
+          <tr className="border-t border-zinc-200 dark:border-zinc-700">
+            <td colSpan={2} className="px-3 py-2.5 border border-zinc-200 dark:border-zinc-700">
+              <div className="font-semibold text-xs text-zinc-700 dark:text-zinc-300">Corrected value</div>
               <div className="text-[10px] text-zinc-400 mt-0.5">After correction factor</div>
             </td>
             {param.ranges.flatMap((r) =>
               r.measurements.map((m) => (
-                <td key={m.id} className="border border-zinc-200 p-0">
+                <td key={m.id} className="border border-zinc-200 dark:border-zinc-700 p-0">
                   <input
                     value={m.corrected}
                     onChange={(e) => updateMeasurement(r.id, m.id, { corrected: e.target.value })}
@@ -843,7 +842,7 @@ const FORMULA_STEPS = [
   },
 ];
 
-// ─── Audit history panel ──────────────────────────────────────────────────────
+// ─── Audit history shared helpers ─────────────────────────────────────────────
 
 const ACTION_META: Record<AuditEntry["action"], { label: string; color: string }> = {
   created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700" },
@@ -852,74 +851,117 @@ const ACTION_META: Record<AuditEntry["action"], { label: string; color: string }
   deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700" },
 };
 
-const AuditHistoryPanel: FC<{ open: boolean; onClose: () => void; log: AuditEntry[] | undefined; loading: boolean }> = ({ open, onClose, log, loading }) => (
-  <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-    <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
-      <DialogHeader className="flex-shrink-0">
-        <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
-          <History className="h-4 w-4 text-zinc-400" /> Audit History
-        </DialogTitle>
-      </DialogHeader>
+function resolveAuditMeta(entry: AuditEntry) {
+  const base = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600" };
+  if (entry.action !== "status_changed") return base;
+  const to = entry.changes[0]?.to;
+  if (to === "verified") return { label: "Verified", color: "bg-emerald-100 text-emerald-700" };
+  if (to === "rejected") return { label: "Rejected", color: "bg-red-100 text-red-700" };
+  return base;
+}
 
-      <div className="flex-1 overflow-y-auto mt-2 pr-1">
-        {loading ? (
-          <div className="flex items-center justify-center h-32 text-sm text-zinc-400 gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+function AuditEntryCard({ entry, isLast }: { entry: AuditEntry; isLast: boolean }) {
+  const meta = resolveAuditMeta(entry);
+  const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
+  const initials = name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+  const date = new Date(entry.createdAt);
+  const dateStr = date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return (
+    <li className={cn("ml-6", !isLast && "pb-4")}>
+      <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white" />
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">{initials}</div>
+            <span className="text-xs font-semibold text-zinc-800">{name}</span>
+            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
           </div>
-        ) : !log?.length ? (
-          <div className="flex flex-col items-center justify-center h-32 gap-2 text-zinc-400">
-            <History className="h-6 w-6 opacity-30" />
-            <span className="text-sm">No history yet</span>
+          <span className="text-[10px] text-zinc-400 whitespace-nowrap">{dateStr} · {timeStr}</span>
+        </div>
+        {entry.changes.length > 0 && (
+          <div className="space-y-1 pt-1 border-t border-zinc-200">
+            {entry.changes.map((c, ci) => (
+              <div key={ci} className="flex items-start gap-1.5 text-[11px]">
+                <span className="text-zinc-500 font-medium min-w-[110px] shrink-0">{c.field}</span>
+                <span className="text-zinc-400 line-through truncate max-w-[70px]">{c.from}</span>
+                <ArrowRight className="h-3 w-3 text-zinc-300 flex-shrink-0 mt-0.5" />
+                <span className="text-zinc-800 font-medium truncate">{c.to}</span>
+              </div>
+            ))}
           </div>
-        ) : (
-          <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
-            {log.map((entry, i) => {
-              const baseMeta = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600" };
-              const meta = entry.action === "status_changed"
-                ? entry.changes[0]?.to === "verified"
-                  ? { label: "Verified", color: "bg-emerald-100 text-emerald-700" }
-                  : entry.changes[0]?.to === "rejected"
-                  ? { label: "Rejected", color: "bg-red-100 text-red-700" }
-                  : baseMeta
-                : baseMeta;
-              const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
-              const initials = name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
-              const date = new Date(entry.createdAt);
-              const dateStr = date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-              const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-              return (
-                <li key={entry._id} className={cn("ml-6 pb-5", i === log.length - 1 && "pb-0")}>
-                  <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white" />
-                  <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">{initials}</div>
-                        <span className="text-xs font-semibold text-zinc-800">{name}</span>
-                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
-                      </div>
-                      <span className="text-[10px] text-zinc-400 whitespace-nowrap">{dateStr} · {timeStr}</span>
-                    </div>
-                    {entry.changes.length > 0 && (
-                      <div className="space-y-1 pt-1 border-t border-zinc-200">
-                        {entry.changes.map((c, ci) => (
-                          <div key={ci} className="flex items-start gap-1.5 text-[11px]">
-                            <span className="text-zinc-500 font-medium min-w-[110px] shrink-0">{c.field}</span>
-                            <span className="text-zinc-400 line-through truncate max-w-[70px]">{c.from}</span>
-                            <ArrowRight className="h-3 w-3 text-zinc-300 flex-shrink-0 mt-0.5" />
-                            <span className="text-zinc-800 font-medium truncate">{c.to}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
         )}
       </div>
-    </DialogContent>
-  </Dialog>
+    </li>
+  );
+}
+
+// Small popover — last 2 entries + "View all" button
+const HistoryPopover: FC<{ log: AuditEntry[] | undefined; loading: boolean; onViewAll: () => void; onClose: () => void }> = ({ log, loading, onViewAll, onClose }) => {
+  const preview = log?.slice(0, 2) ?? [];
+  return (
+    <div className="absolute left-0 top-full mt-1.5 z-50 w-72 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Recent activity</span>
+        <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 p-0.5 rounded"><X className="h-3.5 w-3.5" /></button>
+      </div>
+      {loading ? (
+        <div className="flex items-center justify-center h-16 text-sm text-zinc-400 gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+        </div>
+      ) : !preview.length ? (
+        <div className="flex flex-col items-center justify-center h-16 gap-1 text-zinc-400">
+          <span className="text-xs">No history yet</span>
+        </div>
+      ) : (
+        <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
+          {preview.map((entry, i) => (
+            <AuditEntryCard key={entry._id} entry={entry} isLast={i === preview.length - 1} />
+          ))}
+        </ol>
+      )}
+      {(log?.length ?? 0) > 0 && (
+        <button
+          onClick={() => { onClose(); onViewAll(); }}
+          className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-blue-600 hover:text-blue-800 border border-blue-100 hover:border-blue-300 hover:bg-blue-50 rounded-lg py-1.5 transition-colors"
+        >
+          View all {log!.length} entries <ArrowRight className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Full history panel — renders in main content area
+const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; onBack: () => void }> = ({ log, loading, onBack }) => (
+  <div className="flex-1 flex flex-col bg-white">
+    <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-zinc-200 px-6 py-3.5 flex items-center gap-3 shadow-sm">
+      <button onClick={onBack} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all">
+        <ArrowLeft className="h-4 w-4" />
+      </button>
+      <History className="h-4 w-4 text-zinc-400" />
+      <span className="text-sm font-semibold text-zinc-800">Audit History</span>
+      {log && <span className="ml-auto text-[11px] text-zinc-400">{log.length} {log.length === 1 ? "entry" : "entries"}</span>}
+    </div>
+    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-2xl">
+      {loading ? (
+        <div className="flex items-center justify-center h-40 text-sm text-zinc-400 gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      ) : !log?.length ? (
+        <div className="flex flex-col items-center justify-center h-40 gap-2 text-zinc-400">
+          <History className="h-8 w-8 opacity-20" />
+          <span className="text-sm">No history yet</span>
+        </div>
+      ) : (
+        <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
+          {log.map((entry, i) => (
+            <AuditEntryCard key={entry._id} entry={entry} isLast={i === log.length - 1} />
+          ))}
+        </ol>
+      )}
+    </div>
+  </div>
 );
 
 // ─── Tour tooltip ─────────────────────────────────────────────────────────────
@@ -1126,8 +1168,8 @@ const SbInstrument: FC<{
     <div className={cn(
       "mb-2 rounded-xl border transition-all",
       isActive
-        ? "border-blue-200 bg-blue-50/40 shadow-sm"
-        : "border-zinc-200 bg-white hover:border-zinc-300"
+        ? "border-blue-200 bg-blue-50/40 shadow-sm dark:border-blue-800 dark:bg-blue-950/30"
+        : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-zinc-600"
     )}>
       <div
         onClick={() => { onSelectInstrument(inst.id); if (inst.params[0]) onSelectParam(inst.id, inst.params[0].id); }}
@@ -1136,12 +1178,12 @@ const SbInstrument: FC<{
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className={cn(
             "shrink-0 h-5 w-5 rounded-md text-[10px] font-bold flex items-center justify-center",
-            isActive ? "bg-blue-600 text-white" : "bg-zinc-200 text-zinc-500"
+            isActive ? "bg-blue-600 text-white" : "bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400"
           )}>
             {index + 1}
           </span>
           <div className="min-w-0">
-            <div className={cn("text-xs font-semibold truncate", isActive ? "text-blue-900" : "text-zinc-800")}>{label}</div>
+            <div className={cn("text-xs font-semibold truncate", isActive ? "text-blue-900 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-200")}>{label}</div>
             {sub && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</div>}
             <div className="text-[10px] text-zinc-400 mt-0.5 font-mono">{inst.meta.csrNo || "No CSR yet"}</div>
           </div>
@@ -1155,7 +1197,7 @@ const SbInstrument: FC<{
       </div>
 
       {isActive && (
-        <div className="mx-2.5 mb-2.5 border-t border-blue-100 pt-2 pl-1">
+        <div className="mx-2.5 mb-2.5 border-t border-blue-100 dark:border-blue-900 pt-2 pl-1">
           {inst.params.map((p) => {
             const pActive = p.id === activeParamId;
             const pStatus = getParamStatus(p);
@@ -1166,8 +1208,8 @@ const SbInstrument: FC<{
                 className={cn(
                   "flex items-center justify-between px-2 py-1.5 rounded-md mb-0.5 cursor-pointer group transition-all",
                   pActive
-                    ? "bg-blue-50 border border-blue-100"
-                    : "border border-transparent hover:bg-zinc-50"
+                    ? "bg-blue-50 border border-blue-100 dark:bg-blue-950/40 dark:border-blue-900"
+                    : "border border-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 )}
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1175,7 +1217,7 @@ const SbInstrument: FC<{
                   <div className="min-w-0">
                     <div className={cn(
                       "text-xs truncate",
-                      pActive ? "font-semibold text-blue-700" : "text-zinc-500"
+                      pActive ? "font-semibold text-blue-700 dark:text-blue-400" : "text-zinc-500 dark:text-zinc-400"
                     )}>
                       {p.name || "Unnamed parameter"}
                     </div>
@@ -1504,7 +1546,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [hydrated,      setHydrated]      = useState(false);
   const [view,          setView]          = useState<"readings" | "results">("readings");
   const [showFormulas,  setShowFormulas]  = useState(false);
-  const [showHistory,   setShowHistory]   = useState(false);
+  const [historyPopover,    setHistoryPopover]    = useState(false);
+  const [showHistoryPanel,  setShowHistoryPanel]  = useState(false);
   const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(isEditMode ? reportId ?? null : null);
   const [formErrors,    setFormErrors]    = useState<FormError[]>([]);
   const [errorPanelOpen, setErrorPanelOpen] = useState(false);
@@ -1513,6 +1556,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [reportDetailsOpen, setReportDetailsOpen] = useState(!isEditMode);
   const [tourRun, setTourRun] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const cleanSnapshot = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
+  const [exitDialog,  setExitDialog]  = useState(false);
 
   const tourSteps: Step[] = useMemo(() => [
     {
@@ -1601,9 +1646,32 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setInstruments(mapped);
     setActiveInstId(first.id);
     if (first.params[0]) setActiveParamId(first.params[0].id);
-    setReportMeta(mapApiToReportMeta(existingReport));
+    const meta = mapApiToReportMeta(existingReport);
+    setReportMeta(meta);
     setHydrated(true);
+    cleanSnapshot.current = { instruments: mapped, reportMeta: meta };
   }, [existingReport, hydrated]);
+
+  // For new reports: set snapshot once on first mount
+  useEffect(() => {
+    if (isEditMode) return; // edit mode snapshot is set after hydration
+    if (cleanSnapshot.current) return;
+    cleanSnapshot.current = { instruments, reportMeta };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const isDirty = useMemo(() => {
+    if (!cleanSnapshot.current) return false;
+    return JSON.stringify({ instruments, reportMeta }) !== JSON.stringify(cleanSnapshot.current);
+  }, [instruments, reportMeta]);
+
+  // Warn on browser refresh / tab close
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   const activeInst  = instruments.find((i) => i.id === activeInstId)  ?? instruments[0];
   const activeParam = activeInst.params.find((p) => p.id === activeParamId) ?? activeInst.params[0] ?? null;
@@ -1779,6 +1847,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       : "Report submitted for verification";
 
     const onSuccess = () => {
+      cleanSnapshot.current = { instruments, reportMeta };
       toast.success(successMsg);
       queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
       if (status === "draft" && isEditMode) {
@@ -1900,19 +1969,19 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
       {/* ── Sidebar ── */}
       <div className={cn(
-        "fixed lg:relative inset-y-0 left-0 z-40 w-64 lg:w-60 shrink-0 bg-white border-r border-zinc-200 flex flex-col min-h-screen shadow-sm transition-transform duration-200 ease-in-out",
+        "fixed lg:relative inset-y-0 left-0 z-40 w-64 lg:w-60 shrink-0 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col min-h-screen shadow-sm transition-transform duration-200 ease-in-out",
         sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
       )}>
 
         {/* Brand header */}
-        <div className="px-4 py-4 border-b border-zinc-100">
+        <div className="px-4 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center gap-2.5 mb-3">
-            <Link
-              href="/calibration"
+            <button
+              onClick={() => isDirty ? setExitDialog(true) : router.push("/calibration")}
               className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all"
             >
               <ArrowLeft className="h-4 w-4" />
-            </Link>
+            </button>
             {/* Close button on mobile */}
             <button
               className="lg:hidden ml-auto p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all"
@@ -1927,13 +1996,23 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>
           <div className="flex items-center gap-2">
             {isEditMode && (
-              <button
-                onClick={() => setShowHistory(true)}
-                className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
-              >
-                <History className="h-3 w-3" />
-                History
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setHistoryPopover((v) => !v)}
+                  className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+                >
+                  <History className="h-3 w-3" />
+                  History
+                </button>
+                {historyPopover && (
+                  <HistoryPopover
+                    log={auditLog}
+                    loading={auditLoading}
+                    onViewAll={() => setShowHistoryPanel(true)}
+                    onClose={() => setHistoryPopover(false)}
+                  />
+                )}
+              </div>
             )}
             {!isEditMode && (
               <button
@@ -1985,7 +2064,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         </div>
 
         {/* Bottom panel */}
-        <div className="border-t border-zinc-100 p-3">
+        <div className="border-t border-zinc-100 dark:border-zinc-800 p-3">
           {panel?.type === "addInstrument" ? (
             <AddInstrumentPanel
               currentMeta={activeInst.meta}
@@ -2003,8 +2082,18 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       {/* ── Main content ── */}
       <div className="flex-1 overflow-x-auto flex flex-col">
 
+        {showHistoryPanel && (
+          <HistoryFullPanel
+            log={auditLog}
+            loading={auditLoading}
+            onBack={() => setShowHistoryPanel(false)}
+          />
+        )}
+
+        {!showHistoryPanel && <>
+
         {/* Sticky top bar */}
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-zinc-200 px-4 lg:px-8 py-3 lg:py-3.5 flex items-center justify-between gap-2 lg:gap-4 shadow-sm">
+        <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 px-4 lg:px-8 py-3 lg:py-3.5 flex items-center justify-between gap-2 lg:gap-4 shadow-sm">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* Mobile sidebar toggle */}
             <button
@@ -2102,7 +2191,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         <div className="flex-1 px-4 py-4 lg:px-8 lg:py-6 space-y-4">
 
           {/* Report Details section */}
-          <div data-tour="report-details" className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+          <div data-tour="report-details" className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
             <button
               type="button"
               onClick={() => setReportDetailsOpen((v) => !v)}
@@ -2147,8 +2236,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>
 
           {/* Instrument details section */}
-          <div data-tour="instrument-meta" className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
+          <div data-tour="instrument-meta" className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
               <div>
                 <span className="text-sm font-semibold text-zinc-800">Instrument Details</span>
                 <span className="ml-2 text-xs text-zinc-400">· Environmental · Reference Standard</span>
@@ -2172,8 +2261,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
           {/* Empty state — no params yet */}
           {!activeParam && (
-            <div className="bg-white rounded-xl border border-dashed border-zinc-300 flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <FlaskConical className="h-8 w-8 text-zinc-300" />
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <FlaskConical className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
               <div className="text-sm font-semibold text-zinc-500">No parameters added yet</div>
               {activeInst.meta.make && activeInst.meta.modelType ? (
                 <div className="text-xs text-zinc-400">
@@ -2188,8 +2277,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           )}
 
           {/* Measurement / Results tabs */}
-          {activeParam && <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50">
+          {activeParam && <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-zinc-800">
                   {activeParam.name || "Parameter"}
@@ -2243,7 +2332,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>}
 
           {/* Signatures */}
-          <div className="bg-white rounded-xl border border-zinc-200 px-6 py-5">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 px-6 py-5">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-8">
               Signatures
             </div>
@@ -2269,6 +2358,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             </div>
           </div>
         </div>
+        </>}
       </div>
 
       {/* ── Add parameter dialog ── */}
@@ -2316,7 +2406,47 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       )}
 
       <UncertaintyFormulaModal open={showFormulas} onClose={() => setShowFormulas(false)} />
-      <AuditHistoryPanel open={showHistory} onClose={() => setShowHistory(false)} log={auditLog} loading={auditLoading} />
+
+      {/* ── Unsaved changes exit dialog ── */}
+      <Dialog open={exitDialog} onOpenChange={setExitDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="text-amber-500">⚠</span> Unsaved changes
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            You have unsaved changes. Save as a draft so you can continue later, or discard and leave.
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button
+              className="w-full"
+              onClick={() => {
+                setExitDialog(false);
+                handleSave("draft");
+              }}
+              disabled={isPending}
+            >
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save as draft
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={() => {
+                cleanSnapshot.current = { instruments, reportMeta };
+                setExitDialog(false);
+                router.push("/calibration");
+              }}
+            >
+              Discard &amp; leave
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => setExitDialog(false)}>
+              Stay on page
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Joyride
         steps={tourSteps}

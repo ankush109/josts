@@ -45,7 +45,6 @@ import {
   ChevronRight,
   ArrowUp,
   ArrowDown,
-  MoreVertical,
   FileText,
   Clock,
   CheckCircle2,
@@ -58,12 +57,12 @@ import {
   Plus,
   ClipboardList,
   Eye,
+  Download,
   Loader2,
   ShieldCheck,
   ShieldX,
-  PenLine,
   History,
-  ArrowRight,
+  PenLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
@@ -75,6 +74,7 @@ import { useAuth } from "@/app/provider/AuthProvider";
 import { useVerifyRejectCalibration } from "@/app/hooks/mutation/(calibration)/useVerifyRejectCalibration";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useGetAuditLog, type AuditEntry } from "@/app/hooks/query/(calibration)/useGetAuditLog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -134,18 +134,18 @@ function AuditRow({ entry, isLast }: { entry: AuditEntry; isLast: boolean }) {
   return (
     <li className={cn("ml-6 pb-6", isLast && "pb-0")}>
       {/* dot */}
-      <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white" />
+      <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white dark:bg-zinc-800 dark:border-zinc-600 dark:ring-zinc-800" />
 
-      <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3">
+      <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">
+            <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0 dark:bg-zinc-600">
               {initials}
             </div>
-            <span className="text-xs font-semibold text-zinc-800">{name}</span>
+            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{name}</span>
             <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
           </div>
-          <span className="text-[10px] text-zinc-400 whitespace-nowrap">{dateStr} · {timeStr}</span>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{dateStr} · {timeStr}</span>
         </div>
       </div>
     </li>
@@ -158,22 +158,22 @@ const STATUS_CONFIG: Record<
 > = {
   draft: {
     label: "Draft",
-    className: "bg-slate-100 text-slate-600 border-slate-200",
+    className: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600",
     icon: <FileText className="h-3 w-3" />,
   },
   submitted: {
     label: "Submitted",
-    className: "bg-sky-50 text-sky-700 border-sky-200",
+    className: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800",
     icon: <Clock className="h-3 w-3" />,
   },
   verified: {
     label: "Verified",
-    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
     icon: <CheckCircle2 className="h-3 w-3" />,
   },
   rejected: {
     label: "Rejected",
-    className: "bg-red-50 text-red-700 border-red-200",
+    className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800",
     icon: <XCircle className="h-3 w-3" />,
   },
 };
@@ -223,7 +223,7 @@ function StatCard({
         "flex-1 min-w-[120px] rounded-xl border p-4 text-left transition-all",
         active
           ? isDark ? "border-[#4a7bb5]/40 shadow-sm ring-1 ring-[#4a7bb5]/20" : "border-[#1e3a5f]/40 shadow-sm ring-1 ring-[#1e3a5f]/20"
-          : "border-slate-200 bg-white hover:border-[#1e3a5f]/20 hover:shadow-sm"
+          : "border-slate-200 bg-white hover:border-[#1e3a5f]/20 hover:shadow-sm dark:bg-zinc-900 dark:border-zinc-700 dark:hover:border-zinc-500"
       )}
       style={active ? { backgroundColor: cardNavyLight } : undefined}
     >
@@ -288,7 +288,8 @@ export default function CalibrationReportsTable() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<ReportListItem | null>(null);
-  const [viewingPdf, setViewingPdf] = useState<string | null>(null);
+  const [viewingPdf,    setViewingPdf]    = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [auditReportId, setAuditReportId] = useState<string | null>(null);
   const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(auditReportId);
   const allItems: ReportListItem[] = data?.items ?? [];
@@ -370,6 +371,20 @@ export default function CalibrationReportsTable() {
     }
   }
 
+  async function handleDownloadPdf(e: React.MouseEvent, report: ReportListItem, index = 0) {
+    e.stopPropagation();
+    setDownloadingPdf(report._id);
+    try {
+      const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(report._id, "calibration", true));
+      const urls: string[] = res.data.fileUrls;
+      window.open(urls[index] ?? urls[0], "_blank");
+    } catch {
+      toast.error("Failed to download PDF");
+    } finally {
+      setDownloadingPdf(null);
+    }
+  }
+
   function handleDelete() {
     if (!reportToDelete) return;
     deleteReport(reportToDelete._id);
@@ -434,9 +449,9 @@ export default function CalibrationReportsTable() {
         <StatCard label="Rejected" value={counts.rejected} total={counts.total} barColor="bg-red-400" icon={<XCircle className="h-4 w-4 text-red-500" />} accent="bg-red-50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
       </div>
 
-      <Card className="shadow-sm border-slate-200">
+      <Card className="shadow-sm border-slate-200 dark:border-zinc-700">
         <CardContent className="p-0">
-          <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-slate-100 dark:border-zinc-700">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input placeholder="Search by CSR No or engineer…" value={searchQuery} onChange={(e) => onSearch(e.target.value)} className="pl-9 h-9 text-sm border-slate-200 focus-visible:ring-[#1e3a5f]/30" />
@@ -478,7 +493,7 @@ export default function CalibrationReportsTable() {
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Verified By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Date</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center" style={{ color: navy }}>PDF</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-5" style={{ color: navy }}>Actions</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-4" style={{ color: navy }}>Actions</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -514,26 +529,39 @@ export default function CalibrationReportsTable() {
                           </div>
                           <div>
                             <p className="font-semibold text-sm" style={{ color: navy }}>{report.csrNo}</p>
-                            <p className="text-xs text-slate-400">{report.formatNo}</p>
+                            <p className="text-xs text-slate-400 dark:text-zinc-500">{report.formatNo}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell><StatusBadge status={report.status} /></TableCell>
                       <TableCell>
                         <div>
-                          <p className="text-sm text-slate-700 font-medium">{report.createdBy?.name ?? "—"}</p>
-                          <p className="text-xs text-slate-400">{report.createdBy?.email ?? ""}</p>
+                          <p className="text-sm text-slate-700 font-medium dark:text-zinc-200">{report.createdBy?.name ?? "—"}</p>
+                          <p className="text-xs text-slate-400 dark:text-zinc-500">{report.createdBy?.email ?? ""}</p>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                          <Layers className="h-3 w-3" />
-                          {report.instrumentCount}
-                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600 cursor-default">
+                              <Layers className="h-3 w-3" />
+                              {report.instrumentCount}
+                            </span>
+                          </TooltipTrigger>
+                          {report.instruments?.length > 0 && (
+                            <TooltipContent side="right" className="max-w-[200px] p-2 space-y-1">
+                              {report.instruments.map((inst, i) => (
+                                <div key={i} className="text-[11px] leading-tight">
+                                  {toTitleCase(`${inst.make} ${inst.modelType}`.trim()) || `Instrument ${i + 1}`}
+                                </div>
+                              ))}
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
                       </TableCell>
                       <TableCell>
                         {report.customerName ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 max-w-[140px] truncate">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 max-w-[140px] truncate dark:bg-violet-950 dark:text-violet-300 dark:border-violet-800">
                             {report.customerName}
                           </span>
                         ) : (
@@ -542,142 +570,182 @@ export default function CalibrationReportsTable() {
                       </TableCell>
                       <TableCell>
                         {report.signatures?.calibratedBy
-                          ? <span className="text-sm font-medium text-slate-700">{report.signatures.calibratedBy.name}</span>
-                          : <span className="text-xs text-slate-300">—</span>}
+                          ? <span className="text-sm font-medium text-slate-700 dark:text-zinc-200">{report.signatures.calibratedBy.name}</span>
+                          : <span className="text-xs text-slate-300 dark:text-zinc-600">—</span>}
                       </TableCell>
                       <TableCell>
                         {report.signatures?.verifiedBy
-                          ? <span className="text-sm font-medium text-slate-700">{report.signatures.verifiedBy.name}</span>
-                          : <span className="text-xs text-slate-300">—</span>}
+                          ? <span className="text-sm font-medium text-slate-700 dark:text-zinc-200">{report.signatures.verifiedBy.name}</span>
+                          : <span className="text-xs text-slate-300 dark:text-zinc-600">—</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-medium text-slate-700">
+                          <span className="text-sm font-medium text-slate-700 dark:text-zinc-200">
                             {new Date(report.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                           </span>
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-400 dark:text-zinc-500">
                             {new Date(report.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {report.status === "draft" ? (
-                          <span className="text-xs text-slate-300">—</span>
+                          <span className="text-xs text-slate-300 dark:text-zinc-600">—</span>
                         ) : isPdfFailed(report) ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
-                            <XCircle className="h-3.5 w-3.5" /> Failed
-                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1 text-xs text-red-400 font-medium cursor-default">
+                                <XCircle className="h-3.5 w-3.5" /> Failed
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>PDF generation failed</TooltipContent>
+                          </Tooltip>
                         ) : isPdfPending(report) ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-amber-500 mx-auto" />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Loader2 className="h-4 w-4 animate-spin text-amber-500 mx-auto cursor-default" />
+                            </TooltipTrigger>
+                            <TooltipContent>PDF is being generated…</TooltipContent>
+                          </Tooltip>
                         ) : report.filePaths.length > 0 ? (
                           report.filePaths.length > 1 ? (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 px-2 gap-1 text-slate-500 hover:text-[#1e3a5f]"
-                                  onClick={(e) => e.stopPropagation()}
-                                  disabled={viewingPdf === report._id}
-                                >
-                                  {viewingPdf === report._id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Eye className="h-4 w-4" />
-                                      <span className="text-xs font-medium">{report.filePaths.length}</span>
-                                    </>
-                                  )}
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="center" onClick={(e) => e.stopPropagation()}>
-                                {report.filePaths.map((_, i) => {
-                                  const inst = report.instruments[i];
-                                  const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
-                                  return (
-                                    <DropdownMenuItem key={i} onClick={(e) => handleViewPdf(e, report._id, i)}>
-                                      <Eye className="mr-2 h-4 w-4" /> {label}
-                                    </DropdownMenuItem>
-                                  );
-                                })}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            /* multiple PDFs — show count badge with separate view/download dropdowns */
+                            <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="inline-flex items-center gap-1 px-2 py-1 rounded-l-md border border-r-0 border-slate-200 dark:border-zinc-700 text-[11px] font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50" disabled={viewingPdf === report._id}>
+                                    {viewingPdf === report._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                                    <span>{report.filePaths.length}</span>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center">
+                                  <DropdownMenuLabel className="text-[10px] text-slate-400 uppercase tracking-wider">View PDF</DropdownMenuLabel>
+                                  {report.filePaths.map((_, i) => {
+                                    const inst = report.instruments[i];
+                                    const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
+                                    return <DropdownMenuItem key={i} onClick={(e) => handleViewPdf(e, report._id, i)}><Eye className="mr-2 h-3.5 w-3.5" />{label}</DropdownMenuItem>;
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button className="inline-flex items-center px-2 py-1 rounded-r-md border border-slate-200 dark:border-zinc-700 text-[11px] font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50" disabled={downloadingPdf === report._id}>
+                                    {downloadingPdf === report._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center">
+                                  <DropdownMenuLabel className="text-[10px] text-slate-400 uppercase tracking-wider">Download PDF</DropdownMenuLabel>
+                                  {report.filePaths.map((_, i) => {
+                                    const inst = report.instruments[i];
+                                    const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
+                                    return <DropdownMenuItem key={i} onClick={(e) => handleDownloadPdf(e, report, i)}><Download className="mr-2 h-3.5 w-3.5" />{label}</DropdownMenuItem>;
+                                  })}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-slate-500 hover:text-[#1e3a5f]"
-                              onClick={(e) => handleViewPdf(e, report._id)}
-                              disabled={viewingPdf === report._id}
-                            >
-                              {viewingPdf === report._id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </Button>
+                            /* single PDF — pill button group */
+                            <div className="inline-flex items-center rounded-md border border-slate-200 dark:border-zinc-700 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => handleViewPdf(e, report._id)}
+                                    disabled={viewingPdf === report._id}
+                                    className="px-2.5 py-1.5 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-[#1e3a5f] dark:hover:text-blue-400 transition-colors border-r border-slate-200 dark:border-zinc-700 disabled:opacity-50"
+                                  >
+                                    {viewingPdf === report._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>View PDF</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => handleDownloadPdf(e, report)}
+                                    disabled={downloadingPdf === report._id}
+                                    className="px-2.5 py-1.5 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-[#1e3a5f] dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                                  >
+                                    {downloadingPdf === report._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Download PDF</TooltipContent>
+                              </Tooltip>
+                            </div>
                           )
                         ) : (
-                          <span className="text-xs text-slate-300">—</span>
+                          <span className="text-xs text-slate-300 dark:text-zinc-600">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right pr-5">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-400 hover:text-slate-700 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuLabel className="text-xs text-slate-400">Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {report.filePaths.length > 1 ? (
-                              report.filePaths.map((_, i) => {
-                                const inst = report.instruments[i];
-                                const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
-                                return (
-                                  <DropdownMenuItem key={i} onClick={(e) => handleViewPdf(e, report._id, i)} disabled={!report.filePaths.length || viewingPdf === report._id}>
-                                    <Eye className="mr-2 h-4 w-4" /> {label}
-                                  </DropdownMenuItem>
-                                );
-                              })
-                            ) : (
-                              <DropdownMenuItem
-                                onClick={(e) => report.filePaths.length ? handleViewPdf(e, report._id) : e.stopPropagation()}
-                                disabled={!report.filePaths.length || viewingPdf === report._id}
+                      <TableCell className="pr-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Edit — non-admin only */}
+                          {!isAdmin && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); router.push(`/calibration/${report._id}`); }}
+                                  className="p-1.5 rounded-md text-slate-400 hover:text-[#1e3a5f] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Edit report</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {/* History */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setAuditReportId(report._id); }}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
                               >
-                                <Eye className="mr-2 h-4 w-4" /> View PDF
-                              </DropdownMenuItem>
-                            )}
-                            {!isAdmin && (
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/calibration/${report._id}`); }}>
-                                <Pencil className="mr-2 h-4 w-4" /> Edit report
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setAuditReportId(report._id); }}>
-                              <History className="mr-2 h-4 w-4" /> History
-                            </DropdownMenuItem>
-                            {isAdmin && report.status === "submitted" && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={(e) => handleVerifyReject(e, report._id, "verified")} className="text-emerald-600 focus:text-emerald-600 focus:bg-emerald-50">
-                                  <ShieldCheck className="mr-2 h-4 w-4" /> Verify
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => handleVerifyReject(e, report._id, "rejected")} className="text-red-600 focus:text-red-600 focus:bg-red-50">
-                                  <ShieldX className="mr-2 h-4 w-4" /> Reject
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {!isAdmin && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); confirmDelete(report); }} className="text-red-600 focus:text-red-600 focus:bg-red-50">
-                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                                <History className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>View history</TooltipContent>
+                          </Tooltip>
+                          {/* Admin: Verify / Reject */}
+                          {isAdmin && report.status === "submitted" && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => handleVerifyReject(e, report._id, "verified")}
+                                    className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                  >
+                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Verify report</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => handleVerifyReject(e, report._id, "rejected")}
+                                    className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                  >
+                                    <ShieldX className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Reject report</TooltipContent>
+                              </Tooltip>
+                            </>
+                          )}
+                          {/* Delete — non-admin only */}
+                          {!isAdmin && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); confirmDelete(report); }}
+                                  className="p-1.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete report</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

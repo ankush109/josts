@@ -15,9 +15,18 @@
       overflow: hidden;
     }
 
-    /* ── Page break ── */
-    .page { page-break-after: always; }
+    /* ── Page layout: fixed A4 height so header/footer stay pinned ── */
+    .page {
+      display: flex;
+      flex-direction: column;
+      height: 267mm; /* A4 297mm − top 15mm − bottom 15mm */
+      page-break-after: always;
+      overflow: hidden;
+    }
     .page:last-child { page-break-after: auto; }
+
+    /* Middle content grows to fill space between header and footer */
+    .page-body { flex: 1; }
 
     /* ── Header ── */
     .header {
@@ -26,7 +35,6 @@
       margin-bottom: 4px;
       gap: 0;
     }
-    /* Left: logo + taglines */
     .header-logo {
       width: 155px;
       flex-shrink: 0;
@@ -39,7 +47,6 @@
       height: 115px;
       width: auto;
     }
-    /* Center: company name + address */
     .header-company {
       flex: 1;
       padding: 0 12px;
@@ -61,7 +68,6 @@
       display: flex;
       justify-content: space-between;
     }
-    /* Right: QR */
     .header-qr {
       width: 90px;
       flex-shrink: 0;
@@ -92,7 +98,7 @@
       margin-bottom: 10px;
     }
 
-    /* ── All tables — RIGHT BORDER FIX ── */
+    /* ── All tables ── */
     table {
       width: calc(100% - 1px);
       border-collapse: collapse;
@@ -149,7 +155,7 @@
 
     /* ── Signature footer ── */
     .signature-footer {
-      margin-top: 30px;
+      margin-top: 10px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
@@ -208,7 +214,6 @@
       width: 100%;
       height: auto;
     }
-    /* Ensure all page content sits above watermark */
     .page > *:not(.watermark) {
       position: relative;
       z-index: 1;
@@ -217,17 +222,73 @@
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════════════════ PAGE 1 -->
+<%
+// ── Pre-compute result pages (row-level split) ────────────────────────────────
+// Flatten every measurement row, then slice into pages of MAX_ROWS_PER_PAGE.
+// Within each page chunk, rowspans are recalculated so mid-parameter splits
+// continue cleanly on the next page.
+var MAX_ROWS_PER_PAGE = 22;
+
+var allParams = (typeof calibrationResults !== 'undefined' && calibrationResults) ? calibrationResults : [];
+
+// 1. Flatten all rows
+var flatRows = [];
+allParams.forEach(function(param) {
+  (param.ranges || []).forEach(function(range) {
+    (range.rows || []).forEach(function(row) {
+      flatRows.push({ paramName: param.parameter, rangeName: range.label, row: row });
+    });
+  });
+});
+
+// 2. Slice into page chunks
+var rawPages = [];
+for (var i = 0; i < flatRows.length; i += MAX_ROWS_PER_PAGE) {
+  rawPages.push(flatRows.slice(i, i + MAX_ROWS_PER_PAGE));
+}
+if (rawPages.length === 0) rawPages.push([]);
+
+// 3. For each chunk, annotate each flat row with within-chunk rowspan info
+var resultPages = rawPages.map(function(chunk) {
+  return chunk.map(function(flatRow, idx) {
+    var isFirstParam = (idx === 0 || chunk[idx - 1].paramName !== flatRow.paramName);
+    var isFirstRange = (idx === 0 ||
+      chunk[idx - 1].paramName !== flatRow.paramName ||
+      chunk[idx - 1].rangeName !== flatRow.rangeName);
+
+    var paramRowspan = 0;
+    if (isFirstParam) {
+      for (var j = idx; j < chunk.length && chunk[j].paramName === flatRow.paramName; j++) paramRowspan++;
+    }
+    var rangeRowspan = 0;
+    if (isFirstRange) {
+      for (var j = idx; j < chunk.length &&
+           chunk[j].paramName === flatRow.paramName &&
+           chunk[j].rangeName === flatRow.rangeName; j++) rangeRowspan++;
+    }
+
+    return {
+      row: flatRow.row,
+      paramName: flatRow.paramName,
+      rangeName: flatRow.rangeName,
+      showParam: isFirstParam,
+      paramRowspan: paramRowspan,
+      showRange: isFirstRange,
+      rangeRowspan: rangeRowspan
+    };
+  });
+});
+
+var computedTotalPages = 1 + resultPages.length;
+%>
+
+<!-- ═══════════════════════════════════════════════════════════════ PAGE 1 -->
 <div class="page">
 
-  <!-- Watermark -->
   <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
-  <div class="watermark">
-    <img src="<%= logoUrl %>" alt="" />
-  </div>
+  <div class="watermark"><img src="<%= logoUrl %>" alt="" /></div>
   <% } %>
 
-  <!-- Header -->
   <div class="header">
     <div class="header-logo">
       <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
@@ -255,10 +316,10 @@
 
   <hr class="divider" />
 
-  <!-- Certificate title -->
+  <div class="page-body">
+
   <div class="cert-title">CALIBRATION CERTIFICATE</div>
 
-  <!-- ── Certificate No / Issue Date / Page ── -->
   <table>
     <tr>
       <td colspan="3" class="center bold" style="width:55%">Certificate No.</td>
@@ -268,11 +329,10 @@
     <tr>
       <td colspan="3" class="center"><%= typeof certificateNo !== 'undefined' ? certificateNo : '' %></td>
       <td colspan="2" class="center"><%= typeof certificateIssueDate !== 'undefined' ? certificateIssueDate : '' %></td>
-      <td class="center">1 of <%= typeof totalPages !== 'undefined' ? totalPages : '2' %></td>
+      <td class="center">1 of <%= computedTotalPages %></td>
     </tr>
   </table>
 
-  <!-- ── Dates / Customer Ref ── -->
   <table>
     <tr>
       <td class="bold center" style="width:15%">DUC<br/>Received<br/>Date</td>
@@ -288,7 +348,6 @@
     </tr>
   </table>
 
-  <!-- ── Customer Name & Address ── -->
   <table>
     <tr>
       <td class="bold" style="width:30%">Name &amp; Address of the Customer :</td>
@@ -296,7 +355,6 @@
     </tr>
   </table>
 
-  <!-- ── DUC Details header ── -->
   <table>
     <tr>
       <td colspan="7" class="bold center">Details of the DUC to be Calibrated</td>
@@ -331,7 +389,6 @@
     </tr>
   </table>
 
-  <!-- ── Environmental Conditions ── -->
   <table>
     <tr>
       <td colspan="6" class="bold center">Environmental Condition</td>
@@ -358,7 +415,6 @@
     </tr>
   </table>
 
-  <!-- ── Description of Standards ── -->
   <table>
     <tr>
       <td colspan="4" class="italic">
@@ -368,7 +424,6 @@
     </tr>
   </table>
 
-  <!-- ── Reference Standard Details ── -->
   <table>
     <tr>
       <td class="bold center" style="width:28%">Reference Standard Details</td>
@@ -419,7 +474,8 @@
     <% } %>
   </table>
 
-  <!-- ── Signature Footer (Page 1) ── -->
+  </div><!-- end .page-body -->
+
   <div class="signature-footer">
     <div class="signature-block">
       <% if (typeof calibratedBySignatureUrl !== 'undefined' && calibratedBySignatureUrl) { %>
@@ -449,20 +505,17 @@
   </div>
 
 </div>
-<!-- ═══════════════════ END PAGE 1 ════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════ END PAGE 1 ══════════════════════════════ -->
 
 
-<!-- ═══════════════════════════════════════════════════════════════════ PAGE 2 -->
+<!-- ══════════════════════════════════ RESULTS PAGES ═════════════════════════ -->
+<% resultPages.forEach(function(pageParams, pageIdx) { %>
 <div class="page">
 
-  <!-- Watermark -->
   <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
-  <div class="watermark">
-    <img src="<%= logoUrl %>" alt="" />
-  </div>
+  <div class="watermark"><img src="<%= logoUrl %>" alt="" /></div>
   <% } %>
 
-  <!-- Header -->
   <div class="header">
     <div class="header-logo">
       <% if (typeof logoUrl !== 'undefined' && logoUrl) { %>
@@ -490,7 +543,8 @@
 
   <hr class="divider" />
 
-  <!-- Certificate No / Issue Date / Page (repeated on page 2) -->
+  <div class="page-body">
+
   <table>
     <tr>
       <td colspan="3" class="center bold" style="width:55%">Certificate No.</td>
@@ -500,19 +554,16 @@
     <tr>
       <td colspan="3" class="center"><%= typeof certificateNo !== 'undefined' ? certificateNo : '' %></td>
       <td colspan="2" class="center"><%= typeof certificateIssueDate !== 'undefined' ? certificateIssueDate : '' %></td>
-      <td class="center">2 of <%= typeof totalPages !== 'undefined' ? totalPages : '2' %></td>
+      <td class="center"><%= pageIdx + 2 %> of <%= computedTotalPages %></td>
     </tr>
   </table>
 
-  <!-- ── Calibration Results section ── -->
   <div class="section-label">Calibration Results :</div>
 
-  <!-- Calibration type banner -->
   <div class="cal-type-heading">
     <%= typeof calibrationType !== 'undefined' ? calibrationType : 'Electro - Technical Calibration' %>
   </div>
 
-  <!-- Results table -->
   <table class="results-table">
     <thead>
       <tr>
@@ -533,32 +584,23 @@
       </tr>
     </thead>
     <tbody>
-      <% if (typeof calibrationResults !== 'undefined' && calibrationResults && calibrationResults.length) { %>
-        <% calibrationResults.forEach(function(param) { %>
-          <%
-            var totalRows = 0;
-            (param.ranges || []).forEach(function(r) { totalRows += (r.rows || []).length; });
-            var firstRow = true;
-          %>
-          <% (param.ranges || []).forEach(function(range) { %>
-            <% (range.rows || []).forEach(function(row, rowIdx) { %>
-              <tr>
-                <% if (firstRow) { firstRow = false; %>
-                  <td class="param-cell center" rowspan="<%= totalRows %>"><%= param.parameter || '' %></td>
-                <% } %>
-                <% if (rowIdx === 0) { %>
-                  <td class="center" rowspan="<%= (range.rows || []).length %>"><%= range.label || '' %></td>
-                <% } %>
-                <td class="center"><%= row.standardValue || '' %></td>
-                <td class="center"><%= row.standardUnit  || '' %></td>
-                <td class="center"><%= row.ducValue       || '' %></td>
-                <td class="center"><%= row.ducUnit        || '' %></td>
-                <td class="center"><%= row.errorValue     || '' %></td>
-                <td class="center"><%= row.errorUnit      || '' %></td>
-                <td class="center"><%= row.expandedUncertainty || '' %></td>
-              </tr>
-            <% }); %>
-          <% }); %>
+      <% if (pageParams.length > 0) { %>
+        <% pageParams.forEach(function(r) { %>
+          <tr>
+            <% if (r.showParam) { %>
+              <td class="param-cell center" rowspan="<%= r.paramRowspan %>"><%= r.paramName || '' %></td>
+            <% } %>
+            <% if (r.showRange) { %>
+              <td class="center" rowspan="<%= r.rangeRowspan %>"><%= r.rangeName || '' %></td>
+            <% } %>
+            <td class="center"><%= r.row.standardValue || '' %></td>
+            <td class="center"><%= r.row.standardUnit  || '' %></td>
+            <td class="center"><%= r.row.ducValue       || '' %></td>
+            <td class="center"><%= r.row.ducUnit        || '' %></td>
+            <td class="center"><%= r.row.errorValue     || '' %></td>
+            <td class="center"><%= r.row.errorUnit      || '' %></td>
+            <td class="center"><%= r.row.expandedUncertainty || '' %></td>
+          </tr>
         <% }); %>
       <% } else { %>
         <tr>
@@ -568,7 +610,8 @@
     </tbody>
   </table>
 
-  <!-- ── Signature Footer (Page 2) ── -->
+  </div><!-- end .page-body -->
+
   <div class="signature-footer">
     <div class="signature-block">
       <% if (typeof calibratedBySignatureUrl !== 'undefined' && calibratedBySignatureUrl) { %>
@@ -599,7 +642,8 @@
   <div class="doc-ref"><%= typeof docRef !== 'undefined' ? docRef : 'JECL/KOL/LAB/43B' %></div>
 
 </div>
-<!-- ═══════════════════ END PAGE 2 ════════════════════════════════════════════ -->
+<% }); %>
+<!-- ══════════════════════════════════ END RESULTS PAGES ══════════════════════ -->
 
 </body>
 </html>
