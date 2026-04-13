@@ -4,315 +4,67 @@ import { useState, useEffect, useCallback, useRef, useMemo, FC, KeyboardEvent } 
 import dynamic from "next/dynamic";
 import type { Step, EventData, TooltipRenderProps } from "react-joyride";
 const Joyride = dynamic(() => import("react-joyride").then((m) => ({ default: m.Joyride })), { ssr: false });
-import { useGenerateCalibrationReport } from "@/app/hooks/mutation/useGenerateCalibrationReport";
-import { AUTH_API } from "@/app/hooks/client";
-import { ENDPOINTS } from "@/app/hooks/endpoints";
+import {
+  useGenerateCalibrationReport,
+  useUpdateCalibrationReport,
+  useComputeCalibration,
+  useGetCalibrationReportById,
+  useGetAuditLog,
+  useGetCalibrationReports,
+} from "@/app/hooks";
+import { authClient as AUTH_API } from "@/lib/api-client";
+import { EP_REPORT_URL } from "@/lib/endpoints";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/provider/AuthProvider";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import { useUpdateCalibrationReport } from "@/app/hooks/mutation/(calibration)/updateCalibrationReport";
-import { useComputeCalibration } from "@/app/hooks/mutation/(calibration)/useComputeCalibration";
-import { useGetCalibrationReportById } from "@/app/hooks/query/(calibration)/useGetCalibReportById";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useGetAuditLog, type AuditEntry } from "@/app/hooks/query/(calibration)/useGetAuditLog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types (canonical source: @/types/calibration) ───────────────────────────
+import type {
+  ReportMeta,
+  InstrumentMeta,
+  ComputedBudget,
+  Measurement,
+  Parameter,
+  Instrument,
+  PanelState,
+  FormError,
+  AutoSaveStatus,
+  AuditEntry,
+} from "@/types/calibration";
 
-interface ReportMeta {
-  certNo: string;
-  customerName: string;
-  customerAddress: string;
-  customerRefNo: string;
-  ducReceivedDate: string;
-  calibrationLocation: "onsite" | "at_lab";
-  dateOfCalibration: string;
-  calibrationDueDate: string;
-}
+// ─── Constants & utilities (canonical sources) ───────────────────────────────
+import {
+  MAKE_TO_INSTRUMENT_KEY,
+  INSTRUMENT_PRESETS,
+  BLANK_REPORT_META,
+  BLANK_INSTRUMENT_META as BLANK_META,
+  PARAM_STATUS_DOT,
+} from "./constants";
+import {
+  uid,
+  makeMeasurement,
+  makeParam,
+  makeInstrument,
+  isOutOfRange,
+  isNumericInput,
+  getParamStatus,
+  getInstCompletion,
+  calcMean,
+  buildPayload,
+  mapApiToInstruments,
+  mapApiToReportMeta,
+} from "./utils";
 
-interface InstrumentMeta {
-  csrNo: string;
-  calDate: string;
-  jobId: string;
-  idNo: string;
-  nomenclature: string;
-  make: string;
-  modelType: string;
-  slNo: string;
-  othersDetails: string;
-  supplyVoltage: string;
-  temperature: string;
-  humidity: string;
-  refStandard: string;
-  refMake: string;
-  refModel: string;
-  refSrNo: string;
-  refCalDue: string;
-  refTraceability: string;
-}
-
-interface ComputedBudget {
-  meanValue: number; error: number; stdUcMean: number; stdUncertainty: number;
-  ucOfRefStd: number; ucDueToAccOfRefStd: number; ucDueToLcOfDuc: number;
-  combinedUc: number; effectiveDof: number | null; kFactor: number;
-  expandedUncertainty: number; scopeClaimed: number; resultedExpandedUc: number; percentUc: number;
-}
-
-interface Measurement {
-  id: string;
-  nomValue: string;
-  readings: string[]; // always length 5
-  corrected: string;
-  computed: ComputedBudget | null;
-}
-
-interface Range {
-  id: string;
-  label: string;
-  measurements: Measurement[];
-}
-
-interface Parameter {
-  id: string;
-  name: string;
-  unit: string;
-  ranges: Range[];
-  isPredefined?: boolean;
-}
-
-interface Instrument {
-  id: string;
-  meta: InstrumentMeta;
-  params: Parameter[];
-}
-
-type PanelState =
-  | null
-  | { type: "addInstrument" }
-  | { type: "addParam"; instId: string; instrumentKey: string };
-
-interface FormError {
-  message: string;
-  instId?: string;
-  paramId?: string;
-  fieldId?: string;
-}
-
-// ─── Parameter type keys ─────────────────────────────────────────────────────
-// Must stay in sync with PARAM_TYPES in server/src/v1/constants/voltage-ranges.js
-
-const PARAM_TYPES = {
-  DC_VOLTAGE:            "DC Voltage",
-  AC_VOLTAGE_50HZ:       "AC Voltage @50Hz",
-  DC_CURRENT:            "DC Current",
-  AC_CURRENT_50HZ:       "AC Current @50Hz",
-  RESISTANCE:            "Resistance",
-  CLAMP_AC_CURRENT_50HZ: "Clamp Meter AC Current @50Hz",
-  AC_VOLTAGE:            "AC Voltage",
-  AUX_DC_VOLTAGE:        "AUX. DC Voltage",
-} as const;
-
-// ─── UI make → INSTRUMENT_CONSTANTS key (backend uncertainty params) ──────────
-// UI shows the selected make/model as-is; internally this maps to the key
-// used in INSTRUMENT_CONSTANTS on the server for uncertainty budget lookup.
-const MAKE_TO_INSTRUMENT_KEY: Record<string, string> = {
-  "Fluke":   "Fluke 8846A",
-  "SVERKER": "SVERKER 780",
-  "Motwane": "Motwane DCM45A",
-};
-
-// ─── Per-instrument presets (ranges + units + sample readings) ────────────────
-
-type SampleMeasurement = [string, string[]];
-
-interface InstrumentPreset {
-  params:  Record<string, string[]>;
-  units:   Record<string, string>;
-  samples: Record<string, SampleMeasurement[][]>;
-}
-
-const INSTRUMENT_PRESETS: Record<string, InstrumentPreset> = {
-  "Fluke 8846A": {
-    params: {
-      [PARAM_TYPES.AC_VOLTAGE_50HZ]: ["4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
-      [PARAM_TYPES.DC_VOLTAGE]:      ["400mV/0.1", "4V/0.001", "40V/0.01", "400V/0.1", "1000V/1"],
-      [PARAM_TYPES.AC_CURRENT_50HZ]: ["40mA/0.01", "400mA/0.1", "4A/0.001", "10A/0.01"],
-      [PARAM_TYPES.DC_CURRENT]:      ["40mA/0.01", "400mA/0.1", "4A/0.001", "10A/0.01"],
-      [PARAM_TYPES.RESISTANCE]:      ["400Ω/0.1", "4KΩ/0.001", "40KΩ/0.01", "400KΩ/0.1"],
-    },
-    units: {
-      [PARAM_TYPES.AC_VOLTAGE_50HZ]: "V",
-      [PARAM_TYPES.DC_VOLTAGE]:      "V",
-      [PARAM_TYPES.AC_CURRENT_50HZ]: "mA",
-      [PARAM_TYPES.DC_CURRENT]:      "mA",
-      [PARAM_TYPES.RESISTANCE]:      "Ω",
-    },
-    samples: {
-      [PARAM_TYPES.AC_VOLTAGE_50HZ]: [
-        [["0.5",  ["0.497","0.498","0.499","0.496","0.495"]], ["3.5",  ["3.494","3.497","3.493","3.493","3.493"]]],
-        [["5",    ["4.97", "4.98", "4.99", "4.94", "4.97"]], ["35",   ["34.95","34.96","34.97","34.94","34.93"]]],
-        [["50",   ["49.9", "50.0", "49.8", "49.6", "49.9"]], ["350",  ["349.8","349.9","349.7","349.7","349.6"]]],
-        [["500",  ["498",  "499",  "498",  "497",  "498" ]], ["950",  ["947",  "948",  "948",  "946",  "946" ]]],
-      ],
-      [PARAM_TYPES.DC_VOLTAGE]: [
-        [["0.1",  ["0.0997","0.0998","0.0996","0.0997","0.0995"]], ["0.35", ["0.3496","0.3497","0.3494","0.3495","0.3493"]]],
-        [["0.5",  ["0.497", "0.498", "0.499", "0.496", "0.497" ]], ["3.5",  ["3.494", "3.497", "3.493", "3.494", "3.493" ]]],
-        [["5",    ["4.97",  "4.98",  "4.99",  "4.94",  "4.97"  ]], ["35",   ["34.95", "34.96", "34.97", "34.94", "34.93" ]]],
-        [["50",   ["49.9",  "50.0",  "49.8",  "49.6",  "49.9"  ]], ["350",  ["349.8", "349.9", "349.7", "349.7", "349.6" ]]],
-        [["500",  ["498",   "499",   "498",   "497",   "498"   ]], ["950",  ["947",   "948",   "948",   "946",   "946"   ]]],
-      ],
-      [PARAM_TYPES.AC_CURRENT_50HZ]: [
-        [["20",   ["19.97","19.98","19.96","19.97","19.95"]], ["35",   ["34.95","34.96","34.94","34.95","34.93"]]],
-        [["200",  ["199.8","199.9","199.7","199.8","199.6"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
-        [["2",    ["1.997","1.998","1.996","1.997","1.995"]], ["3.5",  ["3.495","3.496","3.494","3.495","3.493"]]],
-        [["5",    ["4.97", "4.98", "4.96", "4.97", "4.95"]], ["9",    ["8.97", "8.98", "8.96", "8.97", "8.95"]]],
-      ],
-      [PARAM_TYPES.DC_CURRENT]: [
-        [["20",   ["19.97","19.98","19.96","19.97","19.95"]], ["35",   ["34.95","34.96","34.94","34.95","34.93"]]],
-        [["200",  ["199.8","199.9","199.7","199.8","199.6"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
-        [["2",    ["1.997","1.998","1.996","1.997","1.995"]], ["3.5",  ["3.495","3.496","3.494","3.495","3.493"]]],
-        [["5",    ["4.97", "4.98", "4.96", "4.97", "4.95"]], ["9",    ["8.97", "8.98", "8.96", "8.97", "8.95"]]],
-      ],
-      [PARAM_TYPES.RESISTANCE]: [
-        [["100",  ["99.9", "100.0","99.8", "99.9", "99.7"]], ["350",  ["349.8","349.9","349.7","349.8","349.6"]]],
-        [["1",    ["0.999","1.000","0.998","0.999","0.997"]], ["3.5",  ["3.496","3.497","3.495","3.496","3.494"]]],
-        [["10",   ["9.97", "9.98", "9.96", "9.97", "9.95"]], ["35",   ["34.93","34.94","34.92","34.93","34.91"]]],
-        [["100",  ["99.8", "99.9", "99.7", "99.8", "99.6"]], ["350",  ["349.6","349.7","349.5","349.6","349.4"]]],
-      ],
-    },
-  },
-
-  "SVERKER 780": {
-    params: {
-      [PARAM_TYPES.AC_CURRENT_50HZ]: ["40A/0.01", "100A/0.01"],
-      [PARAM_TYPES.AC_VOLTAGE]:      ["60V/1", "600V/1"],
-      [PARAM_TYPES.AUX_DC_VOLTAGE]:  ["130V/1", "220V/1"],
-      [PARAM_TYPES.RESISTANCE]:      ["10Ω/1", "100Ω/1", "1000Ω/1", "2.5kΩ/0.001"],
-    },
-    units: {
-      [PARAM_TYPES.AC_CURRENT_50HZ]: "A",
-      [PARAM_TYPES.AC_VOLTAGE]:      "V",
-      [PARAM_TYPES.AUX_DC_VOLTAGE]:  "V",
-      [PARAM_TYPES.RESISTANCE]:      "Ω",
-    },
-    samples: {
-      [PARAM_TYPES.AC_CURRENT_50HZ]: [
-        [["30",   ["29.98","30.28","30.18","29.58","29.88"]]],
-        [
-          ["50",  ["49.93","50.03","49.83","49.93","49.93"]],
-          ["60",  ["59.91","60.01","60.11","60.01","59.51"]],
-          ["80",  ["79.88","80.28","d",    "79.38","79.78"]],
-          ["100", ["99.79","100.19","99.59","99.59","99.79"]],
-        ],
-      ],
-      [PARAM_TYPES.AC_VOLTAGE]: [
-        [
-          ["30",  ["29.997","30.297","30.197","29.597","29.897"]],
-        ],
-        [
-          ["100", ["99.96", "100.06","99.86", "99.96", "99.96"]],
-          ["300", ["299.93","300.03","300.13","300.03","299.53"]],
-          ["450", ["449.91","453.91","451.91","444.91","448.91"]],
-          ["600", ["599.8", "603.8", "597.8", "597.8", "599.8"]],
-        ],
-      ],
-      [PARAM_TYPES.AUX_DC_VOLTAGE]: [
-        [
-          ["30",  ["29.998","30.298","30.198","29.598","29.898"]],
-          ["100", ["99.97", "100.07","99.87", "99.97", "99.97"]],
-        ],
-        [
-          ["150", ["149.96","150.06","150.16","150.06","149.56"]],
-          ["200", ["199.96","203.96","201.96","194.96","198.96"]],
-          ["220", ["219.93","223.93","217.93","217.93","219.93"]],
-        ],
-      ],
-      [PARAM_TYPES.RESISTANCE]: [
-        [
-          ["0.5", ["0.49", "0.52", "0.51", "0.45", "0.48"]],
-          ["1",   ["0.99", "1.00", "0.98", "0.99", "0.99"]],
-        ],
-        [
-          ["25",  ["24.98","25.02","25.00","24.93","24.97"]],
-          ["100", ["99.98","100.02","99.96","99.96","99.98"]],
-        ],
-        [
-          ["500", ["499.95","499.99","499.97","499.90","499.94"]],
-        ],
-        [
-          ["1",   ["0.9997","1.0001","0.9999","0.9992","0.9996"]],
-          ["3",   ["2.4994","2.4998","2.4996","2.4989","2.4993"]],
-        ],
-      ],
-    },
-  },
-};
-
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const uid = (): string => Math.random().toString(36).slice(2, 9);
-const emptyReadings = (): string[] => Array(5).fill("");
-
-type ParamStatus = "empty" | "partial" | "error" | "ok";
-
-function getParamStatus(param: Parameter): ParamStatus {
-  const allMeasurements = param.ranges.flatMap((r) => r.measurements);
-  if (allMeasurements.length === 0) return "empty";
-  let hasAny = false;
-  for (const m of allMeasurements) {
-    for (let i = 0; i < m.readings.length; i++) {
-      if (isOutOfRange(m.readings[i], m.nomValue)) return "error";
-      if (m.readings[i] !== "") hasAny = true;
-    }
-  }
-  const allFilled = allMeasurements.every((m) => m.readings.every((v) => v !== ""));
-  if (allFilled) return "ok";
-  if (hasAny) return "partial";
-  return "empty";
-}
-
-const PARAM_STATUS_DOT: Record<ParamStatus, string> = {
-  ok:      "bg-emerald-500",
-  partial: "bg-amber-400",
-  error:   "bg-red-500",
-  empty:   "bg-zinc-300",
-};
-
-// Returns 0-100 completion score for an instrument card
-function getInstCompletion(inst: Instrument): number {
-  const metaKeys: (keyof InstrumentMeta)[] = ["csrNo", "nomenclature", "make", "modelType", "calDate", "slNo"];
-  const metaScore = metaKeys.filter((k) => inst.meta[k]?.trim()).length / metaKeys.length;
-  if (inst.params.length === 0) return Math.round(metaScore * 50);
-  const okCount = inst.params.filter((p) => getParamStatus(p) === "ok").length;
-  return Math.round(metaScore * 50 + (okCount / inst.params.length) * 50);
-}
-
-const isNumericInput = (v: string) => v === "" || /^-?\d*\.?\d*$/.test(v);
-
-// Reading is out of range if it reaches or exceeds nom + 1 (allows slight overshoot below that threshold)
-function isOutOfRange(val: string, nomValue: string): boolean {
-  if (val === "" || nomValue === "") return false;
-  const reading = parseFloat(val);
-  const nom = parseFloat(nomValue);
-  if (isNaN(reading) || isNaN(nom)) return false;
-  return reading >= nom + 1;
-}
-
-const BLANK_REPORT_META: ReportMeta = {
-  certNo: "", customerName: "", customerAddress: "",
-  customerRefNo: "", ducReceivedDate: "",
-  calibrationLocation: "at_lab", dateOfCalibration: "", calibrationDueDate: "",
-};
 
 // ─── Report-level field helper ─────────────────────────────────────────────────
 
@@ -328,47 +80,6 @@ const RF: FC<{
   </div>
 );
 
-const BLANK_META: InstrumentMeta = {
-  csrNo: "", calDate: "", jobId: "", idNo: "NA",
-  nomenclature: "", make: "", modelType: "", slNo: "", othersDetails: "NA",
-  supplyVoltage: "", temperature: "", humidity: "",
-  refStandard: "", refMake: "", refModel: "", refSrNo: "", refCalDue: "", refTraceability: "",
-};
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function calcMean(readings: string[]): string | null {
-  const nums = readings.map(Number).filter((n) => !isNaN(n) && n !== 0);
-  if (!nums.length) return null;
-  return (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(4);
-}
-
-function makeMeasurement(): Measurement {
-  return { id: uid(), nomValue: "", readings: emptyReadings(), corrected: "", computed: null };
-}
-
-function makeParam(name = "", unit = "", instrumentKey = "", loadExamples = false): Parameter {
-  const preset = INSTRUMENT_PRESETS[instrumentKey];
-  const predefinedLabels = preset?.params[name];
-  if (predefinedLabels) {
-    const samples = preset.samples[name];
-    return {
-      id: uid(), name, unit: unit || preset.units[name] || "", isPredefined: true,
-      ranges: predefinedLabels.map((label, ri) => ({
-        id: uid(), label,
-        measurements: (loadExamples && (samples?.[ri] ?? []).length > 0)
-          ? samples[ri].map(([nom, readings]) => ({ id: uid(), nomValue: nom, readings, corrected: "", computed: null }))
-          : [makeMeasurement(), makeMeasurement()],
-      })),
-    };
-  }
-  return { id: uid(), name, unit, ranges: [{ id: uid(), label: "", measurements: [makeMeasurement(), makeMeasurement()] }] };
-}
-
-function makeInstrument(meta: InstrumentMeta = BLANK_META): Instrument {
-  return { id: uid(), meta: { ...meta }, params: [] };
-}
-
 // ─── Field ────────────────────────────────────────────────────────────────────
 
 const Field: FC<{
@@ -379,27 +90,30 @@ const Field: FC<{
   span3?: boolean;
   required?: boolean;
   autoFocus?: boolean;
+  readOnly?: boolean;
   meta: InstrumentMeta;
   showErrors?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ label, k, type = "text", span2, span3, required, autoFocus, meta, showErrors, touched, onTouch, onChange }) => {
+}> = ({ label, k, type = "text", span2, span3, required, autoFocus, readOnly, meta, showErrors, touched, onTouch, onChange }) => {
   const isTouched = touched?.has(k) ?? false;
-  const hasError = required && (showErrors || isTouched) && !String(meta[k]).trim();
+  const hasError = !readOnly && required && (showErrors || isTouched) && !String(meta[k]).trim();
   return (
     <div className={cn("flex flex-col gap-1.5", span2 && "col-span-2", span3 && "col-span-3")}>
       <Label htmlFor={`field-${k}`} className={cn("text-[10px] font-semibold uppercase tracking-widest", hasError ? "text-destructive" : "text-muted-foreground")}>
-        {label}{required && <span className="ml-0.5 text-destructive">*</span>}
+        {label}{required && !readOnly && <span className="ml-0.5 text-destructive">*</span>}
       </Label>
       <Input
         id={`field-${k}`}
         type={type}
         value={meta[k]}
-        autoFocus={autoFocus}
+        autoFocus={!readOnly && autoFocus}
+        readOnly={readOnly}
         aria-invalid={hasError}
-        onChange={(e) => onChange(k, e.target.value)}
-        onBlur={() => required && onTouch?.(k)}
+        onChange={(e) => !readOnly && onChange(k, e.target.value)}
+        onBlur={() => !readOnly && required && onTouch?.(k)}
+        className={cn(readOnly && "bg-zinc-50/70 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 cursor-default select-text")}
       />
       {hasError && <span className="text-[10px] text-destructive">This field is required</span>}
     </div>
@@ -412,17 +126,23 @@ const SelectField: FC<{
   options: string[];
   span2?: boolean;
   locked?: boolean;
+  readOnly?: boolean;
   meta: InstrumentMeta;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ label, k, options, span2, locked, meta, onChange }) => (
+}> = ({ label, k, options, span2, locked, readOnly, meta, onChange }) => (
   <div className={cn("flex flex-col gap-1.5", span2 && "col-span-2")}>
     <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
       {label}
     </Label>
-    {locked ? (
-      <div className="h-9 px-3 flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-500 dark:text-zinc-400 gap-1.5">
+    {locked || readOnly ? (
+      <div className={cn(
+        "h-9 px-3 flex items-center rounded-md border text-sm gap-1.5",
+        readOnly
+          ? "border-zinc-200 dark:border-zinc-700 bg-zinc-50/70 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
+          : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+      )}>
         <span className="flex-1 truncate">{String(meta[k]) || `—`}</span>
-        <span className="text-[10px] text-zinc-400 font-medium shrink-0">locked</span>
+        {locked && !readOnly && <span className="text-[10px] text-zinc-400 font-medium shrink-0">locked</span>}
       </div>
     ) : (
       <Select value={meta[k]} onValueChange={(val) => onChange(k, val)}>
@@ -436,14 +156,6 @@ const SelectField: FC<{
         </SelectContent>
       </Select>
     )}
-  </div>
-);
-
-// ─── Section divider ──────────────────────────────────────────────────────────
-
-const SectionLabel: FC<{ label: string }> = ({ label }) => (
-  <div className="col-span-2 lg:col-span-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">{label}</span>
   </div>
 );
 
@@ -471,13 +183,14 @@ const MetaGrid: FC<{
   modelLocked?: boolean;
   showErrors?: boolean;
   autoFocusCsr?: boolean;
+  readOnly?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ meta, modelLocked, showErrors, autoFocusCsr, touched, onTouch, onChange }) => {
+}> = ({ meta, modelLocked, showErrors, autoFocusCsr, readOnly, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
-  const sharedProps = { meta, showErrors, touched, onTouch, onChange };
+  const sharedProps = { meta, showErrors, touched, onTouch, onChange, readOnly };
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
       <Field label="CSR No"              k="csrNo"         {...sharedProps} required autoFocus={autoFocusCsr} />
@@ -485,8 +198,8 @@ const MetaGrid: FC<{
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
-      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} meta={meta} onChange={onChange} />
-      <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} meta={meta} onChange={onChange} />
+      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} readOnly={readOnly} meta={meta} onChange={onChange} />
+      <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} readOnly={readOnly} meta={meta} onChange={onChange} />
       <Field label="Sl. No"              k="slNo"          {...sharedProps} />
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
 
@@ -512,8 +225,9 @@ const MetaGrid: FC<{
 
 const MeasureTable: FC<{
   param: Parameter;
+  readOnly?: boolean;
   onUpdateParam: (updated: Parameter) => void;
-}> = ({ param, onUpdateParam }) => {
+}> = ({ param, readOnly, onUpdateParam }) => {
   const updateRangeLabel = (rid: string, label: string) =>
     onUpdateParam({ ...param, ranges: param.ranges.map((r) => r.id === rid ? { ...r, label } : r) });
 
@@ -630,11 +344,12 @@ const MeasureTable: FC<{
                   <div className="flex items-center gap-0.5 px-1 py-1">
                     <input
                       value={m.nomValue}
-                      onChange={(e) => { if (isNumericInput(e.target.value)) updateMeasurement(r.id, m.id, { nomValue: e.target.value }); }}
+                      readOnly={readOnly}
+                      onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateMeasurement(r.id, m.id, { nomValue: e.target.value }); }}
                       placeholder="Set/Nom"
-                      className="flex-1 min-w-0 h-6 font-mono text-[11px] text-center bg-background border border-border rounded px-1 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30 placeholder:text-muted-foreground/40"
+                      className={cn("flex-1 min-w-0 h-6 font-mono text-[11px] text-center bg-background border border-border rounded px-1 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30 placeholder:text-muted-foreground/40", readOnly && "cursor-default")}
                     />
-                    {r.measurements.length > 1 && (
+                    {r.measurements.length > 1 && !readOnly && (
                       <Button variant="ghost" size="icon-xs" onClick={() => removeMeasurement(r.id, m.id)} className="text-muted-foreground hover:text-destructive shrink-0">
                         <X />
                       </Button>
@@ -668,8 +383,10 @@ const MeasureTable: FC<{
                           id={`reading-${m.id}-${ri}`}
                           data-reading-input="true"
                           value={val}
-                          onChange={(e) => { if (isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
+                          readOnly={readOnly}
+                          onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
                           onKeyDown={(e) => {
+                            if (readOnly) return;
                             if (e.key === "Enter") {
                               e.preventDefault();
                               const all = Array.from(document.querySelectorAll<HTMLInputElement>("[data-reading-input]"));
@@ -678,7 +395,7 @@ const MeasureTable: FC<{
                             }
                           }}
                           placeholder="—"
-                          className={cn("w-full font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-2 placeholder:text-muted-foreground/20", readingError ? "text-destructive font-semibold" : "")}
+                          className={cn("w-full font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-2 placeholder:text-muted-foreground/20", readingError ? "text-destructive font-semibold" : "", readOnly && "cursor-default")}
                         />
                       </TooltipTrigger>
                       <TooltipContent side="top">Must be ≤ {m.nomValue}</TooltipContent>
@@ -754,9 +471,10 @@ const MeasureTable: FC<{
                 <td key={m.id} className="border border-zinc-200 dark:border-zinc-700 p-0">
                   <input
                     value={m.corrected}
-                    onChange={(e) => updateMeasurement(r.id, m.id, { corrected: e.target.value })}
+                    readOnly={readOnly}
+                    onChange={(e) => !readOnly && updateMeasurement(r.id, m.id, { corrected: e.target.value })}
                     placeholder="NA"
-                    className="w-full font-mono text-xs text-center bg-transparent border-none outline-none py-2 px-2 text-zinc-900 placeholder:text-zinc-300"
+                    className={cn("w-full font-mono text-xs text-center bg-transparent border-none outline-none py-2 px-2 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-300", readOnly && "cursor-default")}
                   />
                 </td>
               ))
@@ -1196,12 +914,13 @@ const SbInstrument: FC<{
   isActive: boolean;
   activeParamId: string;
   canAddParam: boolean;
+  readOnly?: boolean;
   onSelectInstrument: (id: string) => void;
   onSelectParam: (instId: string, paramId: string) => void;
   onRemoveInstrument: (id: string) => void;
   onRemoveParam: (instId: string, paramId: string) => void;
   onAddParam: (instId: string) => void;
-}> = ({ inst, index, isActive, activeParamId, canAddParam, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
+}> = ({ inst, index, isActive, activeParamId, canAddParam, readOnly, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
   const label = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
   const sub   = [inst.meta.make, inst.meta.modelType].filter(Boolean).join(" · ");
 
@@ -1243,12 +962,14 @@ const SbInstrument: FC<{
             })()}
           </div>
         </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemoveInstrument(inst.id); }}
-          className="ml-1.5 p-0.5 text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        {!readOnly && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemoveInstrument(inst.id); }}
+            className="ml-1.5 p-0.5 text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {isActive && (
@@ -1281,7 +1002,7 @@ const SbInstrument: FC<{
                     )}
                   </div>
                 </div>
-                {inst.params.length > 1 && (
+                {!readOnly && inst.params.length > 1 && (
                   <Button
                     variant="ghost" size="icon-xs"
                     onClick={(e) => { e.stopPropagation(); onRemoveParam(inst.id, p.id); }}
@@ -1294,25 +1015,27 @@ const SbInstrument: FC<{
             );
           })}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span data-tour="add-param-btn" className="w-full mt-1 block">
-                <Button
-                  variant="outline" size="xs"
-                  onClick={() => onAddParam(inst.id)}
-                  disabled={!canAddParam}
-                  className="w-full border-dashed text-muted-foreground"
-                >
-                  <Plus />Add parameter
-                </Button>
-              </span>
-            </TooltipTrigger>
-            {!canAddParam && (
-              <TooltipContent side="right" className="text-xs max-w-[180px]">
-                Select Make &amp; Model Type first
-              </TooltipContent>
-            )}
-          </Tooltip>
+          {!readOnly && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span data-tour="add-param-btn" className="w-full mt-1 block">
+                  <Button
+                    variant="outline" size="xs"
+                    onClick={() => onAddParam(inst.id)}
+                    disabled={!canAddParam}
+                    className="w-full border-dashed text-muted-foreground"
+                  >
+                    <Plus />Add parameter
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!canAddParam && (
+                <TooltipContent side="right" className="text-xs max-w-[180px]">
+                  Select Make &amp; Model Type first
+                </TooltipContent>
+              )}
+            </Tooltip>
+          )}
         </div>
       )}
     </div>
@@ -1459,120 +1182,6 @@ const AddParamDialog: FC<{
   );
 };
 
-// ─── Payload mapper ───────────────────────────────────────────────────────────
-
-function buildPayload(instruments: Instrument[], status: "draft" | "submitted", createdBy: string, rm: ReportMeta) {
-  const csrNo = instruments[0]?.meta.csrNo ?? "";
-
-  return {
-    csrNo,
-    status,
-    createdBy,
-    customerName:        rm.customerName,
-    customerAddress:     rm.customerAddress,
-    customerRefNo:       rm.customerRefNo,
-    ducReceivedDate:     rm.ducReceivedDate  || undefined,
-    calibrationLocation: rm.calibrationLocation,
-    dateOfCalibration:   rm.dateOfCalibration  || undefined,
-    calibrationDueDate:  rm.calibrationDueDate || undefined,
-    instruments: instruments.map((inst) => ({
-      nomenclature:  inst.meta.nomenclature,
-      make:          inst.meta.make,
-      modelType:     inst.meta.modelType,
-      slNo:          inst.meta.slNo,
-      idNo:          inst.meta.idNo,
-      othersDetails: inst.meta.othersDetails,
-      jobId:         inst.meta.jobId,
-      calDate:       inst.meta.calDate || undefined,
-      environmental: {
-        supplyVoltage: inst.meta.supplyVoltage,
-        temperature:   inst.meta.temperature,
-        humidity:      inst.meta.humidity,
-      },
-      refStandard: {
-        name:         inst.meta.refStandard,
-        make:         inst.meta.refMake,
-        modelType:    inst.meta.refModel,
-        srNo:         inst.meta.refSrNo,
-        calDueDate:   inst.meta.refCalDue || undefined,
-        traceability: inst.meta.refTraceability,
-      },
-      parameters: inst.params.map((p) => ({
-        name:   p.name,
-        unit:   p.unit,
-        ranges: p.ranges.map((r) => ({
-          label: r.label,
-          measurements: r.measurements.map((m) => ({
-            nomValue:  m.nomValue === "" ? null : Number(m.nomValue),
-            readings:  m.readings.map((v) => (v === "" ? null : Number(v))),
-            corrected: m.corrected,
-          })),
-        })),
-      })),
-    })),
-  };
-}
-
-// ─── API response → frontend state mapper ────────────────────────────────────
-
-function mapApiToInstruments(apiReport: any): Instrument[] {
-  return (apiReport.instruments ?? []).map((inst: any) => ({
-    id: inst._id ?? uid(),
-    meta: {
-      csrNo:          apiReport.csrNo ?? "",
-      calDate:        inst.calDate ? inst.calDate.slice(0, 10) : "",
-      jobId:          inst.jobId ?? "",
-      idNo:           inst.idNo ?? "NA",
-      nomenclature:   inst.nomenclature ?? "",
-      make:           inst.make ?? "",
-      modelType:      inst.modelType ?? "",
-      slNo:           inst.slNo ?? "",
-      othersDetails:  inst.othersDetails ?? "NA",
-      supplyVoltage:  inst.environmental?.supplyVoltage ?? "",
-      temperature:    inst.environmental?.temperature ?? "",
-      humidity:       inst.environmental?.humidity ?? "",
-      refStandard:    inst.refStandard?.name ?? "",
-      refMake:        inst.refStandard?.make ?? "",
-      refModel:       inst.refStandard?.modelType ?? "",
-      refSrNo:        inst.refStandard?.srNo ?? "",
-      refCalDue:      inst.refStandard?.calDueDate ? inst.refStandard.calDueDate.slice(0, 10) : "",
-      refTraceability: inst.refStandard?.traceability ?? "",
-    },
-    params: (inst.parameters ?? []).map((p: any) => ({
-      id:          p._id ?? uid(),
-      name:        p.name ?? "",
-      unit:        p.unit ?? "",
-      isPredefined: Object.values(INSTRUMENT_PRESETS).some((preset) => p.name in preset.params),
-      ranges: (p.ranges ?? []).map((r: any) => ({
-        id:    r._id ?? uid(),
-        label: r.label ?? "",
-        measurements: (r.measurements ?? []).map((m: any) => ({
-          id:        m._id ?? uid(),
-          nomValue:  m.nomValue != null ? String(m.nomValue) : "",
-          readings:  Array(5).fill("").map((_, i) =>
-            m.readings?.[i] != null ? String(m.readings[i]) : ""
-          ),
-          corrected: m.corrected ?? "",
-          computed:  m.computed ?? null,
-        })),
-      })),
-    })),
-  }));
-}
-
-function mapApiToReportMeta(r: any): ReportMeta {
-  return {
-    certNo:              r.certNo ?? "",
-    customerName:        r.customerName ?? "",
-    customerAddress:     r.customerAddress ?? "",
-    customerRefNo:       r.customerRefNo ?? "",
-    ducReceivedDate:     r.ducReceivedDate  ? r.ducReceivedDate.slice(0, 10)  : "",
-    calibrationLocation: r.calibrationLocation ?? "at_lab",
-    dateOfCalibration:   r.dateOfCalibration  ? r.dateOfCalibration.slice(0, 10)  : "",
-    calibrationDueDate:  r.calibrationDueDate ? r.calibrationDueDate.slice(0, 10) : "",
-  };
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 interface CalibrationReportPageProps {
@@ -1581,7 +1190,7 @@ interface CalibrationReportPageProps {
 
 export default function CalibrationReportPage({ reportId }: CalibrationReportPageProps) {
   const isEditMode = Boolean(reportId);
-  const { data, isLoading, isError, refetch } = useGetCalibrationReports();
+  const { refetch } = useGetCalibrationReports();
   const router = useRouter();
   const { mutate: generateCalibrationReport, isPending: isCreating } = useGenerateCalibrationReport();
   const { mutate: updateCalibrationReport,   isPending: isUpdating  } = useUpdateCalibrationReport();
@@ -1611,9 +1220,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [reportDetailsOpen, setReportDetailsOpen] = useState(!isEditMode);
   const [tourRun, setTourRun] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const cleanSnapshot = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
+  const cleanSnapshot    = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
+  const originalSnapshot = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
   const [snapshotVersion, setSnapshotVersion] = useState(0);
-  const [exitDialog,  setExitDialog]  = useState(false);
+  const [exitDialog,    setExitDialog]    = useState(false);
+  const [revertDialog,  setRevertDialog]  = useState(false);
+  // view mode: true by default when opening an existing report so users read before editing
+  const [viewMode, setViewMode] = useState(isEditMode);
 
   // ── PDF preview ────────────────────────────────────────────────────────────
   const [showPdfPreview, setShowPdfPreview] = useState(false);
@@ -1629,7 +1242,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     if (!reportId) return;
     setPdfLoading(true);
     try {
-      const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(reportId, "calibration"));
+      const res = await AUTH_API.get(EP_REPORT_URL(reportId, "calibration"));
       setPdfUrls(res.data.fileUrls ?? []);
       setShowPdfPreview(true);
     } catch {
@@ -1729,7 +1342,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     const meta = mapApiToReportMeta(existingReport);
     setReportMeta(meta);
     setHydrated(true);
-    cleanSnapshot.current = { instruments: mapped, reportMeta: meta };
+    cleanSnapshot.current    = { instruments: mapped, reportMeta: meta };
+    originalSnapshot.current = { instruments: mapped, reportMeta: meta };
     setSnapshotVersion((v) => v + 1);
   }, [existingReport, hydrated]);
 
@@ -1748,7 +1362,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   }, [instruments, reportMeta, snapshotVersion]);
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
-  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
   const [lastSavedAt,    setLastSavedAt]    = useState<Date | null>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Ticker so "saved Xs ago" stays fresh
@@ -1766,8 +1380,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   }
 
   useEffect(() => {
-    // Only auto-save in edit mode for draft reports with unsaved changes
-    if (!isEditMode || !isDirty || !hydrated || !userId || !reportId) return;
+    // Only auto-save in edit mode (not view mode) for draft reports with unsaved changes
+    if (!isEditMode || viewMode || !isDirty || !hydrated || !userId || !reportId) return;
     if (existingReport?.status && existingReport.status !== "draft") return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
@@ -2067,13 +1681,200 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setPanel(null);
   };
 
+  /** Restore form state to the original server-fetched snapshot. */
+  function handleRevert() {
+    if (!originalSnapshot.current) return;
+    const { instruments: origInst, reportMeta: origMeta } = originalSnapshot.current;
+    setInstruments(origInst);
+    setReportMeta(origMeta);
+    setActiveInstId(origInst[0]?.id ?? "");
+    setActiveParamId(origInst[0]?.params[0]?.id ?? "");
+    cleanSnapshot.current = { instruments: origInst, reportMeta: origMeta };
+    setSnapshotVersion((v) => v + 1);
+    setRevertDialog(false);
+    toast.success("Reverted to last saved state");
+  }
+
   // ── Loading state ──
   if (isEditMode && isLoadingReport) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-zinc-50">
-        <div className="flex flex-col items-center gap-3 text-zinc-400">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span className="text-sm">Loading report…</span>
+      <div className="flex min-h-screen bg-background">
+        {/* Sidebar skeleton */}
+        <div className="hidden lg:flex w-60 shrink-0 flex-col border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 min-h-screen">
+          {/* Brand header */}
+          <div className="px-4 py-4 border-b border-zinc-100 dark:border-zinc-800 space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-7 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-3 w-32 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                <div className="h-2.5 w-24 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+              </div>
+            </div>
+            <div className="h-6 w-20 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+          </div>
+          {/* Instruments label */}
+          <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+            <div className="h-2.5 w-20 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-4 w-5 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+          </div>
+          {/* Instrument cards */}
+          <div className="flex-1 px-2 space-y-1.5 pt-1">
+            {[1, 2].map((i) => (
+              <div key={i} className="rounded-lg border border-zinc-100 dark:border-zinc-800 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-zinc-200 dark:bg-zinc-700 animate-pulse shrink-0" />
+                  <div className="space-y-1 flex-1">
+                    <div className="h-3 w-24 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                    <div className="h-2.5 w-16 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                  </div>
+                </div>
+                {/* Parameter rows */}
+                {[1, 2, 3].map((j) => (
+                  <div key={j} className="ml-8 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-zinc-200 dark:bg-zinc-700 animate-pulse shrink-0" />
+                    <div className="h-2.5 w-28 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          {/* Add instrument button */}
+          <div className="border-t border-zinc-100 dark:border-zinc-800 p-3">
+            <div className="h-9 w-full rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 animate-pulse" />
+          </div>
+        </div>
+
+        {/* Main content skeleton */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Sticky top bar */}
+          <div className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-8 py-3.5 flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse shrink-0" />
+                <div className="h-3 w-40 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+              </div>
+              <div className="h-5 w-56 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+              <div className="h-2.5 w-44 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Unit input */}
+              <div className="hidden sm:flex items-center gap-1.5 border-r border-zinc-200 dark:border-zinc-700 pr-3">
+                <div className="h-3 w-6 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-8 w-16 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+              </div>
+              {/* Save badge */}
+              <div className="h-6 w-24 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+              {/* Buttons */}
+              <div className="flex gap-2">
+                <div className="h-8 w-20 rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-8 w-20 rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-8 w-24 rounded-md bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                <div className="h-8 w-28 rounded-md bg-zinc-900 dark:bg-zinc-600 animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          {/* Status timeline strip */}
+          <div className="flex items-center gap-4 px-8 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/50">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                <div className="h-3 w-16 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                {i < 3 && <div className="w-12 h-px bg-zinc-200 dark:bg-zinc-700 ml-1" />}
+              </div>
+            ))}
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 px-8 py-6 space-y-4">
+            {/* Report Details card */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30">
+                <div className="h-3.5 w-3.5 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                <div className="h-4 w-32 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                <div className="h-3 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse ml-1" />
+              </div>
+            </div>
+
+            {/* Instrument Details card */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-36 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                  <div className="h-3 w-48 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse ml-1" />
+                </div>
+                <div className="h-3 w-36 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+              </div>
+              {/* Meta fields grid */}
+              <div className="p-5 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className={cn("space-y-2", i === 4 && "col-span-2")}>
+                    <div className="h-2.5 w-16 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                    <div className="h-9 w-full rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Readings table card */}
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden">
+              {/* Table header bar */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-40 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                  <div className="h-5 w-7 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                </div>
+                <div className="flex gap-1.5">
+                  <div className="h-7 w-20 rounded-md bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                  <div className="h-7 w-16 rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                </div>
+              </div>
+              {/* Table */}
+              <div className="overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                      {[80, 40, 90, 90, 90, 90, 90].map((w, i) => (
+                        <th key={i} className="px-4 py-3 text-left">
+                          <div className="h-3 rounded animate-pulse bg-zinc-200 dark:bg-zinc-700" style={{ width: w }} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: 5 }).map((_, row) => (
+                      <tr key={row} className="border-b border-zinc-50 dark:border-zinc-800/60">
+                        <td className="px-4 py-3">
+                          <div className="h-3 w-16 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-3 w-6 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                        </td>
+                        {[1, 2, 3, 4, 5].map((c) => (
+                          <td key={c} className="px-4 py-3">
+                            <div className="h-8 w-full rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    {/* Mean / Status rows */}
+                    {["Status", "Mean value", "Corrected value"].map((row) => (
+                      <tr key={row} className="border-b border-zinc-50 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-zinc-800/20">
+                        <td className="px-4 py-3" colSpan={2}>
+                          <div className="h-3 w-20 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+                        </td>
+                        {[1, 2, 3, 4, 5].map((c) => (
+                          <td key={c} className="px-4 py-3">
+                            <div className="h-5 w-12 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse mx-auto" />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -2174,6 +1975,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               isActive={inst.id === activeInstId}
               activeParamId={activeParamId}
               canAddParam={!!(inst.meta.make && inst.meta.modelType)}
+              readOnly={viewMode}
               onSelectInstrument={(id) => { setActiveInstId(id); setPanel(null); }}
               onSelectParam={(instId, paramId) => { setActiveInstId(instId); setActiveParamId(paramId); setPanel(null); }}
               onRemoveInstrument={removeInstrument}
@@ -2184,19 +1986,21 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         </div>
 
         {/* Bottom panel */}
-        <div className="border-t border-zinc-100 dark:border-zinc-800 p-3">
-          {panel?.type === "addInstrument" ? (
-            <AddInstrumentPanel
-              currentMeta={activeInst.meta}
-              onCancel={() => setPanel(null)}
-              onConfirm={handleAddInstrumentConfirm}
-            />
-          ) : (
-            <Button data-tour="add-instrument-btn" variant="outline" className="w-full border-dashed" onClick={() => setPanel({ type: "addInstrument" })}>
-              <Plus />Add instrument
-            </Button>
-          )}
-        </div>
+        {!viewMode && (
+          <div className="border-t border-zinc-100 dark:border-zinc-800 p-3">
+            {panel?.type === "addInstrument" ? (
+              <AddInstrumentPanel
+                currentMeta={activeInst.meta}
+                onCancel={() => setPanel(null)}
+                onConfirm={handleAddInstrumentConfirm}
+              />
+            ) : (
+              <Button data-tour="add-instrument-btn" variant="outline" className="w-full border-dashed" onClick={() => setPanel({ type: "addInstrument" })}>
+                <Plus />Add instrument
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Main content ── */}
@@ -2213,8 +2017,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         {!showHistoryPanel && <>
 
         {/* Sticky top bar */}
-        <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 px-4 lg:px-8 py-3 lg:py-3.5 flex items-center justify-between gap-2 lg:gap-4 shadow-sm">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
+
+          {/* ── Row 1: title / breadcrumb ── */}
+          <div className="flex items-center gap-2 px-4 lg:px-8 py-3 lg:py-3.5">
             {/* Mobile sidebar toggle */}
             <button
               className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all shrink-0"
@@ -2222,60 +2028,78 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             >
               <Menu className="h-4 w-4" />
             </button>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <FlaskConical className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 truncate">
-                {activeInst.meta.nomenclature || "Instrument"} · {activeInst.meta.csrNo || "No CSR"}
+            <div className="flex-1 min-w-0">
+              {isEditMode ? (
+                <>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <FlaskConical className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 truncate">
+                      {activeInst.meta.nomenclature || "Instrument"} · {activeInst.meta.csrNo || "No CSR"}
+                    </span>
+                  </div>
+                  {activeParam ? (
+                    <input
+                      id={`param-name-${activeParam.id}`}
+                      value={activeParam.name}
+                      onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
+                      readOnly={activeParam.isPredefined || viewMode}
+                      placeholder="Parameter name"
+                      className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
+                    />
+                  ) : (
+                    <div className="text-lg font-semibold text-zinc-300">No parameters yet</div>
+                  )}
+                  <div className="text-xs text-zinc-400 mt-0.5 hidden sm:block">
+                    JECL/KOL/LAB/FM/36B · {activeInst.meta.calDate || "No date set"}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Plus className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-blue-500 truncate">
+                      New Calibration Report
+                    </span>
+                    {(() => {
+                      const missing: string[] = [];
+                      instruments.forEach((inst) => {
+                        if (!inst.meta.csrNo.trim()) missing.push("CSR No");
+                        if (!inst.meta.nomenclature.trim()) missing.push("Nomenclature");
+                      });
+                      if (!missing.length) return null;
+                      const label = missing.length === 1 ? `${missing[0]} missing` : `${missing.length} required fields missing`;
+                      return <Badge variant="in_progress" className="ml-1 text-[10px]">{label}</Badge>;
+                    })()}
+                  </div>
+                  {activeParam ? (
+                    <input
+                      id={`param-name-${activeParam.id}`}
+                      value={activeParam.name}
+                      onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
+                      readOnly={activeParam.isPredefined}
+                      placeholder="Parameter name"
+                      className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
+                    />
+                  ) : (
+                    <div className="text-lg font-semibold text-zinc-400">Add instrument details to get started</div>
+                  )}
+                  <div className="text-xs text-zinc-400 mt-0.5 hidden sm:block">
+                    Fill in report details · Add instrument · Enter readings · Submit
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Right: compact mode badge only (no buttons in title row) */}
+            {isEditMode && viewMode && (
+              <span className="shrink-0 hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
+                <Eye className="h-2.5 w-2.5" />
+                Viewing
               </span>
-              {/* Completion indicator — only shown when something is missing */}
-              {(() => {
-                const missing: string[] = [];
-                instruments.forEach((inst) => {
-                  if (!inst.meta.csrNo.trim()) missing.push("CSR No");
-                  if (!inst.meta.nomenclature.trim()) missing.push("Nomenclature");
-                });
-                if (!missing.length) return null;
-                const label = missing.length === 1 ? `${missing[0]} missing` : `${missing.length} required fields missing`;
-                return (
-                  <Badge variant="in_progress" className="ml-1 text-[10px]">{label}</Badge>
-                );
-              })()}
-            </div>
-            {activeParam ? (
-              <input
-                id={`param-name-${activeParam.id}`}
-                value={activeParam.name}
-                onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
-                readOnly={activeParam.isPredefined}
-                placeholder="Parameter name"
-                className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
-              />
-            ) : (
-              <div className="text-lg font-semibold text-zinc-300">No parameters yet</div>
             )}
-            <div className="text-xs text-zinc-400 mt-0.5 hidden sm:block">
-              JECL/KOL/LAB/FM/36B · {activeInst.meta.calDate || "No date set"}
-            </div>
-          </div>
-          </div>
-
-          <div className="flex items-center gap-2 lg:gap-3 shrink-0">
-            {activeParam && (
-            <div className="hidden sm:flex items-center gap-1.5 border-r border-zinc-200 dark:border-zinc-700 pr-3">
-              <span className="text-xs text-zinc-400">Unit</span>
-              <input
-                value={activeParam.unit}
-                onChange={(e) => updateParam(activeInstId, { ...activeParam, unit: e.target.value })}
-                placeholder="V"
-                className="w-16 h-8 font-mono text-sm text-center rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 transition-all"
-              />
-            </div>
-            )}
-
-            {isEditMode && (
+            {(!isEditMode || !viewMode) && isEditMode && (
               <span className={cn(
-                "inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all",
+                "shrink-0 hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all",
                 autoSaveStatus === "saving"
                   ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
                   : autoSaveStatus === "error"
@@ -2284,78 +2108,209 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
                   : isDirty
                   ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/60"
-                  : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+                  : "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
               )}>
-                {autoSaveStatus === "saving" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-                {autoSaveStatus === "saving"
-                  ? "Saving…"
-                  : autoSaveStatus === "error"
-                  ? "Save failed"
-                  : autoSaveStatus === "saved" && !isDirty && lastSavedAt
-                  ? `Saved ${timeAgo(lastSavedAt)}`
-                  : isDirty
-                  ? "Unsaved changes"
-                  : "Up to date"}
+                {autoSaveStatus === "saving" ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <PenLine className="h-2.5 w-2.5" />}
+                <span>Editing</span>
+                <span className="opacity-40">·</span>
+                <span className="font-normal">
+                  {autoSaveStatus === "saving" ? "Saving…"
+                    : autoSaveStatus === "error" ? "Save failed"
+                    : autoSaveStatus === "saved" && !isDirty && lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}`
+                    : isDirty ? "Unsaved changes"
+                    : "Up to date"}
+                </span>
               </span>
             )}
+          </div>
 
-            <div className="flex gap-1.5 lg:gap-2" data-tour="save-submit">
-              {isEditMode && (
+          {/* ── Row 2: toolbar (view mode buttons OR edit/create actions) ── */}
+          <div className="flex items-center gap-2 px-4 lg:px-8 py-2 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/30">
+
+            {/* View mode toolbar */}
+            {isEditMode && viewMode && (
+              <div className="flex items-center gap-2 w-full">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleTogglePdfPreview}
                   disabled={pdfLoading}
-                  className={cn(
-                    "gap-1.5 px-2.5 lg:px-3 transition-colors",
-                    showPdfPreview
-                      ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400"
-                      : ""
-                  )}
+                  className={cn("gap-1.5 px-3 transition-colors", showPdfPreview ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400" : "")}
                 >
-                  {pdfLoading
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : showPdfPreview
-                      ? <EyeOff className="h-3.5 w-3.5" />
-                      : <Eye className="h-3.5 w-3.5" />
-                  }
-                  <span className="hidden sm:inline">
-                    {pdfLoading ? "Loading…" : showPdfPreview ? "Edit" : "Preview"}
-                  </span>
+                  {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showPdfPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {pdfLoading ? "Loading…" : showPdfPreview ? "Close preview" : "Preview PDF"}
                 </Button>
-              )}
-              <Button
-                data-tour="compute-btn"
-                variant="outline"
-                size="sm"
-                onClick={() => handleCompute(activeInstId)}
-                disabled={isComputing || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
-                className="gap-1.5 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:border-violet-300 dark:hover:border-violet-700 px-2.5 lg:px-3"
-              >
-                {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline">{isComputing ? "Computing…" : "Compute"}</span>
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => handleSave("draft")} disabled={isPending} className="px-2.5 lg:px-3">
-                {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                <span className="hidden sm:inline ml-1">{isPending ? "Saving…" : "Save draft"}</span>
-              </Button>
-              <div className="relative">
-                <Button size="sm" onClick={() => handleSave("submitted")} disabled={isPending} className="px-2.5 lg:px-3">
-                  <Send className="h-3.5 w-3.5 sm:hidden" />
-                  <span className="hidden sm:inline">Submit report</span>
+                <div className="flex-1" />
+                <Button
+                  size="sm"
+                  onClick={() => setViewMode(false)}
+                  className="gap-1.5 px-4"
+                >
+                  <PenLine className="h-3.5 w-3.5" />
+                  Edit Report
                 </Button>
-                {formErrors.length > 0 && (
-                  <span
-                    onClick={(e) => { e.stopPropagation(); setErrorPanelOpen(true); }}
-                    className="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center cursor-pointer"
+              </div>
+            )}
+
+            {/* Edit / create mode toolbar */}
+            {(!isEditMode || !viewMode) && (
+              <div className="flex items-center gap-1.5 lg:gap-2 w-full" data-tour="save-submit">
+                {/* Unit input */}
+                {activeParam && (
+                  <div className="flex items-center gap-1.5 border-r border-zinc-200 dark:border-zinc-700 pr-3 mr-1">
+                    <span className="text-xs text-zinc-400 shrink-0">Unit</span>
+                    <input
+                      value={activeParam.unit}
+                      readOnly={viewMode}
+                      onChange={(e) => updateParam(activeInstId, { ...activeParam, unit: e.target.value })}
+                      placeholder="V"
+                      className="w-14 h-7 font-mono text-sm text-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 dark:focus:ring-blue-900 transition-all"
+                    />
+                  </div>
+                )}
+
+                {/* Revert — only when dirty draft */}
+                {isEditMode && isDirty && existingReport?.status === "draft" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRevertDialog(true)}
+                    className="gap-1.5 px-2.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 hover:text-amber-700"
                   >
-                    {formErrors.length}
-                  </span>
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Revert</span>
+                  </Button>
+                )}
+
+                {/* Preview */}
+                {isEditMode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTogglePdfPreview}
+                    disabled={pdfLoading}
+                    className={cn("gap-1.5 px-2.5 lg:px-3 transition-colors", showPdfPreview ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400" : "")}
+                  >
+                    {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showPdfPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">{pdfLoading ? "Loading…" : showPdfPreview ? "Edit" : "Preview"}</span>
+                  </Button>
+                )}
+
+                {/* Spacer pushes primary actions to the right */}
+                <div className="flex-1" />
+
+                {/* Separator */}
+                <div className="hidden sm:block h-5 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+
+                {/* Compute */}
+                <Button
+                  data-tour="compute-btn"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCompute(activeInstId)}
+                  disabled={isComputing || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
+                  className="gap-1.5 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:border-violet-300 dark:hover:border-violet-700 px-2.5 lg:px-3"
+                >
+                  {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">{isComputing ? "Computing…" : "Compute"}</span>
+                </Button>
+
+                {/* Separator */}
+                <div className="hidden sm:block h-5 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+
+                {/* Save draft */}
+                <Button variant="outline" size="sm" onClick={() => handleSave("draft")} disabled={isPending} className="px-2.5 lg:px-3">
+                  {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline ml-1">{isPending ? "Saving…" : "Save draft"}</span>
+                </Button>
+
+                {/* Submit */}
+                <div className="relative">
+                  <Button size="sm" onClick={() => handleSave("submitted")} disabled={isPending} className="px-2.5 lg:px-3">
+                    <Send className="h-3.5 w-3.5 sm:hidden" />
+                    <span className="hidden sm:inline">{isEditMode ? "Submit report" : "Create Report"}</span>
+                  </Button>
+                  {formErrors.length > 0 && (
+                    <span
+                      onClick={(e) => { e.stopPropagation(); setErrorPanelOpen(true); }}
+                      className="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-white text-[10px] font-bold flex items-center justify-center cursor-pointer"
+                    >
+                      {formErrors.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Done — exit edit mode back to view */}
+                {isEditMode && (
+                  <>
+                    <div className="hidden sm:block h-5 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setViewMode(true); if (isDirty) handleRevert(); }}
+                      className="px-2.5 lg:px-3 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 gap-1.5"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Done</span>
+                    </Button>
+                  </>
                 )}
               </div>
-            </div>
+            )}
           </div>
         </div>
+
+        {/* ── Create mode: step progress strip ── */}
+        {!isEditMode && (() => {
+          const hasMeta  = instruments.some((i) => i.meta.csrNo.trim() && i.meta.nomenclature.trim());
+          const hasParam = instruments.some((i) => i.params.length > 0);
+          const hasReads = instruments.some((i) =>
+            i.params.some((p) => p.ranges.some((r) => r.measurements.some((m) => m.readings.some((v) => v !== ""))))
+          );
+          const steps = [
+            { label: "Report Details",  done: !!reportMeta.customerName.trim() },
+            { label: "Instrument Info", done: hasMeta },
+            { label: "Enter Readings",  done: hasReads },
+            { label: "Submit",          done: false },
+          ];
+          const currentStep = steps.findIndex((s) => !s.done);
+          return (
+            <div className="flex items-center gap-0 px-4 lg:px-8 py-2.5 border-b border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/20 overflow-x-auto shrink-0">
+              {steps.map((step, i) => {
+                const isActive = i === currentStep;
+                const isDone   = step.done;
+                return (
+                  <div key={step.label} className="flex items-center gap-0 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "flex items-center justify-center h-4 w-4 rounded-full text-[9px] font-bold shrink-0",
+                        isDone   ? "bg-blue-500 text-white" :
+                        isActive ? "bg-blue-500 text-white ring-2 ring-blue-200 dark:ring-blue-900" :
+                                   "bg-zinc-200 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500"
+                      )}>
+                        {isDone ? <CheckCircle2 className="h-3 w-3" /> : i + 1}
+                      </div>
+                      <span className={cn(
+                        "text-[11px] font-semibold whitespace-nowrap",
+                        isDone   ? "text-blue-600 dark:text-blue-400" :
+                        isActive ? "text-blue-700 dark:text-blue-300" :
+                                   "text-zinc-400 dark:text-zinc-500"
+                      )}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {i < steps.length - 1 && (
+                      <div className={cn(
+                        "w-8 lg:w-16 h-px mx-2",
+                        isDone ? "bg-blue-300 dark:bg-blue-700" : "bg-zinc-200 dark:bg-zinc-700"
+                      )} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* ── Status timeline ── */}
         {isEditMode && existingReport && (
@@ -2487,13 +2442,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               <div className="p-5">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
                   <RF label="Certificate No" value={reportMeta.certNo || (isEditMode ? "" : "Auto-generated on save")} readOnly placeholder="Auto-generated" />
-                  <RF id="report-customerRefNo" label="Customer Ref No (PO)" value={reportMeta.customerRefNo} onChange={(v) => updateReportMeta("customerRefNo", v)} />
-                  <RF id="report-customerName" label="Customer Name" value={reportMeta.customerName} span2 onChange={(v) => updateReportMeta("customerName", v)} />
-                  <RF id="report-customerAddress" label="Customer Address" value={reportMeta.customerAddress} span2 onChange={(v) => updateReportMeta("customerAddress", v)} />
-                  <RF id="report-ducReceivedDate" label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
+                  <RF id="report-customerRefNo" label="Customer Ref No (PO)" value={reportMeta.customerRefNo} readOnly={viewMode} onChange={(v) => updateReportMeta("customerRefNo", v)} />
+                  <RF id="report-customerName" label="Customer Name" value={reportMeta.customerName} span2 readOnly={viewMode} onChange={(v) => updateReportMeta("customerName", v)} />
+                  <RF id="report-customerAddress" label="Customer Address" value={reportMeta.customerAddress} span2 readOnly={viewMode} onChange={(v) => updateReportMeta("customerAddress", v)} />
+                  <RF id="report-ducReceivedDate" label="DUC Received Date" value={reportMeta.ducReceivedDate} type="date" readOnly={viewMode} onChange={(v) => updateReportMeta("ducReceivedDate", v)} />
                   <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Location</Label>
-                    <Select value={reportMeta.calibrationLocation} onValueChange={(v) => updateReportMeta("calibrationLocation", v as "onsite" | "at_lab")}>
+                    <Select value={reportMeta.calibrationLocation} disabled={viewMode} onValueChange={(v) => updateReportMeta("calibrationLocation", v as "onsite" | "at_lab")}>
                       <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="onsite">Onsite</SelectItem>
@@ -2502,8 +2457,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                     </Select>
                   </div>
                   <RF id="report-dateOfCalibration" label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
-                    readOnly={reportMeta.calibrationLocation === "onsite"}
-                    onChange={reportMeta.calibrationLocation === "at_lab" ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
+                    readOnly={viewMode || reportMeta.calibrationLocation === "onsite"}
+                    onChange={(!viewMode && reportMeta.calibrationLocation === "at_lab") ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
                   <RF label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date" readOnly />
                 </div>
               </div>
@@ -2527,6 +2482,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 modelLocked={activeInst.params.length > 0}
                 showErrors={formErrors.length > 0}
                 autoFocusCsr={!isEditMode}
+                readOnly={viewMode}
                 touched={touchedFields}
                 onTouch={handleTouch}
                 onChange={updateMeta}
@@ -2598,6 +2554,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               <MeasureTable
                 param={activeParam}
                 onUpdateParam={(updated) => updateParam(activeInstId, updated)}
+                readOnly={viewMode}
               />
             ) : (
               <div className="p-4">
@@ -2718,6 +2675,28 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             </Button>
             <Button variant="ghost" className="w-full" onClick={() => setExitDialog(false)}>
               Stay on page
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Revert changes confirmation dialog ── */}
+      <Dialog open={revertDialog} onOpenChange={setRevertDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4 text-amber-500" /> Revert changes
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            This will discard all unsaved edits and restore the report to its last saved state. This cannot be undone.
+          </p>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button variant="destructive" className="w-full" onClick={handleRevert}>
+              Revert to last saved
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => setRevertDialog(false)}>
+              Keep editing
             </Button>
           </div>
         </DialogContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useTheme } from "next-themes";
 import {
   Table,
@@ -66,21 +66,28 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
+import {
+  useGetCalibrationReports,
+  useVerifyRejectCalibration,
+  useGetAuditLog,
+} from "@/app/hooks";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { AUTH_API } from "@/app/hooks/client";
-import { ENDPOINTS } from "@/app/hooks/endpoints";
+import { authClient as AUTH_API } from "@/lib/api-client";
+import {
+  EP_DELETE_CALIBRATION_REPORT,
+  EP_USER_PROFILE,
+  EP_REPORT_URL,
+} from "@/lib/endpoints";
 import { useAuth } from "@/app/provider/AuthProvider";
-import { useVerifyRejectCalibration } from "@/app/hooks/mutation/(calibration)/useVerifyRejectCalibration";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useGetAuditLog, type AuditEntry } from "@/app/hooks/query/(calibration)/useGetAuditLog";
+import type { AuditEntry, CalibrationReportStatus } from "@/types/calibration";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ReportStatus = "draft" | "submitted" | "verified" | "rejected";
+type ReportStatus = CalibrationReportStatus;
 
 interface ReportListItem {
   _id: string;
@@ -218,19 +225,15 @@ function StatusBadge({ status }: { status: ReportStatus }) {
 function StatCard({
   label,
   value,
-  total,
   icon,
   accent,
-  barColor,
   active,
   onClick,
 }: {
   label: string;
   value: number;
-  total: number;
   icon: React.ReactNode;
   accent: string;
-  barColor: string;
   active?: boolean;
   onClick?: () => void;
 }) {
@@ -275,7 +278,7 @@ export default function CalibrationReportsTable() {
   const { mutate: verifyReject } = useVerifyRejectCalibration();
   const queryClient = useQueryClient();
   const { mutate: deleteReport, isPending: isDeleting } = useMutation({
-    mutationFn: (reportId: string) => AUTH_API.delete(ENDPOINTS.DELETE_CALIBRATION_REPORT(reportId)),
+    mutationFn: (reportId: string) => AUTH_API.delete(EP_DELETE_CALIBRATION_REPORT(reportId)),
     onSuccess: () => {
       toast.success("Report deleted");
       setDeleteDialogOpen(false);
@@ -294,7 +297,7 @@ export default function CalibrationReportsTable() {
     if (!sigName.trim()) return;
     setIsSavingOnboard(true);
     try {
-      await AUTH_API.put(ENDPOINTS.UPDATE_PROFILE(), { signatureName: sigName.trim() });
+      await AUTH_API.put(EP_USER_PROFILE(), { signatureName: sigName.trim() });
       setUser({ ...user!, signatureName: sigName.trim() });
       toast.success("Welcome! Your profile is set up.");
     } catch {
@@ -315,7 +318,7 @@ export default function CalibrationReportsTable() {
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [auditReportId, setAuditReportId] = useState<string | null>(null);
   const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(auditReportId);
-  const allItems: ReportListItem[] = data?.items ?? [];
+  const allItems = (data?.items ?? []) as unknown as ReportListItem[];
 
   function isPdfFailed(report: ReportListItem) {
     if (report.filePaths?.length) return false;
@@ -384,7 +387,7 @@ export default function CalibrationReportsTable() {
     e.stopPropagation();
     setViewingPdf(reportId);
     try {
-      const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(reportId, "calibration"));
+      const res = await AUTH_API.get(EP_REPORT_URL(reportId, "calibration"));
       const urls: string[] = res.data.fileUrls;
       window.open(urls[index] ?? urls[0], "_blank");
     } catch {
@@ -398,7 +401,7 @@ export default function CalibrationReportsTable() {
     e.stopPropagation();
     setDownloadingPdf(report._id);
     try {
-      const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(report._id, "calibration", true));
+      const res = await AUTH_API.get(EP_REPORT_URL(report._id, "calibration", true));
       const urls: string[] = res.data.fileUrls;
       window.open(urls[index] ?? urls[0], "_blank");
     } catch {
@@ -426,10 +429,121 @@ export default function CalibrationReportsTable() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="h-8 w-8 border-2 rounded-full animate-spin" style={{ borderColor: NAVY_MEDIUM, borderTopColor: NAVY }} />
-          <span className="text-sm">Loading reports…</span>
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-6 w-48 rounded-md bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+            <div className="h-4 w-72 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+          </div>
+          <div className="h-9 w-32 rounded-md bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+        </div>
+
+        {/* Stat cards */}
+        <div className="flex flex-wrap gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex-1 min-w-[120px] rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-7 w-8 rounded bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+              </div>
+              <div className="h-3 w-20 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Table card */}
+        <div className="rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+          {/* Toolbar */}
+          <div className="flex gap-3 p-4 border-b border-slate-100 dark:border-zinc-700">
+            <div className="h-9 w-72 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+            <div className="ml-auto flex gap-2">
+              <div className="h-9 w-36 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+              <div className="h-9 w-24 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+              <div className="h-9 w-28 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Table */}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 dark:border-zinc-700" style={{ backgroundColor: NAVY_LIGHT }}>
+                {[180, 100, 130, 90, 120, 110, 100, 100, 70, 60].map((w, i) => (
+                  <th key={i} className="px-3 py-3 text-left">
+                    <div className="h-3 rounded animate-pulse" style={{ width: w, backgroundColor: NAVY_MEDIUM }} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 8 }).map((_, row) => (
+                <tr key={row} className="border-b border-slate-50 dark:border-zinc-800">
+                  {/* CSR No + format */}
+                  <td className="px-3 py-3.5 pl-5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-zinc-800 animate-pulse shrink-0" />
+                      <div className="space-y-1.5">
+                        <div className="h-3.5 w-28 rounded bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+                        <div className="h-2.5 w-36 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                      </div>
+                    </div>
+                  </td>
+                  {/* Status badge */}
+                  <td className="px-3 py-3.5">
+                    <div className="h-6 w-20 rounded-full bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                  </td>
+                  {/* Created by */}
+                  <td className="px-3 py-3.5">
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-16 rounded bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+                      <div className="h-2.5 w-24 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                    </div>
+                  </td>
+                  {/* Instruments count */}
+                  <td className="px-3 py-3.5">
+                    <div className="h-6 w-8 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                  </td>
+                  {/* Customer */}
+                  <td className="px-3 py-3.5">
+                    <div className="h-3 w-20 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                  </td>
+                  {/* Calibrated by */}
+                  <td className="px-3 py-3.5">
+                    <div className="h-3 w-14 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                  </td>
+                  {/* Verified by */}
+                  <td className="px-3 py-3.5">
+                    <div className="h-3 w-12 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                  </td>
+                  {/* Date */}
+                  <td className="px-3 py-3.5">
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-24 rounded bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+                      <div className="h-2.5 w-14 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                    </div>
+                  </td>
+                  {/* PDF */}
+                  <td className="px-3 py-3.5 text-center">
+                    <div className="h-3 w-6 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse mx-auto" />
+                  </td>
+                  {/* Actions */}
+                  <td className="px-3 py-3.5 text-right pr-4">
+                    <div className="h-7 w-7 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse ml-auto" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-zinc-700">
+            <div className="h-3.5 w-36 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-8 w-8 rounded-md bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -465,11 +579,11 @@ export default function CalibrationReportsTable() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <StatCard label="Total Reports" value={counts.total} total={counts.total} barColor={isDark ? "bg-[#4a7bb5]" : "bg-[#1e3a5f]"} icon={<ClipboardList className="h-4 w-4" style={{ color: navy }} />} accent={isDark ? "bg-[#1e3a5f]/30" : "bg-[#e8eef5]"} active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
-        <StatCard label="Drafts" value={counts.draft} total={counts.total} barColor="bg-slate-400" icon={<FileText className="h-4 w-4 text-slate-500 dark:text-zinc-400" />} accent="bg-slate-100 dark:bg-zinc-700/60" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
-        <StatCard label="Submitted" value={counts.submitted} total={counts.total} barColor="bg-sky-500" icon={<Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />} accent="bg-sky-50 dark:bg-sky-950/50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
-        <StatCard label="Verified" value={counts.verified} total={counts.total} barColor="bg-emerald-500" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />} accent="bg-emerald-50 dark:bg-emerald-950/50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
-        <StatCard label="Rejected" value={counts.rejected} total={counts.total} barColor="bg-red-400" icon={<XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />} accent="bg-red-50 dark:bg-red-950/50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
+        <StatCard label="Total Reports" value={counts.total} icon={<ClipboardList className="h-4 w-4" style={{ color: navy }} />} accent={isDark ? "bg-[#1e3a5f]/30" : "bg-[#e8eef5]"} active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
+        <StatCard label="Drafts" value={counts.draft} icon={<FileText className="h-4 w-4 text-slate-500 dark:text-zinc-400" />} accent="bg-slate-100 dark:bg-zinc-700/60" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
+        <StatCard label="Submitted" value={counts.submitted} icon={<Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />} accent="bg-sky-50 dark:bg-sky-950/50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
+        <StatCard label="Verified" value={counts.verified} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />} accent="bg-emerald-50 dark:bg-emerald-950/50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
+        <StatCard label="Rejected" value={counts.rejected} icon={<XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />} accent="bg-red-50 dark:bg-red-950/50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
       </div>
 
       <Card className="shadow-sm border-slate-200 dark:border-zinc-700">

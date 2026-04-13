@@ -1,24 +1,41 @@
 "use client";
 
+/**
+ * @fileoverview Application top navigation bar.
+ *
+ * Renders the Josts logo, primary nav links, and the user dropdown.
+ * Uses `usePathname` to highlight the active route.
+ */
+
 import Link from "next/link";
-import { DropdownMenuDemo } from "./DropDown";
-import jostLogo from '../public/logo.png';
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { FileText, FilePlus, Layout } from "lucide-react";
+import { FileText, FilePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { UserMenu } from "./UserMenu";
+import jostLogo from "../public/logo.png";
 
-const navLinks = [
+/** Primary navigation links rendered in the navbar. */
+const NAV_LINKS = [
   { href: "/calibration", label: "Calibration Reports", icon: FileText },
-  { href: "/drafts", label: "Drafts", icon: FilePlus },
-  // { href: "/templates", label: "Templates", icon: Layout },
-];
+  { href: "/drafts",      label: "Drafts",               icon: FilePlus  },
+] as const;
 
+/**
+ * Returns true when `pathname` matches or starts with the given `path`.
+ *
+ * @param pathname - Current Next.js pathname
+ * @param path     - Route prefix to test against
+ */
+function isActivePath(pathname: string, path: string): boolean {
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+/**
+ * Fixed top navigation bar with logo, route links, and user menu.
+ */
 export default function Navbar() {
   const pathname = usePathname();
-
-  const isActive = (path: string) =>
-    pathname === path || pathname.startsWith(path + "/");
 
   return (
     <nav className="fixed top-0 left-0 w-full bg-card/95 backdrop-blur border-b border-border z-50">
@@ -28,40 +45,36 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex-shrink-0">
             <Image
+              src={jostLogo}
               alt="Josts Technologies"
               width={250}
               height={80}
-              src={jostLogo}
               className="h-12 w-auto"
+              priority
             />
           </Link>
 
           <div className="flex items-center gap-1">
-            {/* Nav links */}
+            {/* Desktop nav links */}
             <div className="hidden md:flex items-center gap-0.5 mr-2">
-              {navLinks.map((link) => {
-                const Icon = link.icon;
-                const active = isActive(link.href);
-
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={cn(
-                      "flex items-center gap-2 px-3.5 py-2 rounded-md text-sm font-medium transition-all",
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {link.label}
-                  </Link>
-                );
-              })}
+              {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-2 px-3.5 py-2 rounded-md text-sm font-medium transition-all",
+                    isActivePath(pathname, href)
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </Link>
+              ))}
             </div>
 
-            <DropdownMenuDemo />
+            <UserMenu />
           </div>
         </div>
       </div>

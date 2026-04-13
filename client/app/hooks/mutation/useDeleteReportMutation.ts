@@ -1,18 +1,27 @@
+/**
+ * @fileoverview Delete report mutation hook.
+ */
 import { useMutation } from "@tanstack/react-query";
-import { API, AUTH_API } from "../client";
-import { ENDPOINTS } from "../endpoints";
+import { authClient } from "@/lib/api-client";
+import { EP_DELETE_DRAFT } from "@/lib/endpoints";
 
+/**
+ * Deletes a report by ID.
+ *
+ * @param reportId - The report document ID to delete
+ */
+export async function deleteReport(reportId: string): Promise<unknown> {
+  const { data } = await authClient.delete(EP_DELETE_DRAFT(reportId));
+  return data;
+}
 
-export const deleteReportMutation = async (reportId: string) => {
-  const response = await AUTH_API.delete(ENDPOINTS.DELETE_DRAFT(reportId));
-  return response.data;
-};
-
-export const useDeleteReportMutation = () => {
-  return useMutation({
-    mutationFn: deleteReportMutation,
-    onError: (error) => {
-      console.error("Error deleting report:", error);
-    },
-  });
-};
+/**
+ * React Query mutation hook for deleting a report.
+ *
+ * @example
+ * const { mutate: deleteReport } = useDeleteReportMutation();
+ * deleteReport(reportId, { onSuccess: () => queryClient.invalidateQueries(...) });
+ */
+export function useDeleteReportMutation() {
+  return useMutation({ mutationFn: deleteReport });
+}

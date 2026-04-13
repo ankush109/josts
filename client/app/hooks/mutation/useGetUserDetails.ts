@@ -1,23 +1,42 @@
+/**
+ * @fileoverview Fetch current user profile query hook.
+ *
+ * @note Despite living in the `mutation/` folder for historical reasons,
+ *       this is a read-only query. New code should colocate queries in
+ *       the `query/` folder.
+ */
 import { useQuery } from "@tanstack/react-query";
+import { authClient } from "@/lib/api-client";
+import { EP_USER_PROFILE } from "@/lib/endpoints";
+import type { AuthUser } from "@/types/auth";
 
-import { ENDPOINTS } from "../endpoints";
-import { API, AUTH_API } from "../client";
+/** Query key used to identify this data in the React Query cache. */
+export const USER_DETAILS_KEY = "user-details" as const;
 
-export const getUserDetails = async () => {
-    const response = await AUTH_API.get(ENDPOINTS.GET_LOGGED_USER())
-    return response.data;
-  };
-  
-const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  
-  export const useGetUserDetailsQuery = () =>
-    useQuery({
-      queryKey: ["get-user-details"],
-      enabled: !!token,
-      queryFn: () => getUserDetails(),
-      select: (data) => {
-        const res = data;
-        return res;
-      },
-    });
-  
+/**
+ * Fetches the profile of the currently authenticated user.
+ *
+ * @returns The authenticated user's profile data
+ */
+export async function getUserDetails(): Promise<AuthUser> {
+  const { data } = await authClient.get<AuthUser>(EP_USER_PROFILE());
+  return data;
+}
+
+/**
+ * React Query hook for fetching the authenticated user's profile.
+ * Only runs when a token is present in localStorage.
+ *
+ * @example
+ * const { data: user, isLoading } = useGetUserDetailsQuery();
+ */
+export function useGetUserDetailsQuery() {
+  const hasToken =
+    typeof window !== "undefined" && !!localStorage.getItem("token");
+
+  return useQuery<AuthUser>({
+    queryKey: [USER_DETAILS_KEY],
+    queryFn: getUserDetails,
+    enabled: hasToken,
+  });
+}

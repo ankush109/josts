@@ -1,16 +1,26 @@
-import React from 'react';
+/**
+ * @fileoverview Full-page loading spinner component.
+ *
+ * Displayed as a fallback while async data or a dynamic import is loading.
+ */
 
-export default function Loading() {
+/**
+ * Centred full-screen spinner with a "Loading…" label.
+ *
+ * Uses semantic Tailwind colour tokens so it respects the active theme.
+ */
+export default function Loader() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      {/* Simple spinner */}
-      <div className="relative w-16 h-16">
-        <div className="absolute inset-0 border-4 border-gray-200 rounded-full"></div>
-        <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-background">
+      <div className="relative w-14 h-14">
+        {/* Track ring */}
+        <div className="absolute inset-0 border-4 border-muted rounded-full" />
+        {/* Spinning arc */}
+        <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin" />
       </div>
-      
-      {/* Loading text */}
-      <p className="mt-4 text-gray-600 font-medium">Loading...</p>
+      <p className="mt-4 text-sm text-muted-foreground font-medium">
+        Loading…
+      </p>
     </div>
   );
 }
