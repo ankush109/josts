@@ -99,7 +99,7 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-2">
+    <div className="force-light min-h-screen lg:grid lg:grid-cols-2">
       {/* Left branding panel — minimal elegance */}
       <div className="hidden lg:flex flex-col items-center justify-center p-16 relative overflow-hidden" style={{ backgroundColor: "#1e3a5f" }}>
         {/* Dot grid pattern */}

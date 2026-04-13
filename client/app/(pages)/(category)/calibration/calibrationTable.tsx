@@ -63,6 +63,7 @@ import {
   ShieldX,
   History,
   PenLine,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGetCalibrationReports } from "@/app/hooks/query/useCalibrationReport";
@@ -109,20 +110,29 @@ const NAVY_MEDIUM = "#c7d5e5";
 
 // ─── Audit row component ───────────────────────────────────────────────────────
 
-const ACTION_META: Record<AuditEntry["action"], { label: string; color: string }> = {
-  created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700" },
-  updated:        { label: "Updated",        color: "bg-blue-100 text-blue-700" },
-  status_changed: { label: "Status changed", color: "bg-violet-100 text-violet-700" },
-  deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700" },
+const ACTION_META: Record<AuditEntry["action"], { label: string; color: string; dot: string }> = {
+  created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-400" },
+  updated:        { label: "Updated",        color: "bg-blue-100 text-blue-700",       dot: "bg-blue-400"    },
+  status_changed: { label: "Status changed", color: "bg-violet-100 text-violet-700",  dot: "bg-violet-400"  },
+  deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700",         dot: "bg-red-400"     },
 };
 
+const AVATAR_COLORS_TABLE = [
+  "bg-violet-500", "bg-blue-500", "bg-emerald-600", "bg-amber-500",
+  "bg-rose-500",   "bg-cyan-600", "bg-indigo-500",  "bg-teal-500",
+];
+function tableAvatarColor(name: string) {
+  const idx = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS_TABLE.length;
+  return AVATAR_COLORS_TABLE[idx];
+}
+
 function AuditRow({ entry, isLast }: { entry: AuditEntry; isLast: boolean }) {
-  const baseMeta = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600" };
+  const baseMeta = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600", dot: "bg-zinc-400" };
   const meta = entry.action === "status_changed"
     ? entry.changes[0]?.to === "verified"
-      ? { label: "Verified",  color: "bg-emerald-100 text-emerald-700" }
+      ? { label: "Verified", color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-400" }
       : entry.changes[0]?.to === "rejected"
-      ? { label: "Rejected",  color: "bg-red-100 text-red-700" }
+      ? { label: "Rejected", color: "bg-red-100 text-red-700",         dot: "bg-red-400"     }
       : baseMeta
     : baseMeta;
   const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
@@ -132,21 +142,34 @@ function AuditRow({ entry, isLast }: { entry: AuditEntry; isLast: boolean }) {
   const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 
   return (
-    <li className={cn("ml-6 pb-6", isLast && "pb-0")}>
-      {/* dot */}
-      <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white dark:bg-zinc-800 dark:border-zinc-600 dark:ring-zinc-800" />
-
-      <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0 dark:bg-zinc-600">
+    <li className="relative flex gap-3">
+      <div className="flex flex-col items-center">
+        <span className={cn("mt-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900 flex-shrink-0", meta.dot)} />
+        {!isLast && <span className="mt-1 flex-1 w-px bg-zinc-200 dark:bg-zinc-700" />}
+      </div>
+      <div className={cn("min-w-0 flex-1", !isLast && "pb-4")}>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className={cn("h-5 w-5 rounded-full text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0", tableAvatarColor(name))}>
               {initials}
             </div>
-            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{name}</span>
-            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
+            <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{name}</span>
+            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0", meta.color)}>{meta.label}</span>
           </div>
-          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{dateStr} · {timeStr}</span>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 whitespace-nowrap shrink-0">{dateStr} · {timeStr}</span>
         </div>
+        {entry.changes?.length > 0 && (
+          <div className="mt-1.5 ml-6 space-y-0.5">
+            {entry.changes.map((c: { field: string; from: string; to: string }, ci: number) => (
+              <div key={ci} className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <span className="font-medium min-w-[80px] shrink-0 truncate">{c.field}</span>
+                <span className="text-zinc-400 line-through truncate max-w-[60px]">{c.from}</span>
+                <span className="text-zinc-300 dark:text-zinc-600">→</span>
+                <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate">{c.to}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </li>
   );
@@ -233,7 +256,7 @@ function StatCard({
           {value}
         </span>
       </div>
-      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="text-xs font-medium text-slate-500 dark:text-zinc-400">{label}</div>
     </button>
   );
 }
@@ -443,10 +466,10 @@ export default function CalibrationReportsTable() {
 
       <div className="flex flex-wrap gap-3">
         <StatCard label="Total Reports" value={counts.total} total={counts.total} barColor={isDark ? "bg-[#4a7bb5]" : "bg-[#1e3a5f]"} icon={<ClipboardList className="h-4 w-4" style={{ color: navy }} />} accent={isDark ? "bg-[#1e3a5f]/30" : "bg-[#e8eef5]"} active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
-        <StatCard label="Drafts" value={counts.draft} total={counts.total} barColor="bg-slate-400" icon={<FileText className="h-4 w-4 text-slate-500" />} accent="bg-slate-100" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
-        <StatCard label="Submitted" value={counts.submitted} total={counts.total} barColor="bg-sky-500" icon={<Clock className="h-4 w-4 text-sky-600" />} accent="bg-sky-50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
-        <StatCard label="Verified" value={counts.verified} total={counts.total} barColor="bg-emerald-500" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} accent="bg-emerald-50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
-        <StatCard label="Rejected" value={counts.rejected} total={counts.total} barColor="bg-red-400" icon={<XCircle className="h-4 w-4 text-red-500" />} accent="bg-red-50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
+        <StatCard label="Drafts" value={counts.draft} total={counts.total} barColor="bg-slate-400" icon={<FileText className="h-4 w-4 text-slate-500 dark:text-zinc-400" />} accent="bg-slate-100 dark:bg-zinc-700/60" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
+        <StatCard label="Submitted" value={counts.submitted} total={counts.total} barColor="bg-sky-500" icon={<Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />} accent="bg-sky-50 dark:bg-sky-950/50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
+        <StatCard label="Verified" value={counts.verified} total={counts.total} barColor="bg-emerald-500" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />} accent="bg-emerald-50 dark:bg-emerald-950/50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
+        <StatCard label="Rejected" value={counts.rejected} total={counts.total} barColor="bg-red-400" icon={<XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />} accent="bg-red-50 dark:bg-red-950/50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
       </div>
 
       <Card className="shadow-sm border-slate-200 dark:border-zinc-700">
@@ -677,74 +700,54 @@ export default function CalibrationReportsTable() {
                         )}
                       </TableCell>
                       <TableCell className="pr-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {/* Edit — non-admin only */}
-                          {!isAdmin && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); router.push(`/calibration/${report._id}`); }}
-                                  className="p-1.5 rounded-md text-slate-400 hover:text-[#1e3a5f] dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Edit report</TooltipContent>
-                            </Tooltip>
-                          )}
-                          {/* History */}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setAuditReportId(report._id); }}
-                                className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
-                              >
-                                <History className="h-3.5 w-3.5" />
+                        <div className="flex items-center justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors">
+                                <MoreHorizontal className="h-4 w-4" />
                               </button>
-                            </TooltipTrigger>
-                            <TooltipContent>View history</TooltipContent>
-                          </Tooltip>
-                          {/* Admin: Verify / Reject */}
-                          {isAdmin && report.status === "submitted" && (
-                            <>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              {/* Edit — all roles */}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/calibration/${report._id}`); }}>
+                                <Pencil className="mr-2 h-3.5 w-3.5 text-slate-500" />
+                                Edit report
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setAuditReportId(report._id); }}>
+                                <History className="mr-2 h-3.5 w-3.5 text-slate-500" />
+                                View history
+                              </DropdownMenuItem>
+                              {/* Admin: Verify / Reject — available for any non-draft status */}
+                              {isAdmin && report.status !== "draft" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
                                     onClick={(e) => handleVerifyReject(e, report._id, "verified")}
-                                    className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                                    className="text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-950/40"
                                   >
-                                    <ShieldCheck className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Verify report</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
+                                    <ShieldCheck className="mr-2 h-3.5 w-3.5" />
+                                    Verify report
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
                                     onClick={(e) => handleVerifyReject(e, report._id, "rejected")}
-                                    className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                                    className="text-red-500 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/40"
                                   >
-                                    <ShieldX className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>Reject report</TooltipContent>
-                              </Tooltip>
-                            </>
-                          )}
-                          {/* Delete — non-admin only */}
-                          {!isAdmin && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); confirmDelete(report); }}
-                                  className="p-1.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent>Delete report</TooltipContent>
-                            </Tooltip>
-                          )}
+                                    <ShieldX className="mr-2 h-3.5 w-3.5" />
+                                    Reject report
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {/* Delete — all roles */}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => { e.stopPropagation(); confirmDelete(report); }}
+                                className="text-red-500 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/40"
+                              >
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                Delete report
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -846,25 +849,31 @@ export default function CalibrationReportsTable() {
 
       {/* ── Audit history dialog ── */}
       <Dialog open={!!auditReportId} onOpenChange={(o) => { if (!o) setAuditReportId(null); }}>
-        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <History className="h-4 w-4 text-zinc-500" /> Audit History
+        <DialogContent className="max-w-md max-h-[80vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="flex-shrink-0 px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
+            <DialogTitle className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+              <History className="h-4 w-4 text-zinc-400" />
+              Audit History
+              {(auditLog?.length ?? 0) > 0 && (
+                <span className="text-[10px] font-medium text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-full ml-1">
+                  {auditLog!.length}
+                </span>
+              )}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-1 mt-2">
+          <div className="flex-1 overflow-y-auto px-5 py-4">
             {auditLoading ? (
-              <div className="flex items-center justify-center h-32 text-sm text-zinc-400">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+              <div className="flex items-center justify-center h-32 text-sm text-zinc-400 gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
               </div>
             ) : !auditLog?.length ? (
-              <div className="flex flex-col items-center justify-center h-32 text-sm text-zinc-400 gap-2">
+              <div className="flex flex-col items-center justify-center h-32 gap-2 text-zinc-400">
                 <History className="h-6 w-6 opacity-30" />
-                No history yet
+                <span className="text-sm">No history yet</span>
               </div>
             ) : (
-              <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
+              <ol className="space-y-0">
                 {auditLog.map((entry, i) => (
                   <AuditRow key={entry._id} entry={entry} isLast={i === auditLog.length - 1} />
                 ))}

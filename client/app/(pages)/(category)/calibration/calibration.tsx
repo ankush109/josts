@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import type { Step, EventData, TooltipRenderProps } from "react-joyride";
 const Joyride = dynamic(() => import("react-joyride").then((m) => ({ default: m.Joyride })), { ssr: false });
 import { useGenerateCalibrationReport } from "@/app/hooks/mutation/useGenerateCalibrationReport";
+import { AUTH_API } from "@/app/hooks/client";
+import { ENDPOINTS } from "@/app/hooks/endpoints";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/provider/AuthProvider";
 import toast from "react-hot-toast";
@@ -13,7 +15,7 @@ import { useUpdateCalibrationReport } from "@/app/hooks/mutation/(calibration)/u
 import { useComputeCalibration } from "@/app/hooks/mutation/(calibration)/useComputeCalibration";
 import { useGetCalibrationReportById } from "@/app/hooks/query/(calibration)/useGetCalibReportById";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -285,6 +287,15 @@ const PARAM_STATUS_DOT: Record<ParamStatus, string> = {
   error:   "bg-red-500",
   empty:   "bg-zinc-300",
 };
+
+// Returns 0-100 completion score for an instrument card
+function getInstCompletion(inst: Instrument): number {
+  const metaKeys: (keyof InstrumentMeta)[] = ["csrNo", "nomenclature", "make", "modelType", "calDate", "slNo"];
+  const metaScore = metaKeys.filter((k) => inst.meta[k]?.trim()).length / metaKeys.length;
+  if (inst.params.length === 0) return Math.round(metaScore * 50);
+  const okCount = inst.params.filter((p) => getParamStatus(p) === "ok").length;
+  return Math.round(metaScore * 50 + (okCount / inst.params.length) * 50);
+}
 
 const isNumericInput = (v: string) => v === "" || /^-?\d*\.?\d*$/.test(v);
 
@@ -844,20 +855,29 @@ const FORMULA_STEPS = [
 
 // ─── Audit history shared helpers ─────────────────────────────────────────────
 
-const ACTION_META: Record<AuditEntry["action"], { label: string; color: string }> = {
-  created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700" },
-  updated:        { label: "Updated",        color: "bg-blue-100 text-blue-700" },
-  status_changed: { label: "Status changed", color: "bg-violet-100 text-violet-700" },
-  deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700" },
+const ACTION_META: Record<AuditEntry["action"], { label: string; color: string; dot: string }> = {
+  created:        { label: "Created",        color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-400" },
+  updated:        { label: "Updated",        color: "bg-blue-100 text-blue-700",       dot: "bg-blue-400"    },
+  status_changed: { label: "Status changed", color: "bg-violet-100 text-violet-700",  dot: "bg-violet-400"  },
+  deleted:        { label: "Deleted",        color: "bg-red-100 text-red-700",         dot: "bg-red-400"     },
 };
 
 function resolveAuditMeta(entry: AuditEntry) {
-  const base = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600" };
+  const base = ACTION_META[entry.action] ?? { label: entry.action, color: "bg-zinc-100 text-zinc-600", dot: "bg-zinc-400" };
   if (entry.action !== "status_changed") return base;
   const to = entry.changes[0]?.to;
-  if (to === "verified") return { label: "Verified", color: "bg-emerald-100 text-emerald-700" };
-  if (to === "rejected") return { label: "Rejected", color: "bg-red-100 text-red-700" };
+  if (to === "verified") return { label: "Verified", color: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-400" };
+  if (to === "rejected") return { label: "Rejected", color: "bg-red-100 text-red-700",         dot: "bg-red-400"     };
   return base;
+}
+
+const AVATAR_COLORS = [
+  "bg-violet-500", "bg-blue-500", "bg-emerald-600", "bg-amber-500",
+  "bg-rose-500",   "bg-cyan-600", "bg-indigo-500",  "bg-teal-500",
+];
+function avatarColor(name: string) {
+  const idx = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[idx];
 }
 
 function AuditEntryCard({ entry, isLast }: { entry: AuditEntry; isLast: boolean }) {
@@ -868,25 +888,31 @@ function AuditEntryCard({ entry, isLast }: { entry: AuditEntry; isLast: boolean 
   const dateStr = date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
   const timeStr = date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
   return (
-    <li className={cn("ml-6", !isLast && "pb-4")}>
-      <span className="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white border-2 border-zinc-300 ring-2 ring-white" />
-      <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-zinc-800 text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0">{initials}</div>
-            <span className="text-xs font-semibold text-zinc-800">{name}</span>
-            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", meta.color)}>{meta.label}</span>
+    <li className="relative flex gap-3">
+      {/* timeline spine */}
+      <div className="flex flex-col items-center">
+        <span className={cn("mt-1.5 h-2.5 w-2.5 rounded-full ring-2 ring-white flex-shrink-0", meta.dot)} />
+        {!isLast && <span className="mt-1 flex-1 w-px bg-zinc-200" />}
+      </div>
+      <div className={cn("min-w-0 flex-1", !isLast && "pb-4")}>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className={cn("h-5 w-5 rounded-full text-white flex items-center justify-center text-[9px] font-bold flex-shrink-0", avatarColor(name))}>
+              {initials}
+            </div>
+            <span className="text-xs font-semibold text-zinc-800 truncate">{name}</span>
+            <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0", meta.color)}>{meta.label}</span>
           </div>
-          <span className="text-[10px] text-zinc-400 whitespace-nowrap">{dateStr} · {timeStr}</span>
+          <span className="text-[10px] text-zinc-400 whitespace-nowrap shrink-0">{dateStr} · {timeStr}</span>
         </div>
         {entry.changes.length > 0 && (
-          <div className="space-y-1 pt-1 border-t border-zinc-200">
+          <div className="mt-1.5 ml-6 space-y-0.5">
             {entry.changes.map((c, ci) => (
-              <div key={ci} className="flex items-start gap-1.5 text-[11px]">
-                <span className="text-zinc-500 font-medium min-w-[110px] shrink-0">{c.field}</span>
-                <span className="text-zinc-400 line-through truncate max-w-[70px]">{c.from}</span>
-                <ArrowRight className="h-3 w-3 text-zinc-300 flex-shrink-0 mt-0.5" />
-                <span className="text-zinc-800 font-medium truncate">{c.to}</span>
+              <div key={ci} className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                <span className="font-medium min-w-[80px] shrink-0 truncate">{c.field}</span>
+                <span className="text-zinc-400 line-through truncate max-w-[60px]">{c.from}</span>
+                <ArrowRight className="h-2.5 w-2.5 text-zinc-300 flex-shrink-0" />
+                <span className="text-zinc-700 font-medium truncate">{c.to}</span>
               </div>
             ))}
           </div>
@@ -900,33 +926,46 @@ function AuditEntryCard({ entry, isLast }: { entry: AuditEntry; isLast: boolean 
 const HistoryPopover: FC<{ log: AuditEntry[] | undefined; loading: boolean; onViewAll: () => void; onClose: () => void }> = ({ log, loading, onViewAll, onClose }) => {
   const preview = log?.slice(0, 2) ?? [];
   return (
-    <div className="absolute left-0 top-full mt-1.5 z-50 w-72 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl p-3 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest">Recent activity</span>
-        <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 p-0.5 rounded"><X className="h-3.5 w-3.5" /></button>
-      </div>
-      {loading ? (
-        <div className="flex items-center justify-center h-16 text-sm text-zinc-400 gap-2">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+    <div className="absolute left-0 top-full mt-2 z-50 w-80 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-2xl overflow-hidden">
+      {/* header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+        <div className="flex items-center gap-2">
+          <History className="h-3.5 w-3.5 text-zinc-400" />
+          <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Recent activity</span>
+          {(log?.length ?? 0) > 0 && (
+            <span className="text-[10px] text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-full">{log!.length}</span>
+          )}
         </div>
-      ) : !preview.length ? (
-        <div className="flex flex-col items-center justify-center h-16 gap-1 text-zinc-400">
-          <span className="text-xs">No history yet</span>
-        </div>
-      ) : (
-        <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
-          {preview.map((entry, i) => (
-            <AuditEntryCard key={entry._id} entry={entry} isLast={i === preview.length - 1} />
-          ))}
-        </ol>
-      )}
-      {(log?.length ?? 0) > 0 && (
-        <button
-          onClick={() => { onClose(); onViewAll(); }}
-          className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-blue-600 hover:text-blue-800 border border-blue-100 hover:border-blue-300 hover:bg-blue-50 rounded-lg py-1.5 transition-colors"
-        >
-          View all {log!.length} entries <ArrowRight className="h-3 w-3" />
+        <button onClick={onClose} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-0.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+          <X className="h-3.5 w-3.5" />
         </button>
+      </div>
+      {/* entries */}
+      <div className="px-4 py-3">
+        {loading ? (
+          <div className="flex items-center justify-center h-14 text-xs text-zinc-400 gap-2">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+          </div>
+        ) : !preview.length ? (
+          <div className="flex items-center justify-center h-14 text-xs text-zinc-400">No history yet</div>
+        ) : (
+          <ol className="space-y-0">
+            {preview.map((entry, i) => (
+              <AuditEntryCard key={entry._id} entry={entry} isLast={i === preview.length - 1} />
+            ))}
+          </ol>
+        )}
+      </div>
+      {/* footer */}
+      {(log?.length ?? 0) > 0 && (
+        <div className="border-t border-zinc-100 dark:border-zinc-800">
+          <button
+            onClick={() => { onClose(); onViewAll(); }}
+            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 py-2.5 transition-colors"
+          >
+            View all {log!.length} entries <ArrowRight className="h-3 w-3" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -934,16 +973,18 @@ const HistoryPopover: FC<{ log: AuditEntry[] | undefined; loading: boolean; onVi
 
 // Full history panel — renders in main content area
 const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; onBack: () => void }> = ({ log, loading, onBack }) => (
-  <div className="flex-1 flex flex-col bg-white">
-    <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-zinc-200 px-6 py-3.5 flex items-center gap-3 shadow-sm">
-      <button onClick={onBack} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all">
+  <div className="flex-1 flex flex-col bg-white dark:bg-zinc-900">
+    <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 px-6 py-3 flex items-center gap-3">
+      <button onClick={onBack} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all">
         <ArrowLeft className="h-4 w-4" />
       </button>
-      <History className="h-4 w-4 text-zinc-400" />
-      <span className="text-sm font-semibold text-zinc-800">Audit History</span>
-      {log && <span className="ml-auto text-[11px] text-zinc-400">{log.length} {log.length === 1 ? "entry" : "entries"}</span>}
+      <div className="flex items-center gap-2">
+        <History className="h-4 w-4 text-zinc-400" />
+        <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Audit History</span>
+        {log && <span className="text-[11px] text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-full">{log.length}</span>}
+      </div>
     </div>
-    <div className="flex-1 overflow-y-auto px-6 py-6 max-w-2xl">
+    <div className="flex-1 overflow-y-auto px-6 py-5 max-w-2xl">
       {loading ? (
         <div className="flex items-center justify-center h-40 text-sm text-zinc-400 gap-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
@@ -954,7 +995,7 @@ const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; on
           <span className="text-sm">No history yet</span>
         </div>
       ) : (
-        <ol className="relative border-l border-zinc-200 ml-3 space-y-0">
+        <ol className="space-y-0">
           {log.map((entry, i) => (
             <AuditEntryCard key={entry._id} entry={entry} isLast={i === log.length - 1} />
           ))}
@@ -1042,7 +1083,7 @@ const UncertaintyFormulaModal: FC<{ open: boolean; onClose: () => void }> = ({ o
     <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle className="text-base font-semibold text-zinc-900">
-          Uncertainty Budget — Calculation Reference
+          Calculation References 
         </DialogTitle>
         <p className="text-xs text-zinc-500 mt-1">
           Each row in the Results table corresponds to a step below. Constants (stdUncPct, accPct, accOffset, leastCount, scopePct) are sourced from the reference standard's calibration certificate.
@@ -1182,10 +1223,24 @@ const SbInstrument: FC<{
           )}>
             {index + 1}
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className={cn("text-xs font-semibold truncate", isActive ? "text-blue-900 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-200")}>{label}</div>
             {sub && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</div>}
             <div className="text-[10px] text-zinc-400 mt-0.5 font-mono">{inst.meta.csrNo || "No CSR yet"}</div>
+            {/* Completion bar */}
+            {(() => {
+              const pct = getInstCompletion(inst);
+              return (
+                <div className="mt-1.5 h-1 rounded-full bg-zinc-100 dark:bg-zinc-700 overflow-hidden">
+                  <div
+                    className={cn("h-full rounded-full transition-all duration-500",
+                      pct === 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-zinc-300 dark:bg-zinc-500"
+                    )}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              );
+            })()}
           </div>
         </div>
         <button
@@ -1557,7 +1612,32 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [tourRun, setTourRun] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const cleanSnapshot = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
+  const [snapshotVersion, setSnapshotVersion] = useState(0);
   const [exitDialog,  setExitDialog]  = useState(false);
+
+  // ── PDF preview ────────────────────────────────────────────────────────────
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfUrls,        setPdfUrls]        = useState<string[]>([]);
+  const [pdfLoading,     setPdfLoading]     = useState(false);
+
+  const activeInstIndex = instruments.findIndex((i) => i.id === activeInstId);
+  const activePdfUrl    = pdfUrls[activeInstIndex] ?? pdfUrls[0] ?? null;
+
+  async function handleTogglePdfPreview() {
+    if (showPdfPreview) { setShowPdfPreview(false); return; }
+    if (pdfUrls.length > 0) { setShowPdfPreview(true); return; }
+    if (!reportId) return;
+    setPdfLoading(true);
+    try {
+      const res = await AUTH_API.get(ENDPOINTS.GET_REPORT_URL(reportId, "calibration"));
+      setPdfUrls(res.data.fileUrls ?? []);
+      setShowPdfPreview(true);
+    } catch {
+      toast.error("Failed to load PDF preview");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   const tourSteps: Step[] = useMemo(() => [
     {
@@ -1650,6 +1730,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setReportMeta(meta);
     setHydrated(true);
     cleanSnapshot.current = { instruments: mapped, reportMeta: meta };
+    setSnapshotVersion((v) => v + 1);
   }, [existingReport, hydrated]);
 
   // For new reports: set snapshot once on first mount
@@ -1663,7 +1744,49 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const isDirty = useMemo(() => {
     if (!cleanSnapshot.current) return false;
     return JSON.stringify({ instruments, reportMeta }) !== JSON.stringify(cleanSnapshot.current);
-  }, [instruments, reportMeta]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instruments, reportMeta, snapshotVersion]);
+
+  // ── Auto-save ──────────────────────────────────────────────────────────────
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [lastSavedAt,    setLastSavedAt]    = useState<Date | null>(null);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Ticker so "saved Xs ago" stays fresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  function timeAgo(d: Date): string {
+    const s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60)  return `${s}s ago`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    return `${Math.floor(s / 3600)}h ago`;
+  }
+
+  useEffect(() => {
+    // Only auto-save in edit mode for draft reports with unsaved changes
+    if (!isEditMode || !isDirty || !hydrated || !userId || !reportId) return;
+    if (existingReport?.status && existingReport.status !== "draft") return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      setAutoSaveStatus("saving");
+      const payload = buildPayload(instruments, "draft", userId, reportMeta);
+      updateCalibrationReport({ reportId, ...payload }, {
+        onSuccess: () => {
+          cleanSnapshot.current = { instruments, reportMeta };
+          setSnapshotVersion((v) => v + 1);
+          setAutoSaveStatus("saved");
+          setLastSavedAt(new Date());
+          queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+        },
+        onError: () => setAutoSaveStatus("error"),
+      });
+    }, 5000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDirty, instruments, reportMeta]);
 
   // Warn on browser refresh / tab close
   useEffect(() => {
@@ -1978,19 +2101,19 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           <div className="flex items-center gap-2.5 mb-3">
             <button
               onClick={() => isDirty ? setExitDialog(true) : router.push("/calibration")}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
             {/* Close button on mobile */}
             <button
-              className="lg:hidden ml-auto p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all"
+              className="lg:hidden ml-auto p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
               onClick={() => setSidebarOpen(false)}
             >
               <X className="h-4 w-4" />
             </button>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-zinc-900 truncate">Jost's Engineering</div>
+              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">Jost's Engineering</div>
               <div className="text-[11px] text-zinc-400">Calibration Lab · Kolkata</div>
             </div>
           </div>
@@ -1999,7 +2122,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               <div className="relative">
                 <button
                   onClick={() => setHistoryPopover((v) => !v)}
-                  className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+                  className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                 >
                   <History className="h-3 w-3" />
                   History
@@ -2023,14 +2146,11 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 Tour
               </button>
             )}
-            <span className={cn(
-              "inline-flex text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border",
-              isEditMode
-                ? "bg-amber-50 text-amber-600 border-amber-200"
-                : "bg-blue-50 text-blue-600 border-blue-200"
-            )}>
-              {isEditMode ? "Editing report" : "New report"}
-            </span>
+            {!isEditMode && (
+              <span className="inline-flex text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60">
+                New report
+              </span>
+            )}
           </div>
         </div>
 
@@ -2039,7 +2159,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
             Instruments
           </span>
-          <span className="text-[10px] text-zinc-400 font-mono bg-zinc-100 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] text-zinc-400 font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
             {instruments.length}
           </span>
         </div>
@@ -2097,7 +2217,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* Mobile sidebar toggle */}
             <button
-              className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-all shrink-0"
+              className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all shrink-0"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-4 w-4" />
@@ -2129,7 +2249,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
                 readOnly={activeParam.isPredefined}
                 placeholder="Parameter name"
-                className="text-lg font-semibold text-zinc-900 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300"
+                className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
               />
             ) : (
               <div className="text-lg font-semibold text-zinc-300">No parameters yet</div>
@@ -2142,25 +2262,75 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
           <div className="flex items-center gap-2 lg:gap-3 shrink-0">
             {activeParam && (
-            <div className="hidden sm:flex items-center gap-1.5 border-r border-zinc-200 pr-3">
+            <div className="hidden sm:flex items-center gap-1.5 border-r border-zinc-200 dark:border-zinc-700 pr-3">
               <span className="text-xs text-zinc-400">Unit</span>
               <input
                 value={activeParam.unit}
                 onChange={(e) => updateParam(activeInstId, { ...activeParam, unit: e.target.value })}
                 placeholder="V"
-                className="w-16 h-8 font-mono text-sm text-center rounded-lg border border-zinc-200 bg-white outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                className="w-16 h-8 font-mono text-sm text-center rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 transition-all"
               />
             </div>
             )}
 
+            {isEditMode && (
+              <span className={cn(
+                "inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all",
+                autoSaveStatus === "saving"
+                  ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
+                  : autoSaveStatus === "error"
+                  ? "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+                  : autoSaveStatus === "saved" && !isDirty
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                  : isDirty
+                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800/60"
+                  : "bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700"
+              )}>
+                {autoSaveStatus === "saving" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                {autoSaveStatus === "saving"
+                  ? "Saving…"
+                  : autoSaveStatus === "error"
+                  ? "Save failed"
+                  : autoSaveStatus === "saved" && !isDirty && lastSavedAt
+                  ? `Saved ${timeAgo(lastSavedAt)}`
+                  : isDirty
+                  ? "Unsaved changes"
+                  : "Up to date"}
+              </span>
+            )}
+
             <div className="flex gap-1.5 lg:gap-2" data-tour="save-submit">
+              {isEditMode && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTogglePdfPreview}
+                  disabled={pdfLoading}
+                  className={cn(
+                    "gap-1.5 px-2.5 lg:px-3 transition-colors",
+                    showPdfPreview
+                      ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400"
+                      : ""
+                  )}
+                >
+                  {pdfLoading
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : showPdfPreview
+                      ? <EyeOff className="h-3.5 w-3.5" />
+                      : <Eye className="h-3.5 w-3.5" />
+                  }
+                  <span className="hidden sm:inline">
+                    {pdfLoading ? "Loading…" : showPdfPreview ? "Edit" : "Preview"}
+                  </span>
+                </Button>
+              )}
               <Button
                 data-tour="compute-btn"
                 variant="outline"
                 size="sm"
                 onClick={() => handleCompute(activeInstId)}
                 disabled={isComputing || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
-                className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50 hover:border-violet-300 px-2.5 lg:px-3"
+                className="gap-1.5 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:border-violet-300 dark:hover:border-violet-700 px-2.5 lg:px-3"
               >
                 {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
                 <span className="hidden sm:inline">{isComputing ? "Computing…" : "Compute"}</span>
@@ -2187,8 +2357,113 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           </div>
         </div>
 
+        {/* ── Status timeline ── */}
+        {isEditMode && existingReport && (
+          <div className="flex items-center gap-0 px-4 lg:px-8 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/50 overflow-x-auto shrink-0">
+            {(() => {
+              const current = (existingReport as any)?.status ?? "draft";
+              const isRejected = current === "rejected";
+
+              const ORDER  = isRejected
+                ? ["draft", "submitted", "rejected"] as const
+                : ["draft", "submitted", "verified"] as const;
+              const LABELS: Record<string, string> = { draft: "Draft", submitted: "Submitted", verified: "Verified", rejected: "Rejected" };
+
+              const normalOrder = ["draft", "submitted", "verified", "rejected"];
+              const currentIdx  = normalOrder.indexOf(current);
+
+              return ORDER.map((step, i) => {
+                const stepNormalIdx = normalOrder.indexOf(step);
+                const isDone    = stepNormalIdx < currentIdx;
+                const isCurrent = step === current;
+                const ts: string | undefined =
+                  step === "draft"     ? (existingReport as any)?.createdAt :
+                  step === "submitted" ? (existingReport as any)?.submittedAt ?? (currentIdx >= 1 ? (existingReport as any)?.updatedAt : undefined) :
+                  step === "verified"  ? (existingReport as any)?.verifiedAt  ?? (currentIdx >= 3 ? (existingReport as any)?.updatedAt : undefined) :
+                  step === "rejected"  ? (existingReport as any)?.rejectedAt  ?? (isRejected ? (existingReport as any)?.updatedAt : undefined) :
+                  undefined;
+                return (
+                  <div key={step} className="flex items-center gap-0 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "w-2 h-2 rounded-full shrink-0 transition-colors",
+                        isCurrent && isRejected       ? "bg-red-500 ring-2 ring-red-200 dark:ring-red-900" :
+                        isCurrent && current !== "verified" ? "bg-blue-500 ring-2 ring-blue-200 dark:ring-blue-900" :
+                        isCurrent ? "bg-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-900" :
+                        isDone    ? "bg-emerald-500" : "bg-zinc-200 dark:bg-zinc-700"
+                      )} />
+                      <div className="leading-tight">
+                        <span className={cn(
+                          "text-[11px] font-semibold",
+                          isCurrent && isRejected ? "text-red-600 dark:text-red-400" :
+                          isCurrent ? "text-zinc-900 dark:text-zinc-100" :
+                          isDone    ? "text-emerald-600 dark:text-emerald-400" :
+                                      "text-zinc-400 dark:text-zinc-600"
+                        )}>
+                          {LABELS[step]}
+                        </span>
+                        {ts && (
+                          <span className="ml-1.5 text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">
+                            {new Date(ts).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {i < ORDER.length - 1 && (
+                      <div className={cn(
+                        "w-8 lg:w-14 h-px mx-3",
+                        isDone ? "bg-emerald-300 dark:bg-emerald-800" : "bg-zinc-200 dark:bg-zinc-700"
+                      )} />
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        )}
+
+        {/* ── PDF Preview panel ── */}
+        {showPdfPreview && (
+          <div className="flex flex-col" style={{ height: "calc(100vh - 57px)" }}>
+            {/* Instrument tabs — one per PDF */}
+            {pdfUrls.length > 1 && (
+              <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 overflow-x-auto">
+                {instruments.map((inst, idx) => (
+                  <button
+                    key={inst.id}
+                    onClick={() => { setActiveInstId(inst.id); setActiveParamId(""); }}
+                    className={cn(
+                      "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors",
+                      inst.id === activeInstId
+                        ? "text-white"
+                        : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                    )}
+                    style={inst.id === activeInstId ? { backgroundColor: "#1e3a5f" } : {}}
+                  >
+                    {inst.meta.nomenclature || `Instrument ${idx + 1}`}
+                  </button>
+                ))}
+              </div>
+            )}
+            {activePdfUrl ? (
+              <iframe
+                key={activePdfUrl}
+                src={activePdfUrl}
+                className="flex-1 w-full border-0"
+                title="Calibration Certificate Preview"
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3 text-zinc-400">
+                <Eye className="h-8 w-8 opacity-30" />
+                <p className="text-sm">No PDF available for this instrument yet.</p>
+                <p className="text-xs text-zinc-400">Save the report first, then click Preview.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Content area */}
-        <div className="flex-1 px-4 py-4 lg:px-8 lg:py-6 space-y-4">
+        <div className={cn("flex-1 px-4 py-4 lg:px-8 lg:py-6 space-y-4", showPdfPreview && "hidden")}>
 
           {/* Report Details section */}
           <div data-tour="report-details" className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">

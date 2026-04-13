@@ -178,3 +178,44 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Force light mode for auth pages (login / register) ─────────────────────
+   Resets all CSS custom properties to their light-theme values so that
+   shadcn components (which read from vars) always render light regardless
+   of the user's system/app dark-mode setting.
+   ─────────────────────────────────────────────────────────────────────────── */
+.force-light {
+  --background:           oklch(0.99 0.005 264);
+  --foreground:           oklch(0.16 0.02 264);
+  --card:                 oklch(0.995 0.004 264);
+  --card-foreground:      oklch(0.16 0.02 264);
+  --popover:              oklch(0.995 0.004 264);
+  --popover-foreground:   oklch(0.16 0.02 264);
+  --primary:              oklch(0.5 0.22 262);
+  --primary-foreground:   oklch(0.985 0 0);
+  --secondary:            oklch(0.965 0.012 264);
+  --secondary-foreground: oklch(0.22 0.04 264);
+  --muted:                oklch(0.965 0.012 264);
+  --muted-foreground:     oklch(0.52 0.04 264);
+  --accent:               oklch(0.94 0.025 264);
+  --accent-foreground:    oklch(0.38 0.14 264);
+  --destructive:          oklch(0.577 0.245 27.325);
+  --border:               oklch(0.91 0.015 264);
+  --input:                oklch(0.91 0.015 264);
+  --ring:                 oklch(0.5 0.22 262);
+}
+
+/* Override the explicit dark utility hardcodes inside .force-light */
+.dark .force-light .bg-white          { background-color: white; }
+.dark .force-light .bg-zinc-50        { background-color: oklch(0.985 0.002 264); }
+.dark .force-light .bg-zinc-100       { background-color: oklch(0.96 0.005 264); }
+.dark .force-light .bg-zinc-200       { background-color: oklch(0.91 0.015 264); }
+.dark .force-light .text-zinc-900     { color: oklch(0.16 0.02 264); }
+.dark .force-light .text-zinc-800     { color: oklch(0.26 0.03 264); }
+.dark .force-light .text-zinc-700     { color: oklch(0.37 0.04 264); }
+.dark .force-light .text-zinc-600     { color: oklch(0.46 0.04 264); }
+.dark .force-light .text-zinc-500     { color: oklch(0.55 0.03 264); }
+.dark .force-light .text-zinc-400     { color: oklch(0.65 0.02 264); }
+.dark .force-light .border-zinc-100   { border-color: oklch(0.93 0.008 264); }
+.dark .force-light .border-zinc-200   { border-color: oklch(0.91 0.015 264); }
+.dark .force-light .border-zinc-300   { border-color: oklch(0.87 0.018 264); }
