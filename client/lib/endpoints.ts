@@ -37,6 +37,10 @@ export const EP_DRAFTS = () => `/report/drafts/all` as const;
 export const EP_DRAFT_BY_ID = (reportId: string | number) =>
   `/report/drafts/${reportId}`;
 
+export const EP_EQUIPMENTS_BY_ID = (equipmentId: string | number) =>
+  `/equipments/${equipmentId}`;
+
+
 /** PATCH /report/:reportId/draft */
 export const EP_CHANGE_REPORT_DRAFT = (reportId: string | number) =>
   `/report/${reportId}/draft`;
@@ -103,6 +107,8 @@ export const EP_CALIBRATION_AUDIT_LOG = (reportId: string) =>
 export const EP_COMPUTE_CALIBRATION = () =>
   `/calibration-report/compute` as const;
 
+
+export const EP_EQUIPMEMTS = () => `/equipments`
 // ── Legacy namespace export ────────────────────────────────────────────────
 // Keeps existing call-sites working while the codebase is migrated to the
 // named exports above.  Remove once all imports are updated.
@@ -128,4 +134,5 @@ export const ENDPOINTS = {
   VERIFY_REJECT_CALIBRATION_REPORT: EP_VERIFY_REJECT_CALIBRATION,
   GET_CALIBRATION_AUDIT_LOG:        EP_CALIBRATION_AUDIT_LOG,
   COMPUTE_CALIBRATION_PREVIEW:      EP_COMPUTE_CALIBRATION,
+  GET_EQUIPMENTS:  EP_EQUIPMEMTS
 } as const;

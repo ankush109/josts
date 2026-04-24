@@ -8,6 +8,33 @@
 import { z } from "zod";
 
 // ── Shared rules ───────────────────────────────────────────────────────────
+export interface EquipmentParameter {
+  parameterName: string;
+  stdInputCurrent: number;
+  actualDropVoltage: number;
+  expectedDropVoltage: number;
+  deviationMv: number;
+  errorPct: number;
+  expandedUncertaintyPct: number;
+}
+
+export interface Equipment {
+  _id: string;
+  equipmentName: string;
+  make?: string;
+  model?: string;
+  serialNo?: string;
+  idNo: string;
+  certificateNo?: string;
+  calLab?: string;
+  calDate?: string | Date;
+  nextDue?: string | Date | null;
+  nablCert?: string;
+  isActive: boolean;
+  parameters?: EquipmentParameter[];
+  createdAt: string;
+  updatedAt: string;
+}
 
 const passwordSchema = z
   .string()

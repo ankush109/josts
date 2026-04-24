@@ -19,6 +19,7 @@ import jostLogo from "../public/logo.png";
 const NAV_LINKS = [
   { href: "/calibration", label: "Calibration Reports", icon: FileText },
   { href: "/drafts",      label: "Drafts",               icon: FilePlus  },
+    { href: "/equipments",      label: "Equipments",               icon: FilePlus  },
 ] as const;
 
 /**

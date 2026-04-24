@@ -10,7 +10,7 @@ import authRoutes        from "./auth.routes.js";
 import userRoutes        from "./user.routes.js";
 import calibrationRoutes from "./calibration.routes.js";
 import reportRoutes      from "./report.routes.js";
-
+import equipmentRoutes   from "./equipments.js"
 const router = Router();
 
 /** Liveness probe — no auth required. */
@@ -22,5 +22,6 @@ router.use("/auth",               authRoutes);
 router.use("/user",               userRoutes);
 router.use("/calibration-report", calibrationRoutes);
 router.use("/report",             reportRoutes);
+router.use("/equipments", equipmentRoutes)
 
 export default router;
