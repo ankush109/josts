@@ -54,6 +54,18 @@ Fully editable:
 - History panel: GET `/instruments/:id/history`
 - Save = PUT `/instruments/:id` with full draft body
 
+## Equipment Editor (`equipments/[equipmentId]/page.tsx`)
+
+Same pattern as the instrument editor but for reference-standard masters:
+- **View mode** by default — preserves the original styled cards (Identity + Calibration Details + Parameters table)
+- **Edit** toggle in the top bar swaps fields/cells to inputs (`Field`, `DateField`, table cells become `Input`s)
+- **Save / Cancel** with dirty detection
+- **Activate / Deactivate** button always available
+- **History** panel at the bottom — `useGetEquipmentHistory(id)`
+- Mutations: `useUpdateEquipment`, `useSetEquipmentActive` in `hooks/mutate/useUpdateEquipment.tsx`
+- Table rows on `/equipments` are clickable (whole `<tr>` → `router.push("/equipments/:id")`)
+- UC column renders `uncertaintyPct` only — absolute uncertainties are converted at import time
+
 ## Calibration Form Notes
 
 - Validation: `formErrors` state is populated on submit/compute. Header badge ("N required fields missing") uses `formErrors.length` when present, else falls back to a CSR+Nomenclature heuristic.
@@ -64,3 +76,15 @@ Fully editable:
 
 - `app/(pages)/drafts/DraftTable.tsx`
 - `app/(pages)/home/Table.tsx`
+
+## Tests
+
+**None.** No test runner, no spec files. Verify visually in the browser via `npm run dev` and rely on `npx tsc --noEmit` for type safety.
+
+## TODOs / Known issues (consolidated)
+
+- **DUC presets — make-only lookup** — `useInstrumentPresets.makeKeyMap` is keyed by `make` alone. If two instruments share a make (e.g. multiple Flukes), only the last iterated wins; the Model dropdown is ignored. Switch to a `make+modelType` composite key when adding a second instrument per make.
+- **`MAKE_TO_INSTRUMENT_KEY` removed** — the calibration form used to import this from `constants.ts`; it's now derived from API data via `useInstrumentPresets`. Don't reintroduce hardcoded mappings.
+- **Calibration form size** — `calibration/calibration.tsx` is ~2800 lines. Resist the urge to "tidy" it in passing; large diffs there are risky. Extract only with clear motivation.
+- **Equipment param-name mismatch** — Excel parameter names ("DC High Current") don't match form names ("DC Current"). UI displays whatever's in the DB, but the server's UC lookup misses for most ref-equipments. Fix is server-side (synonym map).
+- **No optimistic updates** — mutations rely on query invalidation in `onSuccess`. Fine for low-traffic admin pages; if a list ever needs snappier feedback, add `onMutate` cache writes.
