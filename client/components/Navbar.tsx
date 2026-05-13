@@ -10,7 +10,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { FileText, FilePlus } from "lucide-react";
+import { FileText, FilePlus, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserMenu } from "./UserMenu";
 import jostLogo from "../public/logo.png";
@@ -20,6 +20,7 @@ const NAV_LINKS = [
   { href: "/calibration", label: "Calibration Reports", icon: FileText },
   { href: "/drafts",      label: "Drafts",               icon: FilePlus  },
     { href: "/equipments",      label: "Equipments",               icon: FilePlus  },
+  { href: "/instruments",     label: "Instruments",          icon: FlaskConical },
 ] as const;
 
 /**

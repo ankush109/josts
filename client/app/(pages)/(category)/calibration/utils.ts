@@ -12,7 +12,39 @@ import type {
   Parameter,
   ReportMeta,
 } from "@/types/calibration";
-import { INSTRUMENT_PRESETS, BLANK_INSTRUMENT_META } from "./constants";
+import { BLANK_INSTRUMENT_META, type InstrumentPreset } from "./constants";
+
+/** Map of instrument key (e.g. "Fluke 8846A") → preset data. */
+export type InstrumentPresetMap = Record<string, InstrumentPreset>;
+
+// ── Nom-value parsing ──────────────────────────────────────────────────────
+
+const NOM_PATTERN = /^(-?\d*\.?\d+)\s*([a-zµ°Ω]+)?$/i;
+
+// Normalise whatever the user types to the canonical unit string used by toSI.
+const UNIT_CANONICAL: Record<string, string> = {
+  mv: "mV", v: "V", kv: "kV",
+  ua: "µA", µa: "µA", ma: "mA", a: "A", ka: "kA",
+  mω: "mΩ", ω: "Ω", kω: "kΩ", mω2: "MΩ", mΩ: "MΩ",
+  hz: "Hz", khz: "kHz", mhz: "MHz",
+  "°c": "°C", c: "°C",
+};
+
+/**
+ * Parses a user-entered nominal value string that may include a unit suffix.
+ * Case-insensitive: "1mv", "1mV", "0.4v", "40" all parse correctly.
+ * Returns null if the string is not a valid number (with optional unit).
+ */
+export function parseNomInput(raw: string): { value: number; unit: string } | null {
+  if (!raw?.trim()) return null;
+  const m = raw.trim().match(NOM_PATTERN);
+  if (!m) return null;
+  const value = parseFloat(m[1]);
+  if (isNaN(value)) return null;
+  const rawUnit = m[2] ?? "";
+  const unit = UNIT_CANONICAL[rawUnit.toLowerCase()] ?? rawUnit;
+  return { value, unit };
+}
 
 // ── ID generation ──────────────────────────────────────────────────────────
 
@@ -39,6 +71,7 @@ export function makeMeasurement(): Measurement {
   return {
     id:       uid(),
     nomValue: "",
+    nomUnit:  "",
     readings: emptyReadings(),
     corrected: "",
     computed:  null,
@@ -48,22 +81,24 @@ export function makeMeasurement(): Measurement {
 /**
  * Creates a new parameter, optionally pre-populated from the instrument preset.
  *
- * When `name` matches a key in the preset for `instrumentKey`, the parameter
+ * When `name` matches a key in `presets[instrumentKey]`, the parameter
  * gets predefined ranges and units. When `loadExamples` is true, sample
  * readings are loaded from the preset as well.
  *
  * @param name           - Parameter display name (e.g. "DC Voltage")
  * @param unit           - Unit string override; falls back to preset unit
- * @param instrumentKey  - Key into `INSTRUMENT_PRESETS` (e.g. "Fluke 8846A")
+ * @param instrumentKey  - Key into `presets` (e.g. "Fluke 8846A")
  * @param loadExamples   - When true, pre-fills sample readings from the preset
+ * @param presets        - Preset map (typically from `useInstrumentPresets`)
  */
 export function makeParam(
   name = "",
   unit = "",
   instrumentKey = "",
   loadExamples = false,
+  presets: InstrumentPresetMap = {},
 ): Parameter {
-  const preset = INSTRUMENT_PRESETS[instrumentKey];
+  const preset = presets[instrumentKey];
   const predefinedLabels = preset?.params[name];
 
   if (predefinedLabels) {
@@ -81,6 +116,7 @@ export function makeParam(
             ? samples[ri].map(([nom, readings]) => ({
                 id:        uid(),
                 nomValue:  nom,
+                nomUnit:   "",
                 readings,
                 corrected: "",
                 computed:  null,
@@ -133,7 +169,8 @@ export type ParamStatus = "empty" | "partial" | "error" | "ok";
 export function isOutOfRange(val: string, nomValue: string): boolean {
   if (val === "" || nomValue === "") return false;
   const reading = parseFloat(val);
-  const nom     = parseFloat(nomValue);
+  const parsed  = parseNomInput(nomValue);
+  const nom     = parsed?.value ?? parseFloat(nomValue);
   if (isNaN(reading) || isNaN(nom)) return false;
   return reading >= nom + 1;
 }
@@ -263,17 +300,23 @@ export function buildPayload(
         srNo:         inst.meta.refSrNo,
         calDueDate:   inst.meta.refCalDue || undefined,
         traceability: inst.meta.refTraceability,
+        equipmentId:  inst.meta.refEquipmentId,
+
       },
       parameters: inst.params.map((p) => ({
         name:   p.name,
         unit:   p.unit,
         ranges: p.ranges.map((r) => ({
           label: r.label,
-          measurements: r.measurements.map((m) => ({
-            nomValue:  m.nomValue === "" ? null : Number(m.nomValue),
-            readings:  m.readings.map((v) => (v === "" ? null : Number(v))),
-            corrected: m.corrected,
-          })),
+          measurements: r.measurements.map((m) => {
+            const parsed = parseNomInput(m.nomValue);
+            return {
+              nomValue:  parsed ? parsed.value : (m.nomValue === "" ? null : Number(m.nomValue)),
+              nomUnit:   parsed?.unit || "",
+              readings:  m.readings.map((v) => (v === "" ? null : Number(v))),
+              corrected: m.corrected,
+            };
+          }),
         })),
       })),
     })),
@@ -286,8 +329,12 @@ export function buildPayload(
  * Maps the raw API report response to the frontend `Instrument[]` state shape.
  *
  * @param apiReport - Raw report document as returned by the API
+ * @param presets   - Preset map used to mark `isPredefined` on parameters
  */
-export function mapApiToInstruments(apiReport: Record<string, unknown>): Instrument[] {
+export function mapApiToInstruments(
+  apiReport: Record<string, unknown>,
+  presets: InstrumentPresetMap = {},
+): Instrument[] {
   const instruments = (apiReport.instruments as unknown[]) ?? [];
   return instruments.map((inst: any) => ({
     id: inst._id ?? uid(),
@@ -312,12 +359,15 @@ export function mapApiToInstruments(apiReport: Record<string, unknown>): Instrum
         ? inst.refStandard.calDueDate.slice(0, 10)
         : "",
       refTraceability: inst.refStandard?.traceability ?? "",
+      refEquipmentId:  inst.refStandard?.equipmentId
+        ? String(inst.refStandard.equipmentId)
+        : "",
     },
     params: (inst.parameters ?? []).map((p: any) => ({
       id:           p._id ?? uid(),
       name:         p.name ?? "",
       unit:         p.unit ?? "",
-      isPredefined: Object.values(INSTRUMENT_PRESETS).some(
+      isPredefined: Object.values(presets).some(
         (preset) => p.name in preset.params,
       ),
       ranges: (p.ranges ?? []).map((r: any) => ({
@@ -325,7 +375,10 @@ export function mapApiToInstruments(apiReport: Record<string, unknown>): Instrum
         label: r.label ?? "",
         measurements: (r.measurements ?? []).map((m: any) => ({
           id:        m._id ?? uid(),
-          nomValue:  m.nomValue != null ? String(m.nomValue) : "",
+          nomValue:  m.nomValue != null
+            ? (m.nomUnit ? `${m.nomValue}${m.nomUnit}` : String(m.nomValue))
+            : "",
+          nomUnit:   "",
           readings:  Array(5)
             .fill("")
             .map((_, i) =>

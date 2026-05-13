@@ -13,9 +13,11 @@
 
 import mongoose             from "mongoose";
 import CalibrationReport    from "../models/Calibration.js";
+import Equipment            from "../models/Equipment.js";
 import User                 from "../models/User.js";
 import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
 import { getInstrumentLookup, MAKE_TO_INSTRUMENT_KEY } from "../constants/instrument-specs.js";
+import { toSI }                     from "../utils/unit-normalize.js";
 import { pushPdfJobToRedis }        from "../lib/redis.js";
 import logger                       from "../lib/logger.js";
 import { logAudit, computeDiff, getAuditLog } from "./audit.service.js";
@@ -34,6 +36,141 @@ function getInitials(name = "") {
     .split(/\s+/)
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
+}
+
+/**
+ * Finds the closest uncertainty% from a master equipment document for a given
+ * measurement point. Matches by parameter name (case-insensitive) then picks
+ * the entry whose stdValue (SI-normalized) is closest to nomValue (SI-normalized).
+ *
+ * @param {object} equipment  - Master equipment document (lean)
+ * @param {string} paramName  - e.g. "DC Voltage"
+ * @param {number} nomValue   - The nominal value as stored (numeric)
+ * @param {string} unit       - Unit for nomValue (e.g. "mV", "V")
+ * @returns {number|null}     - uncertaintyPct, or null if no match
+ */
+function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
+  if (nomValue == null || !equipment?.parameters?.length) return null;
+
+  const normalize  = (s) => (s ?? "").toLowerCase().replace(/\s+/g, "");
+  const targetName = normalize(paramName);
+
+  // First match by name only — separate from the uncertainty check so we can give a precise error
+  const byName = equipment.parameters.filter(
+    (p) => normalize(p.parameterName) === targetName
+  );
+
+  if (!byName.length) {
+    logger.warn("[Traceability] No matching parameter found in master equipment", {
+      masterEquipment: equipment.equipmentName,
+      searchedFor:     paramName,
+      availableParams: [...new Set(equipment.parameters.map((p) => p.parameterName))],
+    });
+    return null;
+  }
+
+  // Accept entries that have either uncertaintyPct OR uncertaintyAbs (RTD etc.)
+  const candidates = byName.filter(
+    (p) => p.uncertaintyPct != null || p.uncertaintyAbs != null
+  );
+
+  if (!candidates.length) {
+    logger.error(
+      `\x1b[31m[Traceability] ❌ UC% NOT FOUND — parameter "${paramName}" exists in master equipment ` +
+      `"${equipment.equipmentName}" but has NO uncertainty value stored. ` +
+      `Add uncertaintyPct or uncertaintyAbs to the equipment entries.\x1b[0m`
+    );
+    return null;
+  }
+
+  const nomSI = toSI(nomValue, unit);
+
+  logger.info("[Traceability] Looking up UC% from master equipment", {
+    masterEquipment: equipment.equipmentName,
+    parameter:       paramName,
+    nomValue:        `${nomValue} ${unit}`.trim(),
+    nomValueSI:      `${nomSI} V/A/Ω (SI base)`,
+    candidateCount:  candidates.length,
+  });
+
+  let closest = null;
+  let minDist  = Infinity;
+
+  for (const entry of candidates) {
+    const entrySI = toSI(entry.stdValue ?? 0, entry.unit ?? "");
+    const dist    = Math.abs(entrySI - nomSI);
+
+    logger.debug("[Traceability] Candidate entry", {
+      range:          entry.range,
+      subRange:       entry.subRange,
+      stdValue:       `${entry.stdValue} ${entry.unit}`,
+      stdValueSI:     entrySI,
+      distanceFromNom: dist,
+      uncertaintyPct: entry.uncertaintyPct,
+    });
+
+    if (dist < minDist) { minDist = dist; closest = entry; }
+  }
+
+  // Resolve effective uncertaintyPct — use direct % value if available,
+  // otherwise derive from absolute uncertainty: (uncertaintyAbs / |nomValue|) × 100
+  let effectiveUncPct = closest.uncertaintyPct ?? null;
+  const source = closest.uncertaintyPct != null ? "direct" : "derived_from_abs";
+  if (effectiveUncPct == null && closest.uncertaintyAbs != null && nomValue !== 0) {
+    effectiveUncPct = (closest.uncertaintyAbs / Math.abs(nomValue)) * 100;
+  }
+
+  logger.info("[Traceability] Selected closest master equipment entry", {
+    masterEquipment:  equipment.equipmentName,
+    parameter:        paramName,
+    nomValue:         `${nomValue} ${unit}`.trim(),
+    matchedRange:     closest.range ?? "—",
+    matchedSubRange:  closest.subRange ?? "—",
+    matchedStdValue:  `${closest.stdValue} ${closest.unit}`,
+    distanceSI:       minDist,
+    source,
+    uncertaintyPct:   `±${effectiveUncPct}%  ← this becomes stdUncPct`,
+  });
+
+  return {
+    uncertaintyPct: effectiveUncPct,
+    equipmentId:    String(equipment._id),
+    equipmentName:  equipment.equipmentName,
+    range:          closest.range    ?? null,
+    subRange:       closest.subRange ?? null,
+    stdValue:       closest.stdValue,
+    unit:           closest.unit,
+    source,
+  };
+}
+
+/**
+ * Pre-fetches master equipment documents for every `refStandard.equipmentId`
+ * referenced by the instruments array.
+ *
+ * @param {object[]} instruments
+ * @returns {Promise<Record<string, object>>} equipmentId → Equipment (lean)
+ */
+async function buildEquipmentMap(instruments) {
+  const ids = [...new Set(
+    (instruments ?? [])
+      .map((i) => i.refStandard?.equipmentId)
+      .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)))
+  )];
+
+  if (!ids.length) {
+    logger.info("[Traceability] No master equipment linked to any instrument — will use hardcoded constants for all UC% values");
+    return {};
+  }
+
+  const docs = await Equipment.find({ _id: { $in: ids } }).lean();
+
+  logger.info("[Traceability] Fetched master equipment for UC% lookup", {
+    requestedIds: ids.map(String),
+    found: docs.map((e) => ({ id: String(e._id), name: e.equipmentName, parameterCount: e.parameters?.length ?? 0 })),
+  });
+
+  return Object.fromEntries(docs.map((e) => [String(e._id), e]));
 }
 
 /**
@@ -69,14 +206,19 @@ async function generateCertNo(userId, customerName) {
  * @param {object[]} instruments - Array of instrument objects from the request.
  * @returns {object[]} Same array with `computed` fields populated.
  */
-export function injectComputed(instruments) {
+/**
+ * @param {object[]} instruments
+ * @param {Record<string, object>} equipmentMap - equipmentId → Equipment doc (pre-fetched)
+ */
+export function injectComputed(instruments, equipmentMap = {}) {
   if (!Array.isArray(instruments)) return instruments;
 
   return instruments.map((inst) => {
-    const instrumentName = MAKE_TO_INSTRUMENT_KEY[inst.make] ?? `${inst.make} ${inst.modelType}`.trim();
-    const lookup         = getInstrumentLookup(instrumentName);
+    const instrumentName   = MAKE_TO_INSTRUMENT_KEY[inst.make] ?? `${inst.make} ${inst.modelType}`.trim();
+    const lookup           = getInstrumentLookup(instrumentName);
+    const masterEquipment  = equipmentMap[String(inst.refStandard?.equipmentId ?? "")] ?? null;
 
-    if (!lookup || Object.keys(lookup).length === 0) {
+    if (!masterEquipment && (!lookup || Object.keys(lookup).length === 0)) {
       logger.warn("No calibration constants found for instrument", { instrumentName, make: inst.make });
     }
 
@@ -90,21 +232,55 @@ export function injectComputed(instruments) {
           return {
             ...range,
             measurements: (range.measurements ?? []).map((m) => {
-              if (!constants || m.nomValue == null) {
-                return { ...m, computed: null };
+              if (m.nomValue == null) return { ...m, computed: null };
+
+              // Determine stdUncPct: prefer master equipment lookup, fall back to constants
+              const effectiveUnit = m.nomUnit?.trim() || param.unit?.trim() || "";
+              const masterMatch   = masterEquipment
+                ? lookupMasterUncertainty(masterEquipment, param.name, m.nomValue, effectiveUnit)
+                : null;
+              const stdUncPct = masterMatch?.uncertaintyPct ?? constants?.stdUncPct;
+
+              if (masterMatch != null) {
+                logger.debug("[Traceability] Using master equipment UC% for measurement", {
+                  param: param.name, range: range.label, nomValue: `${m.nomValue} ${effectiveUnit}`.trim(), stdUncPct,
+                });
+              } else if (constants?.stdUncPct != null) {
+                logger.debug("[Traceability] No master equipment match — falling back to hardcoded constants", {
+                  param: param.name, range: range.label, nomValue: m.nomValue, stdUncPct: constants.stdUncPct,
+                });
               }
+
+              if (stdUncPct == null && !constants) return { ...m, computed: null };
 
               const budget = computeUncertaintyBudget({
                 nomValue:   m.nomValue,
                 readings:   (m.readings ?? []).filter((r) => r != null && !isNaN(r)),
-                stdUncPct:  constants.stdUncPct,
-                accPct:     constants.accPct,
-                accOffset:  constants.accOffset,
-                leastCount: constants.leastCount,
-                scopePct:   constants.scopePct,
+                stdUncPct,
+                accPct:     constants?.accPct,
+                accOffset:  constants?.accOffset,
+                leastCount: constants?.leastCount,
+                scopePct:   constants?.scopePct,
               });
 
-              return { ...m, computed: budget };
+              return {
+                ...m,
+                computed: {
+                  ...budget,
+                  tracedFrom: masterMatch
+                    ? {
+                        equipmentId:    masterMatch.equipmentId,
+                        equipmentName:  masterMatch.equipmentName,
+                        range:          masterMatch.range,
+                        subRange:       masterMatch.subRange,
+                        stdValue:       masterMatch.stdValue,
+                        unit:           masterMatch.unit,
+                        uncertaintyPct: masterMatch.uncertaintyPct,
+                        source:         masterMatch.source,
+                      }
+                    : null,
+                },
+              };
             }),
           };
         }),
@@ -123,13 +299,16 @@ export function injectComputed(instruments) {
  * @returns {Promise<object>} The created Mongoose document.
  */
 export async function createReport(data, userId) {
-  const certNo = await generateCertNo(data.createdBy ?? userId, data.customerName);
+  const [certNo, equipmentMap] = await Promise.all([
+    generateCertNo(data.createdBy ?? userId, data.customerName),
+    buildEquipmentMap(data.instruments ?? []),
+  ]);
 
   const report = await CalibrationReport.create({
     ...data,
     csrNo:       data.csrNo.trim(),
     certNo,
-    instruments: injectComputed(data.instruments ?? []),
+    instruments: injectComputed(data.instruments ?? [], equipmentMap),
     signatures: {
       ...(data.signatures ?? {}),
       calibratedBy: data.createdBy ?? userId,
@@ -258,7 +437,8 @@ export async function updateReport(reportId, updates) {
   const { _id, createdBy, createdAt, __v, signatures: _sig, _updatedBy, ...safeUpdates } = updates;
 
   if (safeUpdates.instruments) {
-    safeUpdates.instruments = injectComputed(safeUpdates.instruments);
+    const equipmentMap = await buildEquipmentMap(safeUpdates.instruments);
+    safeUpdates.instruments = injectComputed(safeUpdates.instruments, equipmentMap);
   }
 
   // Fetch old doc for diff + calibratedBy backfill

@@ -1,5 +1,9 @@
 import mongoose  from "mongoose";
 import Equipment from "../models/Equipment.js";
+import {
+  computeEquipmentDiff,
+  logEquipmentAudit,
+} from "./equipment-audit.service.js";
 
 
 export const getEquipments = async(reqQuery,reqUser)=>{
@@ -68,4 +72,46 @@ export const getEquipmentById = async (id) => {
   } catch (error) {
     throw error;
   }
+};
+
+export const updateEquipment = async (id, payload, userId) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    const err = new Error("Invalid Equipment ID format");
+    err.statusCode = 400;
+    throw err;
+  }
+  const before = await Equipment.findById(id).lean();
+  if (!before) {
+    const err = new Error("Equipment not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const updated = await Equipment.findByIdAndUpdate(id, payload, {
+    new: true,
+    runValidators: true,
+  }).lean();
+
+  const changes = computeEquipmentDiff(before, updated);
+  if (changes.length > 0) {
+    const action =
+      before.isActive !== updated.isActive
+        ? (updated.isActive ? "activated" : "deactivated")
+        : "updated";
+    await logEquipmentAudit({
+      equipmentId: updated._id,
+      action,
+      performedBy: userId,
+      changes,
+    });
+  }
+  return updated;
+};
+
+export const setEquipmentActive = async (id, isActive, userId) => {
+  return updateEquipment(id, { isActive }, userId);
+};
+
+export const deleteEquipment = async (id, userId) => {
+  return updateEquipment(id, { isActive: false }, userId);
 };

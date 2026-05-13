@@ -109,6 +109,32 @@ export const EP_COMPUTE_CALIBRATION = () =>
 
 
 export const EP_EQUIPMEMTS = () => `/equipments`
+export const EP_EQUIPMENTS_PARAMS_SUMMARY = () => `/equipments/params-summary`
+
+/** PATCH /equipments/:id/active — body `{ isActive: boolean }` */
+export const EP_EQUIPMENT_ACTIVE = (id: string | number) =>
+  `/equipments/${id}/active` as const;
+
+/** GET /equipments/:id/history — audit log entries */
+export const EP_EQUIPMENT_HISTORY = (id: string | number) =>
+  `/equipments/${id}/history` as const;
+
+// ── Instruments (DUC instrument master) ────────────────────────────────────
+
+/** GET /instruments  |  POST /instruments */
+export const EP_INSTRUMENTS = () => `/instruments` as const;
+
+/** GET /instruments/:id  |  PUT /instruments/:id  |  DELETE /instruments/:id */
+export const EP_INSTRUMENT_BY_ID = (id: string | number) =>
+  `/instruments/${id}` as const;
+
+/** PATCH /instruments/:id/active — body `{ isActive: boolean }` */
+export const EP_INSTRUMENT_ACTIVE = (id: string | number) =>
+  `/instruments/${id}/active` as const;
+
+/** GET /instruments/:id/history — audit log entries */
+export const EP_INSTRUMENT_HISTORY = (id: string | number) =>
+  `/instruments/${id}/history` as const;
 // ── Legacy namespace export ────────────────────────────────────────────────
 // Keeps existing call-sites working while the codebase is migrated to the
 // named exports above.  Remove once all imports are updated.

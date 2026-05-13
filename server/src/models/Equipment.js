@@ -17,17 +17,18 @@ const equipmentSchema = new Schema(
     nextDue: { type: Date },
     nablCert: { type: String },                          // "CC-3385"
 
-    // From Image 1 - Calibration Results
-    nominalRatio: { type: String },                      // "100A/100mV"
+    nominalRatio: { type: String },
     parameters: [
       {
-        parameterName: { type: String },                 // "DC High Current"
-        stdInputCurrent: { type: Number },               // 10.0014
-        actualDropVoltage: { type: Number },             // 9.9793 (UUC mV)
-        expectedDropVoltage: { type: Number },           // 10.0014 (DUC mV)
-        deviationMv: { type: Number },                   // -0.0221
-        errorPct: { type: Number },                      // -0.22
-        expandedUncertaintyPct: { type: Number },        // ±0.17
+        parameterName:  { type: String },  // "DC Voltage", "AC Current"
+        range:          { type: String },  // "100 mV", "11 V"
+        subRange:       { type: String },  // "1 mV", "10 mV"
+        stdValue:       { type: Number },  // nominal std value in `unit`
+        ducReading:     { type: Number },  // actual reading by DUC
+        unit:           { type: String },  // "mV", "V", "µA", "A", "Ω", "kHz"
+        errorPct:       { type: Number },
+        uncertaintyPct: { type: Number },  // expanded uncertainty % from cert
+        remarks:        { type: String },
       },
     ],
 

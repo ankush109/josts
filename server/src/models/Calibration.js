@@ -45,6 +45,20 @@ const computedSchema = new mongoose.Schema(
     scopeClaimed:        { type: Number, default: null },
     resultedExpandedUc:  { type: Number, default: null },
     percentUc:           { type: Number, default: null },
+    // Which master equipment entry was used for stdUncPct
+    tracedFrom: {
+      type: new mongoose.Schema({
+        equipmentId:    { type: String },
+        equipmentName:  { type: String },
+        range:          { type: String },
+        subRange:       { type: String },
+        stdValue:       { type: Number },
+        unit:           { type: String },
+        uncertaintyPct: { type: Number },
+        source:         { type: String }, // "direct" | "derived_from_abs"
+      }, { _id: false }),
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -55,6 +69,7 @@ const computedSchema = new mongoose.Schema(
 const measurementSchema = new mongoose.Schema(
   {
     nomValue:  { type: Number, default: null },
+    nomUnit:   { type: String, trim: true, default: "" },
     readings:  { type: [Number], default: () => Array(5).fill(null) },
     corrected: { type: String, trim: true, default: "" },
     computed:  { type: computedSchema, default: null },
@@ -96,6 +111,7 @@ const refStandardSchema = new mongoose.Schema(
     srNo:         { type: String, trim: true, default: "" },
     calDueDate:   { type: Date },
     traceability: { type: String, trim: true, default: "" },
+    equipmentId:  { type: mongoose.Schema.Types.ObjectId, ref: "Equipment", default: null },
   },
   { _id: false }
 );

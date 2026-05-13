@@ -47,6 +47,7 @@ export interface InstrumentMeta {
   refSrNo: string;
   refCalDue: string;
   refTraceability: string;
+  refEquipmentId :string
 }
 
 // ── Uncertainty budget ─────────────────────────────────────────────────────
@@ -55,6 +56,17 @@ export interface InstrumentMeta {
  * Computed uncertainty budget for a single measurement point.
  * Populated by the server-side compute endpoint.
  */
+export interface TracedFrom {
+  equipmentId:    string;
+  equipmentName:  string;
+  range:          string | null;
+  subRange:       string | null;
+  stdValue:       number;
+  unit:           string;
+  uncertaintyPct: number;
+  source:         "direct" | "derived_from_abs";
+}
+
 export interface ComputedBudget {
   meanValue: number;
   error: number;
@@ -70,6 +82,7 @@ export interface ComputedBudget {
   scopeClaimed: number;
   resultedExpandedUc: number;
   percentUc: number;
+  tracedFrom: TracedFrom | null;
 }
 
 // ── Measurement / Range / Parameter hierarchy ──────────────────────────────
@@ -77,7 +90,10 @@ export interface ComputedBudget {
 /** A single measurement point (nominal value + 5 readings). */
 export interface Measurement {
   id: string;
+  /** Raw input string — may include a unit suffix e.g. "1mV", "0.4V", or plain "40". */
   nomValue: string;
+  /** Parsed unit from nomValue input. Overrides the parameter-level unit for master equipment lookup. */
+  nomUnit: string;
   /** Always exactly 5 readings. */
   readings: string[];
   corrected: string;

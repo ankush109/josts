@@ -44,12 +44,12 @@ import type {
 
 // ─── Constants & utilities (canonical sources) ───────────────────────────────
 import {
-  MAKE_TO_INSTRUMENT_KEY,
-  INSTRUMENT_PRESETS,
   BLANK_REPORT_META,
   BLANK_INSTRUMENT_META as BLANK_META,
   PARAM_STATUS_DOT,
+  type InstrumentPreset,
 } from "./constants";
+import { useInstrumentPresets } from "@/app/hooks/query/useInstrumentPresets";
 import {
   uid,
   makeMeasurement,
@@ -64,6 +64,7 @@ import {
   mapApiToInstruments,
   mapApiToReportMeta,
 } from "./utils";
+import { useGetEquipmentParamSummary } from "@/app/hooks/query/useGetEquipmentParamSummary";
 
 
 // ─── Report-level field helper ─────────────────────────────────────────────────
@@ -127,9 +128,11 @@ const SelectField: FC<{
   span2?: boolean;
   locked?: boolean;
   readOnly?: boolean;
+  /** undefined = no status message; true = "Preset params loaded"; false = "No params found" */
+  presetMatched?: boolean;
   meta: InstrumentMeta;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ label, k, options, span2, locked, readOnly, meta, onChange }) => (
+}> = ({ label, k, options, span2, locked, readOnly, presetMatched, meta, onChange }) => (
   <div className={cn("flex flex-col gap-1.5", span2 && "col-span-2")}>
     <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
       {label}
@@ -156,8 +159,137 @@ const SelectField: FC<{
         </SelectContent>
       </Select>
     )}
+    {presetMatched === true && (
+      <span className="text-[10px] font-medium text-emerald-600">✓ Preset params loaded</span>
+    )}
+    {presetMatched === false && (
+      <span className="text-[10px] font-medium text-amber-600">No params found</span>
+    )}
   </div>
 );
+
+// ─── EquipmentCombobox ────────────────────────────────────────────────────────
+
+type EqOption = { equipmentName: string; _id: string; make?: string; model?: string; serialNo?: string; nextDue?: string; parameters: { parameterName: string }[] };
+
+const EquipmentCombobox: FC<{
+  value: string;
+  equipments: EqOption[];
+  instParamNames: string[];
+  readOnly?: boolean;
+  onChange: (name: string, eq: EqOption) => void;
+}> = ({ value, equipments, instParamNames, readOnly, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, "");
+
+  const rows = useMemo(() => {
+    const q = query.toLowerCase();
+    return equipments
+      .filter((eq) => !q || eq.equipmentName.toLowerCase().includes(q))
+      .map((eq) => {
+        const masterNames = (eq.parameters ?? []).map((p) => normalize(p.parameterName));
+        // A preset param is "covered" if any master param contains it or vice-versa
+        // e.g. "resistance" is covered by "resistance(4-wire)"
+        const isCovered = (n: string) => {
+          const norm = normalize(n);
+          return masterNames.some((m) => m.includes(norm) || norm.includes(m));
+        };
+        const missing = instParamNames.filter((n) => !isCovered(n));
+        return { eq, missing, compatible: missing.length === 0 };
+      })
+      // compatible first, then partial
+      .sort((a, b) => (a.compatible === b.compatible ? 0 : a.compatible ? -1 : 1));
+  }, [equipments, instParamNames, query]);
+
+  const handleSelect = (eq: EqOption) => {
+    onChange(eq.equipmentName, eq);
+    setQuery("");
+    setOpen(false);
+  };
+
+  if (readOnly) {
+    return (
+      <div className="h-9 px-3 flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50/70 dark:bg-zinc-800/50 text-sm text-zinc-600 dark:text-zinc-400">
+        <span className="truncate">{value || "—"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 overflow-hidden">
+      {/* Trigger */}
+      <div
+        className="h-9 px-3 flex items-center justify-between text-sm cursor-pointer select-none"
+        onClick={() => { setOpen((v) => !v); setQuery(""); }}
+      >
+        <span className={value ? "text-zinc-800 dark:text-zinc-100 truncate" : "text-zinc-400"}>
+          {value || "Select equipment…"}
+        </span>
+        <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 shrink-0 ml-2 transition-transform ${open ? "rotate-180" : ""}`} />
+      </div>
+
+      {open && (
+        <div className="border-t border-zinc-100 dark:border-zinc-800">
+          {/* Search */}
+          <div className="p-1.5">
+            <input
+              autoFocus
+              className="w-full h-7 px-2 text-[12px] rounded bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none placeholder:text-zinc-400"
+              placeholder="Search equipment…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+
+          {/* List */}
+          <div className="max-h-56 overflow-y-auto divide-y divide-zinc-50 dark:divide-zinc-800">
+            {rows.length === 0 && (
+              <div className="px-3 py-3 text-[12px] text-zinc-400">No equipment found</div>
+            )}
+            {rows.map(({ eq, missing, compatible }) => (
+              <div
+                key={eq._id}
+                title={`Stored params: ${(eq.parameters ?? []).map(p => p.parameterName).join(" | ") || "(none)"}`}
+                className={`px-3 py-2.5 cursor-pointer flex items-start gap-2.5 transition-colors ${
+                  compatible
+                    ? "hover:bg-emerald-50/60 dark:hover:bg-emerald-950/20"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                }`}
+                onMouseDown={(e) => { e.preventDefault(); handleSelect(eq); }}
+              >
+                {/* tick / cross icon */}
+                <span className={`mt-0.5 shrink-0 text-[13px] ${compatible ? "text-emerald-500" : "text-zinc-300"}`}>
+                  {compatible ? "✓" : "✗"}
+                </span>
+                <div className="min-w-0">
+                  <div className={`text-[12px] font-medium leading-tight ${compatible ? "text-zinc-800 dark:text-zinc-200" : "text-zinc-400 dark:text-zinc-500"}`}>
+                    {eq.equipmentName}
+                  </div>
+                  {!compatible && (
+                    <div className="text-[10px] text-zinc-400 mt-0.5">
+                      Missing: <span className="text-amber-500">{missing.join(", ")}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── MetaGrid ─────────────────────────────────────────────────────────────────
 
@@ -180,17 +312,22 @@ const CollapsibleSection: FC<{
 
 const MetaGrid: FC<{
   meta: InstrumentMeta;
+  instParamNames: string[];
   modelLocked?: boolean;
   showErrors?: boolean;
   autoFocusCsr?: boolean;
   readOnly?: boolean;
+  hasPreset?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ meta, modelLocked, showErrors, autoFocusCsr, readOnly, touched, onTouch, onChange }) => {
+}> = ({ meta, instParamNames, modelLocked, showErrors, autoFocusCsr, readOnly, hasPreset, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const sharedProps = { meta, showErrors, touched, onTouch, onChange, readOnly };
+  const { data: paramSummary } = useGetEquipmentParamSummary();
+  const equipments: EqOption[] = paramSummary ?? [];
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
       <Field label="CSR No"              k="csrNo"         {...sharedProps} required autoFocus={autoFocusCsr} />
@@ -198,7 +335,7 @@ const MetaGrid: FC<{
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
-      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} readOnly={readOnly} meta={meta} onChange={onChange} />
+      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} readOnly={readOnly} presetMatched={hasPreset} meta={meta} onChange={onChange} />
       <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} readOnly={readOnly} meta={meta} onChange={onChange} />
       <Field label="Sl. No"              k="slNo"          {...sharedProps} />
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
@@ -215,7 +352,25 @@ const MetaGrid: FC<{
         <Field label="Model / Type"       k="refModel"       {...sharedProps} />
         <Field label="Sr. No"             k="refSrNo"        {...sharedProps} />
         <Field label="Cal Due Date"       k="refCalDue"      {...sharedProps} type="date" />
-        <Field label="Traceability"       k="refTraceability" {...sharedProps} span2 />
+        <div className="flex flex-col gap-1.5 col-span-2">
+          <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Traceability (Master Equipment)
+          </Label>
+          <EquipmentCombobox
+            value={meta.refTraceability}
+            equipments={equipments}
+            instParamNames={instParamNames}
+            readOnly={readOnly}
+            onChange={(_name, selected) => {
+              onChange("refTraceability", selected.equipmentName);
+              onChange("refEquipmentId", selected._id);
+              onChange("refMake",        selected.make        || "");
+              onChange("refModel",       selected.model       || "");
+              onChange("refSrNo",        selected.serialNo    || "");
+              onChange("refCalDue",      selected.nextDue     || "");
+            }}
+          />
+        </div>
       </CollapsibleSection>
     </div>
   );
@@ -345,8 +500,8 @@ const MeasureTable: FC<{
                     <input
                       value={m.nomValue}
                       readOnly={readOnly}
-                      onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateMeasurement(r.id, m.id, { nomValue: e.target.value }); }}
-                      placeholder="Set/Nom"
+                      onChange={(e) => { if (!readOnly) updateMeasurement(r.id, m.id, { nomValue: e.target.value }); }}
+                      placeholder="e.g. 1mV"
                       className={cn("flex-1 min-w-0 h-6 font-mono text-[11px] text-center bg-background border border-border rounded px-1 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30 placeholder:text-muted-foreground/40", readOnly && "cursor-default")}
                     />
                     {r.measurements.length > 1 && !readOnly && (
@@ -889,7 +1044,7 @@ const ResultsTable: FC<{ param: Parameter }> = ({ param }) => {
               </td>
               {param.ranges.flatMap((r) =>
                 r.measurements.filter((m) => m.computed).map((m) => {
-                  const val = m.computed![row.key];
+                  const val = m.computed![row.key as keyof typeof m.computed];
                   const display = val == null ? "—" : Number(val).toFixed(row.decimals);
                   return (
                     <td key={m.id} className="px-2 py-2 border border-zinc-200 text-center font-mono text-[11px] text-zinc-800">
@@ -900,6 +1055,48 @@ const ResultsTable: FC<{ param: Parameter }> = ({ param }) => {
               )}
             </tr>
           ))}
+          {/* Traceability row */}
+          <tr className="bg-violet-50/60 border-t-2 border-violet-200">
+            <td className="px-3 py-2 border border-violet-200 text-[11px] text-violet-700 font-semibold whitespace-nowrap sticky left-0 bg-violet-50 z-10">
+              UC% ref used
+            </td>
+            {param.ranges.flatMap((r) =>
+              r.measurements.filter((m) => m.computed).map((m) => {
+                const tf = m.computed!.tracedFrom;
+                return (
+                  <td key={m.id} className="px-2 py-2 border border-violet-200 text-center text-[10px]">
+                    {tf ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="cursor-help space-y-0.5">
+                            <div className="font-semibold text-violet-700">{tf.equipmentName}</div>
+                            <div className="text-violet-500">{[tf.range, tf.subRange].filter(Boolean).join(" · ")}</div>
+                            <div className="font-mono text-violet-600">±{tf.uncertaintyPct}%</div>
+                            {tf.source === "derived_from_abs" && (
+                              <div className="text-amber-600 text-[9px]">derived from abs</div>
+                            )}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-left space-y-1 max-w-56">
+                          <p className="font-semibold text-xs">{tf.equipmentName}</p>
+                          <p className="text-xs text-muted-foreground">ID: {tf.equipmentId}</p>
+                          <p className="text-xs">Range: {tf.range ?? "—"}</p>
+                          <p className="text-xs">Sub-range: {tf.subRange ?? "—"}</p>
+                          <p className="text-xs">Std value: {tf.stdValue} {tf.unit}</p>
+                          <p className="text-xs font-mono font-semibold">UC%: ±{tf.uncertaintyPct}%</p>
+                          {tf.source === "derived_from_abs" && (
+                            <p className="text-xs text-amber-600">Derived from absolute uncertainty</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-zinc-400 text-[10px]">hardcoded</span>
+                    )}
+                  </td>
+                );
+              })
+            )}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -1088,9 +1285,10 @@ const AddInstrumentPanel: FC<{
 const AddParamDialog: FC<{
   open: boolean;
   instrumentKey: string;
+  presets: Record<string, InstrumentPreset>;
   onCancel: () => void;
   onConfirm: (name: string, unit: string, loadExamples: boolean) => void;
-}> = ({ open, instrumentKey, onCancel, onConfirm }) => {
+}> = ({ open, instrumentKey, presets, onCancel, onConfirm }) => {
   const [mode,         setMode]         = useState<"pick" | "choose" | "custom">("pick");
   const [pendingName,  setPendingName]  = useState("");
   const [pendingUnit,  setPendingUnit]  = useState("");
@@ -1124,10 +1322,10 @@ const AddParamDialog: FC<{
         <div className="flex flex-col gap-2 mt-1">
           {mode === "pick" && (
             <>
-              {Object.entries(INSTRUMENT_PRESETS[instrumentKey]?.params ?? {}).map(([pName, labels]) => (
+              {Object.entries(presets[instrumentKey]?.params ?? {}).map(([pName, labels]) => (
                 <button
                   key={pName}
-                  onClick={() => selectPreset(pName, INSTRUMENT_PRESETS[instrumentKey]?.units[pName] ?? "")}
+                  onClick={() => selectPreset(pName, presets[instrumentKey]?.units[pName] ?? "")}
                   className="text-left px-3 py-2.5 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
                 >
                   <div className="text-sm font-semibold">{pName}</div>
@@ -1198,6 +1396,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const isPending = isCreating || isUpdating;
 
   const { data: existingReport, isLoading: isLoadingReport } = useGetCalibrationReportById(reportId ?? "");
+
+  // DUC instrument master presets (Fluke 8846A, SVERKER 780, …)
+  const { presets: instrumentPresets, makeKeyMap } = useInstrumentPresets();
 
   const blankInstrument = useMemo((): Instrument => ({
     id: uid(), meta: { ...BLANK_META }, params: [],
@@ -1333,7 +1534,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   useEffect(() => {
     if (!existingReport || hydrated) return;
-    const mapped = mapApiToInstruments(existingReport);
+    const mapped = mapApiToInstruments(existingReport, instrumentPresets);
     if (!mapped.length) return;
     const first = mapped[0];
     setInstruments(mapped);
@@ -1345,7 +1546,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     cleanSnapshot.current    = { instruments: mapped, reportMeta: meta };
     originalSnapshot.current = { instruments: mapped, reportMeta: meta };
     setSnapshotVersion((v) => v + 1);
-  }, [existingReport, hydrated]);
+  }, [existingReport, hydrated, instrumentPresets]);
 
   // For new reports: set snapshot once on first mount
   useEffect(() => {
@@ -1615,11 +1816,11 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       // At end of tour, open the add-param dialog so user can try it
       if (status === "finished") {
         const inst = instruments.find((i) => i.id === activeInstId);
-        const instrumentKey = MAKE_TO_INSTRUMENT_KEY[inst?.meta.make ?? ""] ?? "";
+        const instrumentKey = makeKeyMap[inst?.meta.make ?? ""] ?? "";
         setPanel({ type: "addParam", instId: activeInstId, instrumentKey });
       }
     }
-  }, [activeInstId, instruments]);
+  }, [activeInstId, instruments, makeKeyMap]);
 
   const updateMeta = useCallback((key: keyof InstrumentMeta, val: string) => {
     setInstruments((ins) =>
@@ -1666,13 +1867,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const handleAddParam = (instId: string) => {
     setActiveInstId(instId);
     const inst = instruments.find((i) => i.id === instId);
-    const instrumentKey = MAKE_TO_INSTRUMENT_KEY[inst?.meta.make ?? ""] ?? "";
+    const instrumentKey = makeKeyMap[inst?.meta.make ?? ""] ?? "";
     setPanel({ type: "addParam", instId, instrumentKey });
   };
 
   const handleAddParamConfirm = (name: string, unit: string, loadExamples: boolean) => {
     if (panel?.type !== "addParam") return;
-    const p = makeParam(name, unit, panel.instrumentKey, loadExamples);
+    const p = makeParam(name, unit, panel.instrumentKey, loadExamples, instrumentPresets);
     setInstruments((ins) =>
       ins.map((i) => i.id !== panel.instId ? i : { ...i, params: [...i.params, p] })
     );
@@ -2061,13 +2262,18 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                       New Calibration Report
                     </span>
                     {(() => {
-                      const missing: string[] = [];
-                      instruments.forEach((inst) => {
-                        if (!inst.meta.csrNo.trim()) missing.push("CSR No");
-                        if (!inst.meta.nomenclature.trim()) missing.push("Nomenclature");
-                      });
-                      if (!missing.length) return null;
-                      const label = missing.length === 1 ? `${missing[0]} missing` : `${missing.length} required fields missing`;
+                      // Prefer the authoritative validation result when available
+                      // (set on submit / compute) — falls back to a quick CSR +
+                      // Nomenclature check before the user has tried submitting.
+                      const count = formErrors.length > 0
+                        ? formErrors.length
+                        : instruments.reduce((acc, inst) => {
+                            if (!inst.meta.csrNo.trim())        acc++;
+                            if (!inst.meta.nomenclature.trim()) acc++;
+                            return acc;
+                          }, 0);
+                      if (count === 0) return null;
+                      const label = count === 1 ? "1 required field missing" : `${count} required fields missing`;
                       return <Badge variant="in_progress" className="ml-1 text-[10px]">{label}</Badge>;
                     })()}
                   </div>
@@ -2479,10 +2685,22 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             <div className="p-5">
               <MetaGrid
                 meta={activeInst.meta}
+                instParamNames={(() => {
+                  if (activeInst.params.length > 0) return activeInst.params.map((p) => p.name);
+                  const key = makeKeyMap[activeInst.meta.make] ?? `${activeInst.meta.make} ${activeInst.meta.modelType}`.trim();
+                  return Object.keys(instrumentPresets[key]?.params ?? {});
+                })()}
                 modelLocked={activeInst.params.length > 0}
                 showErrors={formErrors.length > 0}
                 autoFocusCsr={!isEditMode}
                 readOnly={viewMode}
+                hasPreset={
+                  activeInst.meta.make
+                    ? Object.keys(
+                        instrumentPresets[makeKeyMap[activeInst.meta.make] ?? ""]?.params ?? {}
+                      ).length > 0
+                    : undefined
+                }
                 touched={touchedFields}
                 onTouch={handleTouch}
                 onChange={updateMeta}
@@ -2597,6 +2815,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       <AddParamDialog
         open={panel?.type === "addParam"}
         instrumentKey={panel?.type === "addParam" ? panel.instrumentKey : ""}
+        presets={instrumentPresets}
         onCancel={() => setPanel(null)}
         onConfirm={handleAddParamConfirm}
       />
