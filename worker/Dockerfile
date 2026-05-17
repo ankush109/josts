@@ -46,16 +46,19 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY package*.json ./
+# Puppeteer caches Chrome under $HOME/.cache by default — pin it inside /app
+# so the non-root user we switch to below can read it.
+ENV PUPPETEER_CACHE_DIR=/app/.cache/puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
 
-# postinstall script downloads Chrome automatically
+COPY package*.json ./
 RUN npm install --production
 
 COPY . .
 
-# Tell Puppeteer not to download Chrome again at runtime (already done above)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-# Run Chrome in no-sandbox mode (required inside Docker)
-ENV PUPPETEER_ARGS="--no-sandbox --disable-setuid-sandbox"
+# Hand ownership to the built-in `node` user and drop privileges. Chrome refuses
+# to run as root without --no-sandbox; running as non-root keeps its sandbox on.
+RUN chown -R node:node /app
+USER node
 
 CMD ["node", "index.js"]
