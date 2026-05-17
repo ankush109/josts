@@ -5,11 +5,11 @@ services:
     ports:
       - "5000:5000"
     env_file:
-      - ./.env
+      - /home/ec2-user/.env
     restart: unless-stopped
 
   worker:
     image: ghcr.io/ankush109/josts-worker:latest
     env_file:
-      - ./.env
+      - /home/ec2-user/.env
     restart: unless-stopped
