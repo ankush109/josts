@@ -18,6 +18,7 @@ import ReactQueryProvider from "./ReactQueryProvider";
 import { ToasterProvider } from "./ToastProvider";
 import { AuthProvider } from "./AuthProvider";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import SyncQueueRunner from "../components/SyncQueueRunner";
 
 /**
  * Wraps the entire application with all required context providers.
@@ -39,6 +40,7 @@ export default function RootProvider({
       <ReactQueryProvider>
         <AuthProvider>
           <ToasterProvider />
+          <SyncQueueRunner />
           {children}
           <ReactQueryDevtools initialIsOpen={false} />
         </AuthProvider>

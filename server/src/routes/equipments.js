@@ -6,6 +6,7 @@ const router = Router();
 
 // Static paths first (must be before /:id)
 router.get("/",                authMiddleware, EquipmentController.getEquipmentList);
+router.post("/",               authMiddleware, EquipmentController.createEquipment);
 router.get("/params-summary",  authMiddleware, EquipmentController.getEquipmentParamSummary);
 
 router.get("/:id",             authMiddleware, EquipmentController.getEquipmentDetails);

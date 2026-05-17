@@ -1,12 +1,12 @@
 import Navbar from "@/components/Navbar";
 import ReportList from "./EquipmentTable";
 
-
 export default function HomePage() {
   return (
-    <div className="w-full min-h-screen pt-16 bg-slate-50">
+    <div className="w-full min-h-screen pt-24 flex flex-col items-center bg-background">
       <Navbar />
-      <div className="max-w-[1400px] mx-auto px-6 py-8">
+
+      <div className="w-full mt-10 max-w-7xl px-4 sm:px-6 lg:px-8 mb-10">
         <ReportList />
       </div>
     </div>

@@ -25,7 +25,7 @@ export interface EquipmentApiResponse {
 
 export async function getEquipments(page = 1): Promise<EquipmentApiResponse> {
   const { data } = await authClient.get<EquipmentApiResponse>(EP_EQUIPMEMTS(), {
-    params: { page }
+    params: { page, limit: 100 }
   });
   return data;
 }

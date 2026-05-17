@@ -17,6 +17,7 @@ import {
   useUpdateEquipment,
   useSetEquipmentActive,
 } from "@/app/hooks/mutate/useUpdateEquipment";
+import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ export default function EquipmentDetailPage() {
 
   const eq: EquipmentDoc | undefined = res?.data;
   const [editMode, setEditMode] = useState(false);
+  const isOffline = !useOnlineStatus();
   const [draft, setDraft] = useState<EquipmentDoc | null>(null);
 
   useEffect(() => { if (eq) setDraft(structuredClone(eq)); }, [eq]);
@@ -120,18 +122,18 @@ export default function EquipmentDetailPage() {
   }, [eq, draft]);
 
   if (isLoading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <RefreshCw className="h-6 w-6 animate-spin text-slate-400" />
-        <p className="text-[13px] text-slate-400">Loading equipment details…</p>
+        <RefreshCw className="h-6 w-6 animate-spin text-slate-400 dark:text-zinc-500" />
+        <p className="text-[13px] text-slate-400 dark:text-zinc-500">Loading equipment details…</p>
       </div>
     </div>
   );
 
   if (isError || !eq || !draft) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center">
-        <p className="text-red-500 text-[14px] mb-3">Failed to load equipment.</p>
+        <p className="text-red-500 dark:text-red-400 text-[14px] mb-3">Failed to load equipment.</p>
         <Button variant="outline" size="sm" onClick={() => router.back()}>Go Back</Button>
       </div>
     </div>
@@ -178,9 +180,9 @@ export default function EquipmentDetailPage() {
   const parameters = draft.parameters ?? [];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-background">
       {/* Top bar */}
-      <div className="bg-[#1e3a5f] text-white px-6 py-4 flex items-center gap-4 shadow-md">
+      <div className="bg-[#1e3a5f] dark:bg-zinc-900 dark:border-b dark:border-zinc-800 text-white px-6 py-4 flex items-center gap-4 shadow-md">
         <Button variant="ghost" size="icon" className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10 shrink-0" onClick={() => router.push("/equipments")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -192,12 +194,26 @@ export default function EquipmentDetailPage() {
         <Badge className={draft.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500"}>
           {draft.isActive ? "Active" : "Inactive"}
         </Badge>
-        <Button size="sm" variant="ghost" onClick={onToggleActive} disabled={isToggling} className="text-white/80 hover:text-white hover:bg-white/10 gap-1.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onToggleActive}
+          disabled={isToggling || isOffline}
+          title={isOffline ? "Reference standards can only be updated online" : undefined}
+          className="text-white/80 hover:text-white hover:bg-white/10 gap-1.5"
+        >
           <Power className="h-3.5 w-3.5" />
           {draft.isActive ? "Deactivate" : "Activate"}
         </Button>
         {!editMode ? (
-          <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setEditMode(true)}
+            disabled={isOffline}
+            title={isOffline ? "Reference standards can only be edited online" : undefined}
+            className="gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20"
+          >
             <Pencil className="h-3.5 w-3.5" /> Edit
           </Button>
         ) : (
@@ -205,7 +221,13 @@ export default function EquipmentDetailPage() {
             <Button size="sm" variant="ghost" onClick={onCancel} className="text-white/80 hover:text-white hover:bg-white/10 gap-1.5">
               <X className="h-3.5 w-3.5" /> Cancel
             </Button>
-            <Button size="sm" onClick={onSave} disabled={!isDirty || isSaving} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+            <Button
+              size="sm"
+              onClick={onSave}
+              disabled={!isDirty || isSaving || isOffline}
+              title={isOffline ? "Save requires internet" : undefined}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            >
               <Save className="h-3.5 w-3.5" />
               {isSaving ? "Saving…" : "Save"}
             </Button>
@@ -253,15 +275,15 @@ export default function EquipmentDetailPage() {
         </div>
 
         {/* Parameters */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 flex items-center justify-center">
-                <Activity className="h-4 w-4 text-[#1e3a5f]" />
+              <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 dark:bg-blue-500/15 flex items-center justify-center">
+                <Activity className="h-4 w-4 text-[#1e3a5f] dark:text-blue-400" />
               </div>
               <div>
-                <span className="text-[13px] font-semibold text-slate-700">Calibration Results</span>
-                <span className="text-[11px] text-slate-400 ml-2">{parameters.length} reading{parameters.length === 1 ? "" : "s"}</span>
+                <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">Calibration Results</span>
+                <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-2">{parameters.length} reading{parameters.length === 1 ? "" : "s"}</span>
               </div>
             </div>
             {editMode && (
@@ -274,11 +296,11 @@ export default function EquipmentDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-[12px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-widest w-8">#</th>
-                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Parameter</th>
+                <tr className="bg-slate-50 dark:bg-zinc-800/50 border-b border-slate-200 dark:border-zinc-800">
+                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest w-8">#</th>
+                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Parameter</th>
                   {PARAM_COLS.map((c) => (
-                    <th key={String(c.key)} className={`px-3 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-widest whitespace-nowrap text-${c.align}`}>
+                    <th key={String(c.key)} className={`px-3 py-3 text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest whitespace-nowrap text-${c.align}`}>
                       {c.label}
                     </th>
                   ))}
@@ -287,13 +309,13 @@ export default function EquipmentDetailPage() {
               </thead>
               <tbody>
                 {parameters.map((p, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/70">
-                    <td className="px-3 py-2 text-slate-300 text-[11px] font-mono">{i + 1}</td>
+                  <tr key={i} className="border-b border-slate-100 dark:border-zinc-800 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40">
+                    <td className="px-3 py-2 text-slate-300 dark:text-zinc-600 text-[11px] font-mono">{i + 1}</td>
                     <td className="px-3 py-2">
                       {editMode ? (
                         <Input value={p.parameterName ?? ""} onChange={(e) => updateParam(i, { parameterName: e.target.value })} className="h-8 text-[12px]" />
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60">
                           {p.parameterName || "—"}
                         </span>
                       )}
@@ -329,7 +351,7 @@ export default function EquipmentDetailPage() {
                 ))}
                 {parameters.length === 0 && (
                   <tr>
-                    <td colSpan={PARAM_COLS.length + 2} className="px-4 py-8 text-center text-slate-400 text-[12px]">
+                    <td colSpan={PARAM_COLS.length + 2} className="px-4 py-8 text-center text-slate-400 dark:text-zinc-500 text-[12px]">
                       No calibration readings.
                     </td>
                   </tr>
@@ -340,40 +362,40 @@ export default function EquipmentDetailPage() {
         </div>
 
         {/* History */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100">
-            <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 flex items-center justify-center">
-              <History className="h-4 w-4 text-[#1e3a5f]" />
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100 dark:border-zinc-800">
+            <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 dark:bg-blue-500/15 flex items-center justify-center">
+              <History className="h-4 w-4 text-[#1e3a5f] dark:text-blue-400" />
             </div>
-            <span className="text-[13px] font-semibold text-slate-700">History</span>
-            <span className="text-[11px] text-slate-400 ml-auto">{history?.length ?? 0} entries</span>
+            <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">History</span>
+            <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-auto">{history?.length ?? 0} entries</span>
           </div>
-          <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+          <div className="divide-y divide-slate-100 dark:divide-zinc-800 max-h-96 overflow-y-auto">
             {(!history || history.length === 0) && (
-              <div className="px-5 py-10 text-center text-slate-400 text-[12px]">No history yet.</div>
+              <div className="px-5 py-10 text-center text-slate-400 dark:text-zinc-500 text-[12px]">No history yet.</div>
             )}
             {history?.map((e) => (
               <div key={e._id} className="px-5 py-3.5">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">{e.action}</span>
-                    <span className="text-[11px] text-slate-400">·</span>
-                    <span className="text-[11px] text-slate-500">{e.performedBy?.name ?? e.performedBy?.email ?? "system"}</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600 dark:text-zinc-300">{e.action}</span>
+                    <span className="text-[11px] text-slate-400 dark:text-zinc-500">·</span>
+                    <span className="text-[11px] text-slate-500 dark:text-zinc-400">{e.performedBy?.name ?? e.performedBy?.email ?? "system"}</span>
                   </div>
-                  <span className="text-[10px] text-slate-400">{new Date(e.createdAt).toLocaleString()}</span>
+                  <span className="text-[10px] text-slate-400 dark:text-zinc-500">{new Date(e.createdAt).toLocaleString()}</span>
                 </div>
                 {e.changes.length > 0 && (
-                  <div className="text-[11px] text-slate-500 space-y-0.5">
+                  <div className="text-[11px] text-slate-500 dark:text-zinc-400 space-y-0.5">
                     {e.changes.slice(0, 8).map((c, i) => (
                       <div key={i}>
-                        <span className="font-semibold text-slate-600">{c.field}</span>
-                        <span className="text-slate-400"> · </span>
-                        <span className="line-through text-slate-400">{c.from}</span>
-                        <span className="text-slate-400"> → </span>
-                        <span className="text-slate-700">{c.to}</span>
+                        <span className="font-semibold text-slate-600 dark:text-zinc-300">{c.field}</span>
+                        <span className="text-slate-400 dark:text-zinc-500"> · </span>
+                        <span className="line-through text-slate-400 dark:text-zinc-500">{c.from}</span>
+                        <span className="text-slate-400 dark:text-zinc-500"> → </span>
+                        <span className="text-slate-700 dark:text-zinc-200">{c.to}</span>
                       </div>
                     ))}
-                    {e.changes.length > 8 && <div className="text-slate-400">+{e.changes.length - 8} more…</div>}
+                    {e.changes.length > 8 && <div className="text-slate-400 dark:text-zinc-500">+{e.changes.length - 8} more…</div>}
                   </div>
                 )}
               </div>
@@ -381,7 +403,7 @@ export default function EquipmentDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
+        <div className="flex items-center justify-between text-[11px] text-slate-400 dark:text-zinc-500 px-1">
           <span>Created: {fmt(eq.createdAt)}</span>
           <span>Last updated: {fmt(eq.updatedAt)}</span>
         </div>
@@ -394,10 +416,10 @@ export default function EquipmentDetailPage() {
 
 function Card({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+    <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm p-5">
       <div className="flex items-center gap-2.5 mb-4">
-        <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">{icon}</div>
-        <span className="text-[13px] font-semibold text-slate-700">{title}</span>
+        <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 dark:bg-blue-500/15 flex items-center justify-center shrink-0">{icon}</div>
+        <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">{title}</span>
       </div>
       {children}
     </div>
@@ -406,9 +428,9 @@ function Card({ icon, title, children }: { icon: React.ReactNode; title: string;
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between py-3 border-b border-slate-100 last:border-0">
-      <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-widest w-36 shrink-0 pt-0.5">{label}</span>
-      <span className="text-[13px] text-slate-800 text-right">{value ?? "—"}</span>
+    <div className="flex items-start justify-between py-3 border-b border-slate-100 dark:border-zinc-800 last:border-0">
+      <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-widest w-36 shrink-0 pt-0.5">{label}</span>
+      <span className="text-[13px] text-slate-800 dark:text-zinc-100 text-right">{value ?? "—"}</span>
     </div>
   );
 }
@@ -418,15 +440,15 @@ function Field({ label, value, edit, onChange, mono }: {
 }) {
   if (edit) {
     return (
-      <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 last:border-0">
-        <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-widest w-36 shrink-0">{label}</span>
+      <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 dark:border-zinc-800 last:border-0">
+        <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-widest w-36 shrink-0">{label}</span>
         <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={`h-8 text-[12px] ${mono ? "font-mono" : ""}`} />
       </div>
     );
   }
   return (
     <InfoRow label={label} value={
-      mono ? <span className="font-mono text-[12px] bg-slate-100 px-2 py-0.5 rounded">{value || "—"}</span>
+      mono ? <span className="font-mono text-[12px] bg-slate-100 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-0.5 rounded">{value || "—"}</span>
            : <span>{value || "—"}</span>
     } />
   );
@@ -436,8 +458,8 @@ function DateField({ label, value, onChange }: {
   label: string; value: string | Date | null | undefined; onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 last:border-0">
-      <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-widest w-36 shrink-0">{label}</span>
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 dark:border-zinc-800 last:border-0">
+      <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-widest w-36 shrink-0">{label}</span>
       <Input type="date" value={dateInput(value)} onChange={(e) => onChange(e.target.value)} className="h-8 text-[12px]" />
     </div>
   );

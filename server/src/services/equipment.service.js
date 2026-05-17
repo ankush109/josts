@@ -8,18 +8,19 @@ import {
 
 export const getEquipments = async(reqQuery,reqUser)=>{
   try {
-    const { 
-      page = 1, 
-      limit = 20, 
-      search = "", 
-      status = "true", 
-      sortBy = "nextDue" 
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      status = "all",
+      sortBy = "nextDue"
     } = reqQuery
 
     // 1. Build Search/Filter Object
-    const query = {
-      isActive: status === "true",
-    };
+    const query = {};
+    if (status === "true" || status === "active") query.isActive = true;
+    else if (status === "false" || status === "inactive") query.isActive = false;
+    // status === "all" → no isActive filter, return everything
 
     if (search) {
       query.$or = [
@@ -72,6 +73,46 @@ export const getEquipmentById = async (id) => {
   } catch (error) {
     throw error;
   }
+};
+
+export const createEquipment = async (payload, userId) => {
+  if (!payload || typeof payload !== "object") {
+    const err = new Error("Equipment payload is required");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!payload.equipmentName || !String(payload.equipmentName).trim()) {
+    const err = new Error("Equipment name is required");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!payload.idNo || !String(payload.idNo).trim()) {
+    const err = new Error("ID No. is required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const existing = await Equipment.findOne({ idNo: payload.idNo.trim() }).lean();
+  if (existing) {
+    const err = new Error(`An equipment with ID No. "${payload.idNo}" already exists`);
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const created = await Equipment.create({
+    ...payload,
+    idNo: payload.idNo.trim(),
+    isActive: payload.isActive ?? true,
+  });
+
+  await logEquipmentAudit({
+    equipmentId: created._id,
+    action: "created",
+    performedBy: userId,
+    changes: [],
+  });
+
+  return created.toObject();
 };
 
 export const updateEquipment = async (id, payload, userId) => {

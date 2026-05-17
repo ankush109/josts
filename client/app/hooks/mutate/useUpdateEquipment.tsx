@@ -3,8 +3,22 @@ import { authClient } from "@/lib/api-client";
 import {
   EP_EQUIPMENTS_BY_ID,
   EP_EQUIPMENT_ACTIVE,
+  EP_EQUIPMEMTS,
 } from "@/lib/endpoints";
 import { EQUIPMENETS_KEY } from "../query/useGetEquipments";
+
+export function useCreateEquipment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: any) => {
+      const { data } = await authClient.post(EP_EQUIPMEMTS(), payload);
+      return data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [EQUIPMENETS_KEY] });
+    },
+  });
+}
 
 export function useUpdateEquipment() {
   const qc = useQueryClient();

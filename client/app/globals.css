@@ -185,6 +185,9 @@
    of the user's system/app dark-mode setting.
    ─────────────────────────────────────────────────────────────────────────── */
 .force-light {
+  color-scheme: light;
+  background-color: var(--background);
+  color: var(--foreground);
   --background:           oklch(0.99 0.005 264);
   --foreground:           oklch(0.16 0.02 264);
   --card:                 oklch(0.995 0.004 264);
@@ -205,17 +208,53 @@
   --ring:                 oklch(0.5 0.22 262);
 }
 
-/* Override the explicit dark utility hardcodes inside .force-light */
+/* Override the explicit dark utility hardcodes inside .force-light
+   so /, /login, /register stay in light mode even when system dark mode is on. */
+.dark .force-light,
+.dark .force-light * { color-scheme: light; }
+
+/* Backgrounds — zinc */
 .dark .force-light .bg-white          { background-color: white; }
+.dark .force-light .bg-white\/95      { background-color: rgb(255 255 255 / 0.95); }
 .dark .force-light .bg-zinc-50        { background-color: oklch(0.985 0.002 264); }
+.dark .force-light .bg-zinc-50\/60    { background-color: oklch(0.985 0.002 264 / 0.6); }
+.dark .force-light .bg-zinc-50\/40    { background-color: oklch(0.985 0.002 264 / 0.4); }
+.dark .force-light .bg-zinc-50\/50    { background-color: oklch(0.985 0.002 264 / 0.5); }
 .dark .force-light .bg-zinc-100       { background-color: oklch(0.96 0.005 264); }
+.dark .force-light .bg-zinc-100\/60   { background-color: oklch(0.96 0.005 264 / 0.6); }
 .dark .force-light .bg-zinc-200       { background-color: oklch(0.91 0.015 264); }
+.dark .force-light .bg-zinc-300       { background-color: oklch(0.87 0.018 264); }
+/* Backgrounds — slate */
+.dark .force-light .bg-slate-50       { background-color: oklch(0.985 0.005 264); }
+.dark .force-light .bg-slate-100      { background-color: oklch(0.96 0.012 264); }
+.dark .force-light .bg-slate-200      { background-color: oklch(0.91 0.018 264); }
+.dark .force-light .bg-slate-300      { background-color: oklch(0.85 0.020 264); }
+
+/* Text — zinc */
 .dark .force-light .text-zinc-900     { color: oklch(0.16 0.02 264); }
 .dark .force-light .text-zinc-800     { color: oklch(0.26 0.03 264); }
 .dark .force-light .text-zinc-700     { color: oklch(0.37 0.04 264); }
 .dark .force-light .text-zinc-600     { color: oklch(0.46 0.04 264); }
 .dark .force-light .text-zinc-500     { color: oklch(0.55 0.03 264); }
 .dark .force-light .text-zinc-400     { color: oklch(0.65 0.02 264); }
+/* Text — slate */
+.dark .force-light .text-slate-900    { color: oklch(0.16 0.02 264); }
+.dark .force-light .text-slate-800    { color: oklch(0.26 0.03 264); }
+.dark .force-light .text-slate-700    { color: oklch(0.37 0.04 264); }
+.dark .force-light .text-slate-600    { color: oklch(0.46 0.04 264); }
+.dark .force-light .text-slate-500    { color: oklch(0.55 0.03 264); }
+.dark .force-light .text-slate-400    { color: oklch(0.65 0.02 264); }
+.dark .force-light .text-slate-300    { color: oklch(0.75 0.015 264); }
+
+/* Borders */
 .dark .force-light .border-zinc-100   { border-color: oklch(0.93 0.008 264); }
 .dark .force-light .border-zinc-200   { border-color: oklch(0.91 0.015 264); }
 .dark .force-light .border-zinc-300   { border-color: oklch(0.87 0.018 264); }
+.dark .force-light .border-slate-100  { border-color: oklch(0.94 0.010 264); }
+.dark .force-light .border-slate-200  { border-color: oklch(0.91 0.018 264); }
+.dark .force-light .border-slate-300  { border-color: oklch(0.85 0.020 264); }
+.dark .force-light .border-dashed     { border-color: oklch(0.87 0.018 264); }
+
+/* Dividers */
+.dark .force-light .divide-zinc-100   > * + * { border-color: oklch(0.93 0.008 264); }
+.dark .force-light .divide-slate-100  > * + * { border-color: oklch(0.94 0.010 264); }

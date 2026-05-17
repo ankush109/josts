@@ -6,6 +6,29 @@
 
 import * as CalibrationService from "../services/calibration.service.js";
 import { getAuditLog } from "../services/audit.service.js";
+import CalibrationReport from "../models/Calibration.js";
+
+/**
+ * GET /calibration-report/check-csr?csrNo=...&excludeId=...
+ * Lightweight uniqueness check used by the form as the user types.
+ * Returns `{ exists, reportId? }`. `excludeId` lets edit mode skip its own doc.
+ */
+export async function checkCsrNo(req, res, next) {
+  try {
+    const csrNo = String(req.query.csrNo ?? "").trim();
+    if (!csrNo) return res.json({ exists: false });
+
+    const query = { csrNo };
+    const excludeId = String(req.query.excludeId ?? "").trim();
+    if (excludeId && /^[a-f0-9]{24}$/i.test(excludeId)) {
+      query._id = { $ne: excludeId };
+    }
+    const existing = await CalibrationReport.findOne(query).select("_id").lean();
+    res.json({ exists: !!existing, reportId: existing?._id ?? null });
+  } catch (err) {
+    next(err);
+  }
+}
 
 /**
  * POST /calibration-report
@@ -94,7 +117,7 @@ export async function verifyOrReject(req, res, next) {
  */
 export async function computePreview(req, res, next) {
   try {
-    const instrument = CalibrationService.previewCompute(req.body.instrument);
+    const instrument = await CalibrationService.previewCompute(req.body.instrument);
     res.json({ instrument });
   } catch (err) {
     next(err);

@@ -149,7 +149,12 @@ export function makeParam(
 export function makeInstrument(
   meta: InstrumentMeta = BLANK_INSTRUMENT_META,
 ): Instrument {
-  return { id: uid(), meta: { ...meta }, params: [] };
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    id: uid(),
+    meta: { ...meta, calDate: meta.calDate || today },
+    params: [],
+  };
 }
 
 // ── Validation helpers ─────────────────────────────────────────────────────
@@ -300,7 +305,7 @@ export function buildPayload(
         srNo:         inst.meta.refSrNo,
         calDueDate:   inst.meta.refCalDue || undefined,
         traceability: inst.meta.refTraceability,
-        equipmentId:  inst.meta.refEquipmentId,
+        equipmentId:  inst.meta.refEquipmentId || null,
 
       },
       parameters: inst.params.map((p) => ({

@@ -1,7 +1,3 @@
-
-import Image from "next/image"
-
-import jostLogo from '../../../public/logo.png';
 import {TemplateKit} from "../home/TemplateKitForm";
 import Navbar from "@/components/Navbar";
 export default function BlogPage({ params }: { params: { slug: string } }) {

@@ -30,8 +30,8 @@ export const EP_USER_PROFILE = () => `/user/profile` as const;
 export const EP_REPORTS = (id?: string | number) =>
   id ? `/report/${id}` : `/report`;
 
-/** GET /report/drafts/all */
-export const EP_DRAFTS = () => `/report/drafts/all` as const;
+/** GET /report/drafts */
+export const EP_DRAFTS = () => `/report/drafts` as const;
 
 /** GET /report/drafts/:reportId */
 export const EP_DRAFT_BY_ID = (reportId: string | number) =>
@@ -107,6 +107,10 @@ export const EP_CALIBRATION_AUDIT_LOG = (reportId: string) =>
 export const EP_COMPUTE_CALIBRATION = () =>
   `/calibration-report/compute` as const;
 
+/** GET /calibration-report/check-csr — uniqueness check for CSR No */
+export const EP_CHECK_CSR_NO = () =>
+  `/calibration-report/check-csr` as const;
+
 
 export const EP_EQUIPMEMTS = () => `/equipments`
 export const EP_EQUIPMENTS_PARAMS_SUMMARY = () => `/equipments/params-summary`
@@ -135,6 +139,26 @@ export const EP_INSTRUMENT_ACTIVE = (id: string | number) =>
 /** GET /instruments/:id/history — audit log entries */
 export const EP_INSTRUMENT_HISTORY = (id: string | number) =>
   `/instruments/${id}/history` as const;
+// ── Support / Help ─────────────────────────────────────────────────────────
+
+/** POST /support — submit a support message */
+export const EP_SUPPORT_SUBMIT = () => `/support` as const;
+
+/** GET /support/my — current user's messages */
+export const EP_SUPPORT_MY = () => `/support/my` as const;
+
+/** GET /support/all — all messages (admin) */
+export const EP_SUPPORT_ALL = () => `/support/all` as const;
+
+/** PATCH /support/:id/seen — admin marks message as seen */
+export const EP_SUPPORT_SEEN = (id: string) => `/support/${id}/seen` as const;
+
+/** POST /support/:id/reply — admin reply */
+export const EP_SUPPORT_REPLY = (id: string) => `/support/${id}/reply` as const;
+
+/** GET /dashboard */
+export const EP_DASHBOARD = () => "/dashboard" as const;
+
 // ── Legacy namespace export ────────────────────────────────────────────────
 // Keeps existing call-sites working while the codebase is migrated to the
 // named exports above.  Remove once all imports are updated.

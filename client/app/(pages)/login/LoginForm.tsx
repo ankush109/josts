@@ -17,7 +17,6 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "react-hot-toast";
 import { z } from "zod";
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -26,11 +25,11 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { AuthBrandingPanel } from "@/components/AuthBrandingPanel";
+import Wordmark from "@/components/Wordmark";
 import { useLoginMutation } from "@/app/hooks/mutation/useLoginMutation";
 import { useGetUserDetailsQuery } from "@/app/hooks/mutation/useGetUserDetails";
 import { useAuth } from "@/app/provider/AuthProvider";
 import type { AxiosError } from "axios";
-import jostLogo from "../../../public/logo2.png";
 
 // ── Validation schema ──────────────────────────────────────────────────────
 
@@ -103,15 +102,9 @@ export function LoginForm() {
       {/* Form panel */}
       <div className="flex min-h-screen lg:min-h-0 items-center justify-center bg-background px-6 py-12">
         <div className="w-full max-w-sm space-y-7">
-          {/* Mobile logo */}
+          {/* Mobile wordmark */}
           <div className="flex justify-center lg:hidden">
-            <Image
-              src={jostLogo}
-              alt="Josts Technologies"
-              width={130}
-              height={55}
-              className="h-14 w-auto"
-            />
+            <Wordmark size="lg" showDot caption="Calibration Suite" />
           </div>
 
           <div className="space-y-1.5">
@@ -119,7 +112,7 @@ export function LoginForm() {
               Welcome back
             </h2>
             <p className="text-sm text-muted-foreground">
-              Sign in to your Josts Technologies account
+              Sign in to continue
             </p>
           </div>
 

@@ -11,20 +11,23 @@
 
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://f998-13-204-43-74.ngrok-free.app";
 
-/** Unauthenticated client – use for public endpoints (login, register). */
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: { 
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true"
+  },
 });
 
-/** Authenticated client – automatically attaches the stored Bearer token. */
 export const authClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: { 
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true"
+  },
 });
-
 // ── Request interceptor ────────────────────────────────────────────────────
 
 /**

@@ -131,7 +131,7 @@ export interface Instrument {
 export type PanelState =
   | null
   | { type: "addInstrument" }
-  | { type: "addParam"; instId: string; instrumentKey: string };
+  | { type: "addParam"; instId: string; instrumentKey: string; initialMode?: "pick" | "custom" };
 
 /** A validation error surfaced in the form's error panel. */
 export interface FormError {
@@ -141,8 +141,14 @@ export interface FormError {
   fieldId?: string;
 }
 
-/** Auto-save lifecycle states shown in the status badge. */
-export type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
+/**
+ * Auto-save lifecycle states shown in the status badge.
+ *  - `saved`         — committed to the server (or to IDB on a server-backed
+ *                      draft that was reachable).
+ *  - `saved-local`   — committed to IndexedDB only; the sync queue will push
+ *                      to the server on reconnect.
+ */
+export type AutoSaveStatus = "idle" | "saving" | "saved" | "saved-local" | "error";
 
 // ── Report status ──────────────────────────────────────────────────────────
 

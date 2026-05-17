@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
 import { useGetInstrumentById } from "@/app/hooks/query/useGetInstrumentById";
 import { useGetInstrumentHistory } from "@/app/hooks/query/useGetInstrumentHistory";
+import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import {
   useUpdateInstrument,
   useSetInstrumentActive,
@@ -44,6 +45,7 @@ export default function InstrumentDetailPage() {
   const { data: history } = useGetInstrumentHistory(instrumentId);
   const { mutate: update, isPending: isSaving } = useUpdateInstrument();
   const { mutate: setActive, isPending: isToggling } = useSetInstrumentActive();
+  const isOffline = !useOnlineStatus();
 
   // Local editable copy
   const [draft, setDraft] = useState<Instrument | null>(null);
@@ -155,16 +157,16 @@ export default function InstrumentDetailPage() {
         variant="ghost"
         size="sm"
         onClick={() => router.push("/instruments")}
-        className="mb-4 -ml-2 text-slate-500"
+        className="mb-4 -ml-2 text-slate-500 dark:text-zinc-400"
       >
         <ArrowLeft className="h-4 w-4 mr-1" /> Back to Instruments
       </Button>
 
       {/* Header / top fields */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-5">
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm p-6 mb-5">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-slate-100 flex items-center justify-center">
-            <FlaskConical className="h-5 w-5 text-slate-500" />
+          <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-zinc-800 flex items-center justify-center">
+            <FlaskConical className="h-5 w-5 text-slate-500 dark:text-zinc-400" />
           </div>
           <div className="flex-1 grid grid-cols-3 gap-4">
             <LabeledInput label="Key" value={draft.key}       onChange={(v) => updateTop("key", v)} />
@@ -179,7 +181,8 @@ export default function InstrumentDetailPage() {
               size="sm"
               variant={draft.isActive ? "outline" : "default"}
               onClick={onToggleActive}
-              disabled={isToggling}
+              disabled={isToggling || isOffline}
+              title={isOffline ? "Instrument templates can only be updated online" : undefined}
               className="gap-1.5"
             >
               <Power className="h-3.5 w-3.5" />
@@ -190,9 +193,15 @@ export default function InstrumentDetailPage() {
 
         <div className="mt-4 flex items-center justify-end gap-2">
           {isDirty && (
-            <span className="text-[11px] text-amber-600">Unsaved changes</span>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">Unsaved changes</span>
           )}
-          <Button size="sm" onClick={onSave} disabled={!isDirty || isSaving} className="gap-1.5">
+          <Button
+            size="sm"
+            onClick={onSave}
+            disabled={!isDirty || isSaving || isOffline}
+            title={isOffline ? "Save requires internet" : undefined}
+            className="gap-1.5"
+          >
             <Save className="h-3.5 w-3.5" />
             {isSaving ? "Saving…" : "Save"}
           </Button>
@@ -202,8 +211,8 @@ export default function InstrumentDetailPage() {
       {/* Parameters */}
       <div className="space-y-4">
         {draft.parameters.map((p, pi) => (
-          <div key={pi} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 gap-3">
+          <div key={pi} className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/50 gap-3">
               <div className="flex items-center gap-3 flex-1">
                 <Input
                   value={p.parameterName}
@@ -226,15 +235,15 @@ export default function InstrumentDetailPage() {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[12px]">
                 <thead>
-                  <tr className="border-b border-slate-100">
+                  <tr className="border-b border-slate-100 dark:border-zinc-800">
                     {["Range", "Std. Unc. %", "Accuracy %", "Acc. Offset", "Least Count", "Scope %", ""].map((h, i) => (
-                      <th key={i} className="px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 uppercase tracking-widest bg-slate-50/40">
+                      <th key={i} className="px-3 py-2.5 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest bg-slate-50/40 dark:bg-zinc-800/40">
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
                   {p.ranges.map((r, ri) => (
                     <tr key={ri}>
                       <td className="px-3 py-2"><Input value={r.label}      onChange={(e) => updateRange(pi, ri, { label: e.target.value })}            className="h-8 text-[12px] font-mono" /></td>
@@ -254,14 +263,14 @@ export default function InstrumentDetailPage() {
               </table>
             </div>
 
-            <div className="px-4 py-2 border-t border-slate-100 flex justify-end">
+            <div className="px-4 py-2 border-t border-slate-100 dark:border-zinc-800 flex justify-end">
               <Button size="sm" variant="ghost" onClick={() => addRange(pi)} className="text-[12px] gap-1">
                 <Plus className="h-3.5 w-3.5" /> Add range
               </Button>
             </div>
 
-            <details className="border-t border-slate-100 bg-slate-50/30">
-              <summary className="px-4 py-2.5 text-[11px] font-semibold text-slate-500 cursor-pointer hover:text-slate-700">
+            <details className="border-t border-slate-100 dark:border-zinc-800 bg-slate-50/30 dark:bg-zinc-800/20">
+              <summary className="px-4 py-2.5 text-[11px] font-semibold text-slate-500 dark:text-zinc-400 cursor-pointer hover:text-slate-700 dark:hover:text-zinc-200">
                 Sample readings — used by "Load examples"
               </summary>
               <div className="px-4 pb-4 space-y-3">
@@ -284,38 +293,38 @@ export default function InstrumentDetailPage() {
       </div>
 
       {/* History */}
-      <div className="mt-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
-          <History className="h-4 w-4 text-slate-400" />
-          <span className="text-sm font-semibold text-slate-800">History</span>
-          <span className="text-[11px] text-slate-400 ml-auto">{history?.length ?? 0} entries</span>
+      <div className="mt-8 bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/50">
+          <History className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
+          <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200">History</span>
+          <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-auto">{history?.length ?? 0} entries</span>
         </div>
-        <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+        <div className="divide-y divide-slate-100 dark:divide-zinc-800 max-h-96 overflow-y-auto">
           {(!history || history.length === 0) && (
-            <div className="px-5 py-10 text-center text-slate-400 text-[12px]">No history yet.</div>
+            <div className="px-5 py-10 text-center text-slate-400 dark:text-zinc-500 text-[12px]">No history yet.</div>
           )}
           {history?.map((e) => (
             <div key={e._id} className="px-5 py-3.5">
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">{e.action}</span>
-                  <span className="text-[11px] text-slate-400">·</span>
-                  <span className="text-[11px] text-slate-500">{e.performedBy?.name ?? e.performedBy?.email ?? "system"}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600 dark:text-zinc-300">{e.action}</span>
+                  <span className="text-[11px] text-slate-400 dark:text-zinc-600">·</span>
+                  <span className="text-[11px] text-slate-500 dark:text-zinc-400">{e.performedBy?.name ?? e.performedBy?.email ?? "system"}</span>
                 </div>
-                <span className="text-[10px] text-slate-400">{new Date(e.createdAt).toLocaleString()}</span>
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500">{new Date(e.createdAt).toLocaleString()}</span>
               </div>
               {e.changes.length > 0 && (
-                <div className="text-[11px] text-slate-500 space-y-0.5">
+                <div className="text-[11px] text-slate-500 dark:text-zinc-400 space-y-0.5">
                   {e.changes.slice(0, 6).map((c, i) => (
                     <div key={i}>
-                      <span className="font-semibold text-slate-600">{c.field}</span>
-                      <span className="text-slate-400"> · </span>
-                      <span className="line-through text-slate-400">{c.from}</span>
-                      <span className="text-slate-400"> → </span>
-                      <span className="text-slate-700">{c.to}</span>
+                      <span className="font-semibold text-slate-600 dark:text-zinc-300">{c.field}</span>
+                      <span className="text-slate-400 dark:text-zinc-600"> · </span>
+                      <span className="line-through text-slate-400 dark:text-zinc-600">{c.from}</span>
+                      <span className="text-slate-400 dark:text-zinc-600"> → </span>
+                      <span className="text-slate-700 dark:text-zinc-200">{c.to}</span>
                     </div>
                   ))}
-                  {e.changes.length > 6 && <div className="text-slate-400">+{e.changes.length - 6} more…</div>}
+                  {e.changes.length > 6 && <div className="text-slate-400 dark:text-zinc-500">+{e.changes.length - 6} more…</div>}
                 </div>
               )}
             </div>
@@ -330,7 +339,7 @@ export default function InstrumentDetailPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="w-full min-h-screen pt-16 bg-slate-50">
+    <div className="w-full min-h-screen pt-24 bg-background">
       <Navbar />
       <div className="max-w-[1200px] mx-auto px-6 py-8">{children}</div>
     </div>
@@ -366,17 +375,17 @@ function SampleEditor({ rangeLabel, samples, onChange }: {
   const removePoint = (idx: number) => onChange(samples.filter((_, i) => i !== idx));
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-      <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-[11px] font-mono text-slate-600">{rangeLabel}</span>
+    <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-slate-50 dark:bg-zinc-800 border-b border-slate-100 dark:border-zinc-700 flex items-center justify-between">
+        <span className="text-[11px] font-mono text-slate-600 dark:text-zinc-300">{rangeLabel}</span>
         <Button size="sm" variant="ghost" onClick={addPoint} className="text-[11px] h-6 gap-1">
           <Plus className="h-3 w-3" /> Add point
         </Button>
       </div>
       {samples.length === 0 ? (
-        <div className="px-3 py-3 text-[11px] text-slate-400">No sample points.</div>
+        <div className="px-3 py-3 text-[11px] text-slate-400 dark:text-zinc-500">No sample points.</div>
       ) : (
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-zinc-700">
           {samples.map((s, idx) => (
             <div key={idx} className="px-3 py-2 flex items-center gap-2">
               <Input

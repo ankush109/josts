@@ -1,28 +1,26 @@
 /**
  * @fileoverview Left-side branding panel for auth pages (login & register).
  *
- * Displays the Josts Technologies logo, a typewriter brand name animation,
- * and a rotating tagline carousel. Extracted from LoginForm / RegisterForm to
- * eliminate copy-paste duplication.
+ * Displays the Jasper wordmark with a typewriter animation and a rotating
+ * tagline carousel.
  */
 
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
-import jostLogo from "../public/logo2.png";
 
 /** Taglines rotated every 3 seconds on the auth branding panel. */
 const TAGLINES = [
-  "Advanced engineering solutions since 1907",
-  "Built on fair & ethical business practices",
-  "Trusted by customers, stakeholders & employees",
-  "World-class products for Indian industry",
-  "Setting high standards of quality & service",
-  "Diverse Technology Integrated Approach",
+  "Calibration reports that work offline, anywhere.",
+  "Built for engineers, not paperwork.",
+  "Uncertainty budgets — computed, not crunched.",
+  "From reading to certificate in minutes.",
+  "Audit trails that survive every revision.",
+  "Field-ready. Lab-grade.",
 ] as const;
 
-const BRAND_NAME = "Josts Technologies";
+const BRAND_NAME = "Jasper";
+const SUB_BRAND = "Calibration Suite";
 const TYPEWRITER_INTERVAL_MS = 80;
 const TAGLINE_INTERVAL_MS = 3000;
 const TAGLINE_FADE_DURATION_MS = 400;
@@ -30,8 +28,8 @@ const TAGLINE_FADE_DURATION_MS = 400;
 /**
  * Animated left panel shown on the login and register pages.
  *
- * Renders a navy background with dot-grid texture, the Josts logo,
- * a typewriter brand-name animation, and a fading tagline carousel.
+ * Renders a navy background with dot-grid texture, a typewriter Jasper
+ * wordmark, and a fading tagline carousel.
  *
  * Only visible on `lg` screens and above (hidden on mobile).
  */
@@ -91,30 +89,41 @@ export function AuthBrandingPanel() {
       <div className="relative z-10 flex flex-col items-center text-center gap-10 max-w-sm">
         {/* Typewriter brand name */}
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-white">
+          <h1
+            className="text-6xl font-extrabold tracking-tight italic bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
+            style={{ fontFamily: '"Times New Roman", Times, serif' }}
+          >
             {displayedText}
             {!typewriterDone && (
-              <span className="inline-block w-[2px] h-8 bg-white/80 ml-0.5 animate-pulse align-middle" />
+              <span className="inline-block w-[3px] h-12 bg-white/80 ml-1 animate-pulse align-middle" />
             )}
           </h1>
           <div className="mt-3 mx-auto w-12 h-px bg-blue-400" />
+          {typewriterDone && (
+            <p className="mt-3 text-xs uppercase tracking-[0.3em] text-blue-200/60 font-medium animate-in fade-in duration-700">
+              {SUB_BRAND}
+            </p>
+          )}
         </div>
 
-        {/* Logo card */}
-        <div className="bg-white rounded-2xl p-5 shadow-2xl shadow-black/20">
-          <Image
-            src={jostLogo}
-            alt="Josts Technologies"
-            width={220}
-            height={480}
-          />
+        {/* Decorative monogram */}
+        <div className="relative">
+          <div className="h-32 w-32 rounded-3xl bg-gradient-to-br from-blue-500/20 via-indigo-500/15 to-violet-500/20 border border-white/10 backdrop-blur-sm shadow-2xl shadow-black/30 flex items-center justify-center">
+            <span
+              className="text-7xl font-extrabold italic bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
+              style={{ fontFamily: '"Times New Roman", Times, serif' }}
+            >
+              J
+            </span>
+          </div>
+          <div className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-gradient-to-br from-blue-400 to-violet-500 ring-4 ring-[#1e3a5f]" />
         </div>
 
-        {/* Est. divider */}
+        {/* Divider */}
         <div className="w-full flex items-center gap-4">
           <div className="flex-1 h-px bg-blue-400/15" />
           <span className="text-[10px] uppercase tracking-[0.25em] text-blue-300/40 font-medium">
-            Est. 1907
+            Precision · Reliability · Trust
           </span>
           <div className="flex-1 h-px bg-blue-400/15" />
         </div>

@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/api-client";
 import { EP_CALIBRATION_AUDIT_LOG } from "@/lib/endpoints";
+import { isLocalId } from "@/app/lib/offline-drafts";
 import type { AuditEntry } from "@/types/calibration";
 
 /** Shared React Query cache key for audit logs. */
@@ -38,6 +39,6 @@ export function useGetAuditLog(reportId: string | null) {
   return useQuery<AuditEntry[]>({
     queryKey: [AUDIT_LOG_KEY, reportId],
     queryFn: () => getAuditLog(reportId!),
-    enabled: !!reportId,
+    enabled: !!reportId && !isLocalId(reportId),
   });
 }

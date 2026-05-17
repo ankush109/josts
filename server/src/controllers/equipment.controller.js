@@ -6,7 +6,7 @@ import { getEquipmentAudit } from "../services/equipment-audit.service.js";
 export const getEquipmentParamSummary = async (req, res, next) => {
   try {
     const equipments = await Equipment.find({ isActive: true })
-      .select("equipmentName parameters.parameterName")
+      .select("equipmentName make model serialNo nextDue parameters.parameterName")
       .lean();
     res.status(200).json({ success: true, data: equipments });
   } catch (err) {
@@ -34,6 +34,15 @@ export const getEquipmentDetails = async (req, res, next) => {
       success: true,
       data: equipment
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const createEquipment = async (req, res, next) => {
+  try {
+    const data = await EquipementService.createEquipment(req.body, req.user?.userId);
+    res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);
   }

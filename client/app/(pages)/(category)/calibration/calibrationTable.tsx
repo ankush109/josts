@@ -84,6 +84,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AuditEntry, CalibrationReportStatus } from "@/types/calibration";
+import { useLocalDraftReports } from "@/app/hooks/useLocalDraftReports";
+import { useSyncQueue } from "@/app/hooks/useSyncQueue";
+import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
+import { CloudOff, RefreshCw } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -107,6 +111,8 @@ interface ReportListItem {
   customerName: string;
   createdAt: string;
   updatedAt: string;
+  /** True when this row originates from an offline IndexedDB draft (not yet synced). */
+  __local?: boolean;
 }
 
 const NAVY       = "#1e3a5f";
@@ -239,8 +245,6 @@ function StatCard({
 }) {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const cardNavy = isDark ? NAVY_DARK : NAVY;
-  const cardNavyLight = isDark ? NAVY_LIGHT_DARK : NAVY_LIGHT;
 
   return (
     <button
@@ -248,14 +252,13 @@ function StatCard({
       className={cn(
         "flex-1 min-w-[120px] rounded-xl border p-4 text-left transition-all",
         active
-          ? isDark ? "border-[#4a7bb5]/40 shadow-sm ring-1 ring-[#4a7bb5]/20" : "border-[#1e3a5f]/40 shadow-sm ring-1 ring-[#1e3a5f]/20"
+          ? "bg-[#e8eef5] dark:bg-zinc-800/60 border-[#1e3a5f]/40 dark:border-[#4a7bb5]/40 shadow-sm ring-1 ring-[#1e3a5f]/20 dark:ring-[#4a7bb5]/20"
           : "border-slate-200 bg-white hover:border-[#1e3a5f]/20 hover:shadow-sm dark:bg-zinc-900 dark:border-zinc-700 dark:hover:border-zinc-500"
       )}
-      style={active ? { backgroundColor: cardNavyLight } : undefined}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className={cn("p-2 rounded-lg", accent)}>{icon}</div>
-        <span className="text-2xl font-bold tabular-nums" style={{ color: cardNavy }}>
+        <span className="text-2xl font-bold tabular-nums text-[#1e3a5f] dark:text-[#4a7bb5]">
           {value}
         </span>
       </div>
@@ -318,7 +321,17 @@ export default function CalibrationReportsTable() {
   const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [auditReportId, setAuditReportId] = useState<string | null>(null);
   const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(auditReportId);
-  const allItems = (data?.items ?? []) as unknown as ReportListItem[];
+
+  // Server-side reports (from the API)
+  const serverItems = (data?.items ?? []) as unknown as ReportListItem[];
+
+  // Offline-only drafts (live in IndexedDB until the sync queue pushes them).
+  // Rendered in their own table above the main list — NOT merged into `allItems`.
+  const { items: localItems } = useLocalDraftReports();
+  const { syncNow, running: syncRunning } = useSyncQueue();
+  const online = useOnlineStatus();
+
+  const allItems: ReportListItem[] = serverItems;
 
   function isPdfFailed(report: ReportListItem) {
     if (report.filePaths?.length) return false;
@@ -467,7 +480,7 @@ export default function CalibrationReportsTable() {
           {/* Table */}
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-zinc-700" style={{ backgroundColor: NAVY_LIGHT }}>
+              <tr className="border-b border-slate-100 dark:border-zinc-700 bg-[#e8eef5] dark:bg-zinc-800/60">
                 {[180, 100, 130, 90, 120, 110, 100, 100, 70, 60].map((w, i) => (
                   <th key={i} className="px-3 py-3 text-left">
                     <div className="h-3 rounded animate-pulse" style={{ width: w, backgroundColor: NAVY_MEDIUM }} />
@@ -579,12 +592,138 @@ export default function CalibrationReportsTable() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <StatCard label="Total Reports" value={counts.total} icon={<ClipboardList className="h-4 w-4" style={{ color: navy }} />} accent={isDark ? "bg-[#1e3a5f]/30" : "bg-[#e8eef5]"} active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
+        <StatCard label="Total Reports" value={counts.total} icon={<ClipboardList className="h-4 w-4 text-[#1e3a5f] dark:text-[#4a7bb5]" />} accent="bg-[#e8eef5] dark:bg-[#1e3a5f]/30" active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
         <StatCard label="Drafts" value={counts.draft} icon={<FileText className="h-4 w-4 text-slate-500 dark:text-zinc-400" />} accent="bg-slate-100 dark:bg-zinc-700/60" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
         <StatCard label="Submitted" value={counts.submitted} icon={<Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />} accent="bg-sky-50 dark:bg-sky-950/50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
         <StatCard label="Verified" value={counts.verified} icon={<CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />} accent="bg-emerald-50 dark:bg-emerald-950/50" active={statusFilter === "verified"} onClick={() => handleStatClick("verified")} />
         <StatCard label="Rejected" value={counts.rejected} icon={<XCircle className="h-4 w-4 text-red-500 dark:text-red-400" />} accent="bg-red-50 dark:bg-red-950/50" active={statusFilter === "rejected"} onClick={() => handleStatClick("rejected")} />
       </div>
+
+      {localItems.length > 0 && (
+        <Card className="shadow-sm border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20">
+          <CardContent className="p-0">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-amber-200/70 dark:border-amber-900/40">
+              <div className="flex items-center gap-2">
+                <CloudOff className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
+                    Not synced yet ({localItems.length})
+                  </p>
+                  <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                    Saved on this device. Will upload when online.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => syncNow()}
+                disabled={!online || syncRunning}
+                title={!online ? "Connect to the internet to sync" : undefined}
+                className="h-8 gap-1.5 text-xs border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", syncRunning && "animate-spin")} />
+                {syncRunning ? "Syncing…" : "Sync now"}
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide pl-5 text-amber-900 dark:text-amber-300">CSR No</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-300">Customer</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-300">Instruments</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-300">Last edited</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-4 text-amber-900 dark:text-amber-300">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {localItems.map((report) => (
+                  <TableRow
+                    key={report._id}
+                    className={cn(
+                      "cursor-pointer",
+                      report.__syncError
+                        ? "hover:bg-red-100/60 dark:hover:bg-red-900/20"
+                        : "hover:bg-amber-100/60 dark:hover:bg-amber-900/30"
+                    )}
+                    onClick={() => router.push(`/calibration/${report._id}`)}
+                  >
+                    <TableCell className="pl-5">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn(
+                          "h-8 w-8 rounded-lg flex items-center justify-center shrink-0",
+                          report.__syncError
+                            ? "bg-red-100 dark:bg-red-900/40"
+                            : "bg-amber-100 dark:bg-amber-900/40"
+                        )}>
+                          <FlaskConical className={cn(
+                            "h-3.5 w-3.5",
+                            report.__syncError
+                              ? "text-red-700 dark:text-red-300"
+                              : "text-amber-800 dark:text-amber-300"
+                          )} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-amber-950 dark:text-amber-200">{report.csrNo}</p>
+                          {report.__syncError ? (
+                            <p className="text-xs text-red-700 dark:text-red-400 flex items-center gap-1 mt-0.5">
+                              <AlertCircle className="h-3 w-3 shrink-0" />
+                              <span className="truncate max-w-[260px]" title={report.__syncError}>
+                                {report.__syncError}
+                              </span>
+                            </p>
+                          ) : (
+                            <p className="text-xs text-amber-700/70 dark:text-amber-400/70">Saved on this device</p>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {report.customerName
+                        ? <span className="text-sm text-amber-900 dark:text-amber-200">{report.customerName}</span>
+                        : <span className="text-xs text-amber-700/60">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800">
+                        <Layers className="h-3 w-3" />
+                        {report.instrumentCount}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                          {new Date(report.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                        <span className="text-xs text-amber-700/70 dark:text-amber-400/70">
+                          {new Date(report.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right pr-4">
+                      {report.__syncError ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/50 dark:text-red-200 dark:border-red-700 cursor-default">
+                              <AlertCircle className="h-3 w-3" /> Sync failed
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[280px] text-xs">
+                            {report.__syncError}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700">
+                          📱 Local
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="shadow-sm border-slate-200 dark:border-zinc-700">
         <CardContent className="p-0">
@@ -617,20 +756,20 @@ export default function CalibrationReportsTable() {
             </div>
           </div>
 
-          <div className="overflow-hidden">
-            <Table>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[900px]">
               <TableHeader>
-                <TableRow className="hover:bg-transparent" style={{ backgroundColor: navyLight }}>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide pl-5" style={{ color: navy }}>CSR No</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Status</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Created By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Instruments</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Customer</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Calibrated By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Verified By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: navy }}>Date</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center" style={{ color: navy }}>PDF</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-4" style={{ color: navy }}>Actions</TableHead>
+                <TableRow className="hover:bg-transparent bg-[#e8eef5] dark:bg-zinc-800/60">
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide pl-5 text-[#1e3a5f] dark:text-[#4a7bb5]">CSR No</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Status</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Created By</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Instruments</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Customer</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Calibrated By</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Verified By</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Date</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center text-[#1e3a5f] dark:text-[#4a7bb5]">PDF</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-4 text-[#1e3a5f] dark:text-[#4a7bb5]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -670,7 +809,19 @@ export default function CalibrationReportsTable() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell><StatusBadge status={report.status} /></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <StatusBadge status={report.status} />
+                          {report.__local && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                              title="Saved on this device — will sync when online"
+                            >
+                              📱 Local
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="text-sm text-slate-700 font-medium dark:text-zinc-200">{report.createdBy?.name ?? "—"}</p>
@@ -1000,7 +1151,7 @@ export default function CalibrationReportsTable() {
       {/* ── First-login onboarding modal ── */}
       {showOnboarding && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6">
+          <div className="bg-white dark:bg-zinc-900 dark:border dark:border-zinc-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 flex flex-col gap-6">
             <div className="flex flex-col items-center gap-2 text-center">
               <div className="h-14 w-14 rounded-full flex items-center justify-center mb-1" style={{ backgroundColor: navyLight }}>
                 <PenLine className="h-6 w-6" style={{ color: navy }} />

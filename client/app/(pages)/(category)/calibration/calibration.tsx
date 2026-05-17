@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo, FC, KeyboardEvent } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useId, FC, KeyboardEvent } from "react";
 import dynamic from "next/dynamic";
 import type { Step, EventData, TooltipRenderProps } from "react-joyride";
 const Joyride = dynamic(() => import("react-joyride").then((m) => ({ default: m.Joyride })), { ssr: false });
@@ -18,8 +18,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/provider/AuthProvider";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import {
+  isLocalId,
+  createLocalDraft,
+  updateLocalDraft,
+  getDraft,
+} from "@/app/lib/offline-drafts";
+import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
+import { useCheckCsrNo } from "@/app/hooks/useCheckCsrNo";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine, GitBranch, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +35,11 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
 
 // ─── Types (canonical source: @/types/calibration) ───────────────────────────
 import type {
@@ -65,6 +78,7 @@ import {
   mapApiToReportMeta,
 } from "./utils";
 import { useGetEquipmentParamSummary } from "@/app/hooks/query/useGetEquipmentParamSummary";
+import Wordmark from "@/components/Wordmark";
 
 
 // ─── Report-level field helper ─────────────────────────────────────────────────
@@ -97,7 +111,8 @@ const Field: FC<{
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ label, k, type = "text", span2, span3, required, autoFocus, readOnly, meta, showErrors, touched, onTouch, onChange }) => {
+  helper?: React.ReactNode;
+}> = ({ label, k, type = "text", span2, span3, required, autoFocus, readOnly, meta, showErrors, touched, onTouch, onChange, helper }) => {
   const isTouched = touched?.has(k) ?? false;
   const hasError = !readOnly && required && (showErrors || isTouched) && !String(meta[k]).trim();
   return (
@@ -117,6 +132,7 @@ const Field: FC<{
         className={cn(readOnly && "bg-zinc-50/70 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400 cursor-default select-text")}
       />
       {hasError && <span className="text-[10px] text-destructive">This field is required</span>}
+      {helper}
     </div>
   );
 };
@@ -128,45 +144,62 @@ const SelectField: FC<{
   span2?: boolean;
   locked?: boolean;
   readOnly?: boolean;
+  allowCustom?: boolean;
   /** undefined = no status message; true = "Preset params loaded"; false = "No params found" */
   presetMatched?: boolean;
   meta: InstrumentMeta;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ label, k, options, span2, locked, readOnly, presetMatched, meta, onChange }) => (
-  <div className={cn("flex flex-col gap-1.5", span2 && "col-span-2")}>
-    <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-      {label}
-    </Label>
-    {locked || readOnly ? (
-      <div className={cn(
-        "h-9 px-3 flex items-center rounded-md border text-sm gap-1.5",
-        readOnly
-          ? "border-zinc-200 dark:border-zinc-700 bg-zinc-50/70 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
-          : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
-      )}>
-        <span className="flex-1 truncate">{String(meta[k]) || `—`}</span>
-        {locked && !readOnly && <span className="text-[10px] text-zinc-400 font-medium shrink-0">locked</span>}
-      </div>
-    ) : (
-      <Select value={meta[k]} onValueChange={(val) => onChange(k, val)}>
-        <SelectTrigger className="h-9 text-sm">
-          <SelectValue placeholder={`Select ${label}`} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((opt) => (
-            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    )}
-    {presetMatched === true && (
-      <span className="text-[10px] font-medium text-emerald-600">✓ Preset params loaded</span>
-    )}
-    {presetMatched === false && (
-      <span className="text-[10px] font-medium text-amber-600">No params found</span>
-    )}
-  </div>
-);
+}> = ({ label, k, options, span2, locked, readOnly, allowCustom, presetMatched, meta, onChange }) => {
+  const listId = useId();
+  return (
+    <div className={cn("flex flex-col gap-1.5", span2 && "col-span-2")}>
+      <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </Label>
+      {locked || readOnly ? (
+        <div className={cn(
+          "h-9 px-3 flex items-center rounded-md border text-sm gap-1.5",
+          readOnly
+            ? "border-zinc-200 dark:border-zinc-700 bg-zinc-50/70 dark:bg-zinc-800/50 text-zinc-600 dark:text-zinc-400"
+            : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+        )}>
+          <span className="flex-1 truncate">{String(meta[k]) || `—`}</span>
+          {locked && !readOnly && <span className="text-[10px] text-zinc-400 font-medium shrink-0">locked</span>}
+        </div>
+      ) : allowCustom ? (
+        <>
+          <datalist id={listId}>
+            {options.map((opt) => <option key={opt} value={opt} />)}
+          </datalist>
+          <Input
+            list={listId}
+            value={String(meta[k])}
+            onChange={(e) => onChange(k, e.target.value)}
+            placeholder={`Select or type ${label}`}
+            className="h-9 text-sm"
+          />
+        </>
+      ) : (
+        <Select value={meta[k]} onValueChange={(val) => onChange(k, val)}>
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue placeholder={`Select ${label}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((opt) => (
+              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {presetMatched === true && (
+        <span className="text-[10px] font-medium text-emerald-600">✓ Preset params loaded</span>
+      )}
+      {presetMatched === false && (
+        <span className="text-[10px] font-medium text-amber-600">No params found — enter any parameter manually</span>
+      )}
+    </div>
+  );
+};
 
 // ─── EquipmentCombobox ────────────────────────────────────────────────────────
 
@@ -321,7 +354,8 @@ const MetaGrid: FC<{
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-}> = ({ meta, instParamNames, modelLocked, showErrors, autoFocusCsr, readOnly, hasPreset, touched, onTouch, onChange }) => {
+  csrCheckHelper?: React.ReactNode;
+}> = ({ meta, instParamNames, modelLocked, showErrors, autoFocusCsr, readOnly, hasPreset, touched, onTouch, onChange, csrCheckHelper }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const sharedProps = { meta, showErrors, touched, onTouch, onChange, readOnly };
@@ -330,13 +364,13 @@ const MetaGrid: FC<{
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-      <Field label="CSR No"              k="csrNo"         {...sharedProps} required autoFocus={autoFocusCsr} />
+      <Field label="CSR No"              k="csrNo"         {...sharedProps} required autoFocus={autoFocusCsr} helper={csrCheckHelper} />
       <Field label="Cal Date"            k="calDate"       {...sharedProps} type="date" />
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
-      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} readOnly={readOnly} presetMatched={hasPreset} meta={meta} onChange={onChange} />
-      <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} readOnly={readOnly} meta={meta} onChange={onChange} />
+      <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} readOnly={readOnly} allowCustom presetMatched={hasPreset} meta={meta} onChange={onChange} />
+      <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} readOnly={readOnly} allowCustom meta={meta} onChange={onChange} />
       <Field label="Sl. No"              k="slNo"          {...sharedProps} />
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
 
@@ -991,6 +1025,322 @@ const UncertaintyFormulaModal: FC<{ open: boolean; onClose: () => void }> = ({ o
   </Dialog>
 );
 
+// ─── Calculation trace (step-by-step with substituted values) ────────────────
+
+function fmt(n: number | null | undefined, dec = 6) {
+  if (n == null || !isFinite(n)) return "—";
+  return n.toFixed(dec);
+}
+
+// ─── Workflow (flow-diagram) view of a single measurement point ──────────────
+
+type TraceStep = { sym: string; label: string; result: string; highlight?: boolean };
+
+const FLOW_NODE_W = 148;
+const FLOW_NODE_H = 68;
+const FLOW_CW = 1460;
+const FLOW_CH = 470;
+
+// center-x, center-y for each variable node
+const FLOW_POS: Record<string, [number, number]> = {
+  J:   [90,   55],
+  err: [280,  15],
+  K:   [280, 112],
+  M:   [90,  230],
+  N:   [280, 230],
+  O:   [90,  318],
+  P:   [90,  406],
+  Q:   [500, 230],
+  R:   [695, 162],
+  S:   [880, 130],
+  T:   [1050, 282],
+  U:   [715, 392],
+  V:  [1215, 282],
+  W:  [1375, 282],
+};
+
+const FLOW_EDGES: [string, string][] = [
+  ["J", "err"], ["J", "K"],
+  ["M", "N"],
+  ["K", "Q"], ["N", "Q"], ["O", "Q"], ["P", "Q"],
+  ["Q", "R"], ["K", "R"],
+  ["R", "S"],
+  ["Q", "T"], ["S", "T"],
+  ["T", "V"], ["U", "V"],
+  ["V", "W"],
+];
+
+const FLOW_SHORT_EXPR: Record<string, string> = {
+  J:   "mean(readings)",
+  err: "J − nom",
+  K:   "stdev / √n",
+  M:   "stdUnc% / 100 × |nom|",
+  N:   "M / 2",
+  O:   "(acc% × |nom| + offset) / √3",
+  P:   "leastCount / (2√3)",
+  Q:   "√(K² + N² + O² + P²)",
+  R:   "4 × Q⁴ / K⁴",
+  S:   "t(R, 95%)",
+  T:   "S × Q",
+  U:   "scope% / 100 × |nom|",
+  V:   "max(T, U)",
+  W:   "(V / |nom|) × 100",
+};
+
+const CalcWorkflow: FC<{ steps: TraceStep[]; exprs: Record<string, string> }> = ({ steps, exprs }) => {
+  const uid = useId().replace(/:/g, "");
+  const markerId = `wf-arrow-${uid}`;
+  const stepMap = Object.fromEntries(steps.map((s) => [s.sym, s]));
+
+  return (
+    <div className="overflow-x-auto pb-2 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800">
+      <div className="relative" style={{ width: FLOW_CW, height: FLOW_CH }}>
+        <svg className="absolute inset-0 pointer-events-none" width={FLOW_CW} height={FLOW_CH}>
+          <defs>
+            <marker id={markerId} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M1,1 L1,7 L7,4 z" fill="rgb(139 92 246 / 0.7)" />
+            </marker>
+          </defs>
+          {FLOW_EDGES.map(([from, to]) => {
+            const [fx, fy] = FLOW_POS[from];
+            const [tx, ty] = FLOW_POS[to];
+            const x1 = fx + FLOW_NODE_W / 2;
+            const y1 = fy;
+            const x2 = tx - FLOW_NODE_W / 2;
+            const y2 = ty;
+            const mx = (x1 + x2) / 2;
+            return (
+              <path
+                key={`${from}-${to}`}
+                d={`M ${x1} ${y1} C ${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`}
+                stroke="rgb(139 92 246 / 0.45)"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                fill="none"
+                markerEnd={`url(#${markerId})`}
+              />
+            );
+          })}
+        </svg>
+
+        {Object.entries(FLOW_POS).map(([sym, [cx, cy]]) => {
+          const step = stepMap[sym];
+          if (!step) return null;
+          const hi = !!step.highlight;
+          return (
+            <div
+              key={sym}
+              style={{ left: cx - FLOW_NODE_W / 2, top: cy - FLOW_NODE_H / 2, width: FLOW_NODE_W, height: FLOW_NODE_H }}
+              className="absolute"
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className={`h-full w-full rounded-lg border shadow-sm px-2.5 py-2 flex flex-col justify-between cursor-default select-none ${
+                    hi
+                      ? "bg-violet-50 dark:bg-violet-950/60 border-violet-300 dark:border-violet-700/70"
+                      : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-700"
+                  }`}>
+                    {/* sym + label */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`shrink-0 rounded px-1 py-px text-white text-[8px] font-bold font-mono leading-tight ${
+                        hi ? "bg-violet-500" : "bg-zinc-500 dark:bg-zinc-600"
+                      }`}>
+                        {sym}
+                      </span>
+                      <span className="text-[9px] text-zinc-500 dark:text-zinc-400 truncate leading-tight">{step.label}</span>
+                    </div>
+                    {/* short formula */}
+                    <div className="font-mono text-[9px] text-zinc-400 dark:text-zinc-500 truncate">
+                      {FLOW_SHORT_EXPR[sym]}
+                    </div>
+                    {/* result */}
+                    <div className={`font-mono text-[11px] font-bold leading-none ${
+                      hi ? "text-violet-600 dark:text-violet-400" : "text-zinc-800 dark:text-zinc-200"
+                    }`}>
+                      = {step.result}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-72">
+                  <div className="space-y-1.5 py-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`rounded px-1.5 py-px text-white text-[9px] font-bold font-mono ${hi ? "bg-violet-500" : "bg-zinc-500"}`}>
+                        {sym}
+                      </span>
+                      <span className="text-[12px] font-semibold">{step.label}</span>
+                    </div>
+                    <div className="font-mono text-[11px] text-zinc-300 whitespace-pre-wrap break-all leading-relaxed">
+                      {exprs[sym] ?? FLOW_SHORT_EXPR[sym]}
+                    </div>
+                    <div className={`font-mono text-[12px] font-bold pt-0.5 border-t border-zinc-700 ${hi ? "text-violet-400" : "text-zinc-100"}`}>
+                      = {step.result}
+                    </div>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─── Step-by-step calculation trace (list + flow views) ──────────────────────
+
+const CalcTrace: FC<{ param: Parameter }> = ({ param }) => {
+  const [open, setOpen] = useState(false);
+  const [traceView, setTraceView] = useState<"list" | "flow">("list");
+
+  const measurements = param.ranges.flatMap((r) =>
+    r.measurements
+      .filter((m) => m.computed)
+      .map((m) => ({ m, rangeLabel: r.label }))
+  );
+
+  if (!measurements.length) return null;
+
+  return (
+    <div className="border border-zinc-200 dark:border-zinc-700 rounded-xl overflow-hidden">
+      {/* Header row */}
+      <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 flex-1 text-left"
+        >
+          <Calculator className="h-3.5 w-3.5 text-violet-500" />
+          <span className="text-[12px] font-semibold text-zinc-700 dark:text-zinc-300">Step-by-step calculation trace</span>
+          <span className="text-[10px] text-zinc-400 bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded-full">
+            {measurements.length} point{measurements.length !== 1 ? "s" : ""}
+          </span>
+        </button>
+        {open && (
+          <div className="flex items-center gap-1 mr-2">
+            <button
+              onClick={() => setTraceView("list")}
+              title="List view"
+              className={`p-1 rounded transition-colors ${traceView === "list" ? "bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setTraceView("flow")}
+              title="Flow diagram"
+              className={`p-1 rounded transition-colors ${traceView === "flow" ? "bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400" : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"}`}
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+        <button onClick={() => setOpen((v) => !v)}>
+          <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {measurements.map(({ m, rangeLabel }, idx) => {
+            const c = m.computed!;
+            const nom = parseFloat(m.nomValue);
+            const absNom = Math.abs(nom);
+            const validReadings = m.readings.map(Number).filter((r) => !isNaN(r));
+            const n = validReadings.length;
+
+            const K2 = c.stdUcMean ** 2;
+            const N2 = c.ucOfRefStd ** 2;
+            const O2 = c.ucDueToAccOfRefStd ** 2;
+            const P2 = c.ucDueToLcOfDuc ** 2;
+
+            const steps: TraceStep[] = [
+              { sym: "J",   label: "Mean Value",                    result: fmt(c.meanValue) },
+              { sym: "err", label: "Error (J − nom)",               result: fmt(c.error) },
+              { sym: "K",   label: "Type A Uncertainty",            result: fmt(c.stdUcMean) },
+              { sym: "M",   label: "Std. Uncertainty of Ref. Std.", result: fmt(c.stdUncertainty) },
+              { sym: "N",   label: "U/c of Ref. Std.",              result: fmt(c.ucOfRefStd) },
+              { sym: "O",   label: "U/c due to Accuracy of Ref.",   result: fmt(c.ucDueToAccOfRefStd) },
+              { sym: "P",   label: "U/c due to Least Count of DUC", result: fmt(c.ucDueToLcOfDuc) },
+              { sym: "Q",   label: "Combined Standard Uncertainty", result: fmt(c.combinedUc),          highlight: true },
+              { sym: "R",   label: "Effective Degrees of Freedom",  result: c.effectiveDof != null ? String(c.effectiveDof) : "∞" },
+              { sym: "S",   label: "Coverage Factor k",             result: fmt(c.kFactor, 2) },
+              { sym: "T",   label: "Expanded Uncertainty",          result: fmt(c.expandedUncertainty), highlight: true },
+              { sym: "U",   label: "Scope Claimed",                 result: fmt(c.scopeClaimed) },
+              { sym: "V",   label: "Resulted Expanded U/C",         result: fmt(c.resultedExpandedUc),  highlight: true },
+              { sym: "W",   label: "% Uncertainty",                 result: `${fmt(c.percentUc, 4)}%`,  highlight: true },
+            ];
+
+            // expressions only needed for list view
+            const exprs: Record<string, string> = {
+              J:   `mean(${validReadings.join(", ")})`,
+              err: `${fmt(c.meanValue)} − ${isNaN(nom) ? m.nomValue : nom}`,
+              K:   `stdev / √${n}`,
+              M:   `(stdUnc%) / 100 × ${fmt(absNom, 4)}`,
+              N:   `M / 2 = ${fmt(c.stdUncertainty)} / 2`,
+              O:   `(acc% × |nom| + offset) / √3`,
+              P:   `leastCount / (2√3)`,
+              Q:   `√(K² + N² + O² + P²)\n= √(${fmt(K2, 8)} + ${fmt(N2, 8)} + ${fmt(O2, 8)} + ${fmt(P2, 8)})`,
+              R:   `4 × Q⁴ / K⁴ (Welch–Satterthwaite)`,
+              S:   `t(R=${c.effectiveDof ?? "∞"}, 95%)`,
+              T:   `S × Q = ${fmt(c.kFactor, 2)} × ${fmt(c.combinedUc)}`,
+              U:   `scope% / 100 × ${fmt(absNom, 4)}`,
+              V:   `max(T, U) = max(${fmt(c.expandedUncertainty)}, ${fmt(c.scopeClaimed)})`,
+              W:   `(V / |nom|) × 100 = (${fmt(c.resultedExpandedUc)} / ${fmt(absNom, 4)}) × 100`,
+            };
+
+            return (
+              <div key={m.id} className="p-4">
+                {/* Point header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                    Point {idx + 1}
+                  </span>
+                  {rangeLabel && (
+                    <span className="text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded">
+                      {rangeLabel}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 font-mono">
+                    nom = {m.nomValue}
+                  </span>
+                </div>
+
+                {traceView === "flow" ? (
+                  <CalcWorkflow steps={steps} exprs={exprs} />
+                ) : (
+                  <div className="space-y-1.5">
+                    {steps.map((step) => (
+                      <div
+                        key={step.sym}
+                        className={`flex items-start gap-3 rounded-lg px-3 py-2 ${
+                          step.highlight
+                            ? "bg-violet-50 dark:bg-violet-950/30 border border-violet-100 dark:border-violet-900"
+                            : "bg-zinc-50 dark:bg-zinc-800/40"
+                        }`}
+                      >
+                        <div className="shrink-0 h-6 w-6 rounded-md bg-zinc-800 dark:bg-zinc-700 text-white flex items-center justify-center text-[9px] font-bold font-mono mt-0.5">
+                          {step.sym}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 mb-0.5">{step.label}</div>
+                          <div className="font-mono text-[11px] text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap break-all">{exprs[step.sym]}</div>
+                        </div>
+                        <div className={`shrink-0 font-mono text-[12px] font-bold mt-0.5 ${
+                          step.highlight ? "text-violet-700 dark:text-violet-400" : "text-zinc-800 dark:text-zinc-200"
+                        }`}>
+                          = {step.result}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Results table (computed uncertainty budget) ──────────────────────────────
 
 const RESULT_ROWS: { key: keyof ComputedBudget; label: string; decimals: number }[] = [
@@ -1112,12 +1462,18 @@ const SbInstrument: FC<{
   activeParamId: string;
   canAddParam: boolean;
   readOnly?: boolean;
+  presets: Record<string, InstrumentPreset>;
+  instrumentKey: string;
   onSelectInstrument: (id: string) => void;
   onSelectParam: (instId: string, paramId: string) => void;
   onRemoveInstrument: (id: string) => void;
   onRemoveParam: (instId: string, paramId: string) => void;
   onAddParam: (instId: string) => void;
-}> = ({ inst, index, isActive, activeParamId, canAddParam, readOnly, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam }) => {
+  onAddParamDirect: (instId: string, name: string, unit: string, loadExamples: boolean) => void;
+}> = ({ inst, index, isActive, activeParamId, canAddParam, readOnly, presets, instrumentKey, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam, onAddParamDirect }) => {
+  const presetParams = presets[instrumentKey]?.params ?? {};
+  const presetUnits  = presets[instrumentKey]?.units ?? {};
+  const hasPresets = Object.keys(presetParams).length > 0;
   const label = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
   const sub   = [inst.meta.make, inst.meta.modelType].filter(Boolean).join(" · ");
 
@@ -1213,25 +1569,92 @@ const SbInstrument: FC<{
           })}
 
           {!readOnly && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span data-tour="add-param-btn" className="w-full mt-1 block">
-                  <Button
-                    variant="outline" size="xs"
-                    onClick={() => onAddParam(inst.id)}
-                    disabled={!canAddParam}
-                    className="w-full border-dashed text-muted-foreground"
-                  >
-                    <Plus />Add parameter
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {!canAddParam && (
+            !canAddParam ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span data-tour="add-param-btn" className="w-full mt-1 block">
+                    <Button
+                      variant="outline" size="xs"
+                      disabled
+                      className="w-full border-dashed text-muted-foreground"
+                    >
+                      <Plus />Add parameter
+                    </Button>
+                  </span>
+                </TooltipTrigger>
                 <TooltipContent side="right" className="text-xs max-w-[180px]">
                   Select Make &amp; Model Type first
                 </TooltipContent>
-              )}
-            </Tooltip>
+              </Tooltip>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    data-tour="add-param-btn"
+                    variant="outline" size="xs"
+                    className="w-full border-dashed text-muted-foreground mt-1"
+                  >
+                    <Plus />Add parameter
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  sideOffset={4}
+                  className="w-[15rem] max-h-[60vh] overflow-y-auto"
+                >
+                  {hasPresets && (
+                    <>
+                      <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground py-1">
+                        Presets
+                      </DropdownMenuLabel>
+                      {Object.keys(presetParams).map((pName) => {
+                        const pUnit = presetUnits[pName] ?? "";
+                        return (
+                          <DropdownMenuSub key={pName}>
+                            <DropdownMenuSubTrigger className="text-xs">
+                              <span className="flex-1 truncate">{pName}</span>
+                              {pUnit && (
+                                <span className="text-[10px] font-mono text-muted-foreground min-w-[1.5rem] text-right">
+                                  {pUnit}
+                                </span>
+                              )}
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="w-56">
+                              <DropdownMenuItem
+                                onClick={() => onAddParamDirect(inst.id, pName, pUnit, false)}
+                                className="text-xs"
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium">Manual entry</span>
+                                  <span className="text-[10px] text-muted-foreground">Start blank</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onAddParamDirect(inst.id, pName, pUnit, true)}
+                                className="text-xs"
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium">Load example values</span>
+                                  <span className="text-[10px] text-muted-foreground">Pre-filled sample readings</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        );
+                      })}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() => onAddParam(inst.id)}
+                    className="text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    Custom parameter…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )
           )}
         </div>
       )}
@@ -1286,19 +1709,26 @@ const AddParamDialog: FC<{
   open: boolean;
   instrumentKey: string;
   presets: Record<string, InstrumentPreset>;
+  equipmentParamNames?: string[];
+  initialMode?: "pick" | "custom";
   onCancel: () => void;
   onConfirm: (name: string, unit: string, loadExamples: boolean) => void;
-}> = ({ open, instrumentKey, presets, onCancel, onConfirm }) => {
-  const [mode,         setMode]         = useState<"pick" | "choose" | "custom">("pick");
+}> = ({ open, instrumentKey, presets, equipmentParamNames = [], initialMode = "pick", onCancel, onConfirm }) => {
+  const [mode,         setMode]         = useState<"pick" | "choose" | "custom">(initialMode);
   const [pendingName,  setPendingName]  = useState("");
   const [pendingUnit,  setPendingUnit]  = useState("");
   const [name,         setName]         = useState("");
   const [unit,         setUnit]         = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
+  const datalistId = useId();
 
   useEffect(() => {
-    if (!open) { setMode("pick"); setName(""); setUnit(""); setPendingName(""); setPendingUnit(""); }
-  }, [open]);
+    if (open) {
+      setMode(initialMode);
+    } else {
+      setMode("pick"); setName(""); setUnit(""); setPendingName(""); setPendingUnit("");
+    }
+  }, [open, initialMode]);
 
   useEffect(() => { if (mode === "custom") setTimeout(() => nameRef.current?.focus(), 60); }, [mode]);
 
@@ -1366,7 +1796,20 @@ const AddParamDialog: FC<{
 
           {mode === "custom" && (
             <>
-              <Input ref={nameRef} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={handleKey} placeholder="Parameter name" className="text-xs" />
+              {equipmentParamNames.length > 0 && (
+                <datalist id={datalistId}>
+                  {equipmentParamNames.map((n) => <option key={n} value={n} />)}
+                </datalist>
+              )}
+              <Input
+                ref={nameRef}
+                list={equipmentParamNames.length > 0 ? datalistId : undefined}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Parameter name (type or pick from master equipment)"
+                className="text-xs"
+              />
               <Input value={unit} onChange={(e) => setUnit(e.target.value)} onKeyDown={handleKey} placeholder="Unit (V, mA, Ω…)" className="text-xs" />
               <div className="flex gap-2 mt-1">
                 <Button variant="outline" size="sm" onClick={() => setMode("pick")} className="flex-1">Back</Button>
@@ -1388,6 +1831,8 @@ interface CalibrationReportPageProps {
 
 export default function CalibrationReportPage({ reportId }: CalibrationReportPageProps) {
   const isEditMode = Boolean(reportId);
+  const isOffline  = !useOnlineStatus();
+  const reportIdIsLocal = isLocalId(reportId);
   const { refetch } = useGetCalibrationReports();
   const router = useRouter();
   const { mutate: generateCalibrationReport, isPending: isCreating } = useGenerateCalibrationReport();
@@ -1395,10 +1840,46 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const { mutate: computeCalibration,        isPending: isComputing } = useComputeCalibration();
   const isPending = isCreating || isUpdating;
 
-  const { data: existingReport, isLoading: isLoadingReport } = useGetCalibrationReportById(reportId ?? "");
+  // For server-stored reports, hit the API as before. For local drafts
+  // (id starts with "local-"), skip the network call and resolve from IDB.
+  const { data: serverReport, isLoading: isLoadingServerReport } =
+    useGetCalibrationReportById(reportIdIsLocal ? "" : (reportId ?? ""));
+  const [localReport,     setLocalReport]     = useState<any>(undefined);
+  const [localReportLoading, setLocalReportLoading] = useState<boolean>(reportIdIsLocal);
+  useEffect(() => {
+    if (!reportIdIsLocal || !reportId) { setLocalReport(undefined); setLocalReportLoading(false); return; }
+    let cancelled = false;
+    setLocalReportLoading(true);
+    getDraft(reportId).then((d) => {
+      if (cancelled) return;
+      // Once a local draft has been synced and assigned a serverId, redirect
+      // the URL to the canonical /calibration/<serverId> so subsequent edits
+      // PUT to the server instead of churning IDB only.
+      if (d?.serverId) {
+        router.replace(`/calibration/${d.serverId}`);
+        return;
+      }
+      setLocalReport(d?.payload);
+      setLocalReportLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [reportId, reportIdIsLocal, router]);
+
+  const existingReport: any = reportIdIsLocal ? localReport : serverReport;
+  const isLoadingReport     = reportIdIsLocal ? localReportLoading : isLoadingServerReport;
 
   // DUC instrument master presets (Fluke 8846A, SVERKER 780, …)
   const { presets: instrumentPresets, makeKeyMap } = useInstrumentPresets();
+  const { data: equipParamSummary } = useGetEquipmentParamSummary();
+  const equipmentParamNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const eq of equipParamSummary ?? []) {
+      for (const p of eq.parameters ?? []) {
+        if (p.parameterName) names.add(p.parameterName);
+      }
+    }
+    return [...names].sort();
+  }, [equipParamSummary]);
 
   const blankInstrument = useMemo((): Instrument => ({
     id: uid(), meta: { ...BLANK_META }, params: [],
@@ -1588,16 +2069,32 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     autoSaveTimer.current = setTimeout(() => {
       setAutoSaveStatus("saving");
       const payload = buildPayload(instruments, "draft", userId, reportMeta);
-      updateCalibrationReport({ reportId, ...payload }, {
-        onSuccess: () => {
-          cleanSnapshot.current = { instruments, reportMeta };
-          setSnapshotVersion((v) => v + 1);
-          setAutoSaveStatus("saved");
-          setLastSavedAt(new Date());
-          queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
-        },
-        onError: () => setAutoSaveStatus("error"),
-      });
+
+      // Always persist to IndexedDB first — guarantees no data loss whether
+      // online or offline, and whether the report is a server doc or a local
+      // draft. This must complete before we declare success.
+      updateLocalDraft(reportId, payload).then(() => {
+        cleanSnapshot.current = { instruments, reportMeta };
+        setSnapshotVersion((v) => v + 1);
+        setLastSavedAt(new Date());
+
+        // Local-only drafts never hit the server here; the sync queue will
+        // POST them on reconnect.
+        if (reportIdIsLocal || isOffline) {
+          setAutoSaveStatus("saved-local");
+          return;
+        }
+
+        updateCalibrationReport({ reportId, ...payload }, {
+          onSuccess: () => {
+            setAutoSaveStatus("saved");
+            queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+          },
+          // Server failed but the local write succeeded — the sync queue
+          // will retry. Reflect that in the badge.
+          onError: () => setAutoSaveStatus("saved-local"),
+        });
+      }).catch(() => setAutoSaveStatus("error"));
     }, 5000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1613,6 +2110,32 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   const activeInst  = instruments.find((i) => i.id === activeInstId)  ?? instruments[0];
   const activeParam = activeInst.params.find((p) => p.id === activeParamId) ?? activeInst.params[0] ?? null;
+
+  const csrCheck = useCheckCsrNo(instruments[0]?.meta.csrNo ?? "", reportId ?? null);
+  const csrCheckHelper = (() => {
+    if (csrCheck === "checking") {
+      return (
+        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" /> Checking availability…
+        </span>
+      );
+    }
+    if (csrCheck === "available") {
+      return (
+        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+          <CheckCircle2 className="h-3 w-3" /> CSR No is available
+        </span>
+      );
+    }
+    if (csrCheck === "taken") {
+      return (
+        <span className="text-[10px] text-destructive flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" /> This CSR No is already used by another report
+        </span>
+      );
+    }
+    return null;
+  })();
 
   const { user } = useAuth();
   const userId = user?.id ?? (user as any)?._id ?? null;
@@ -1766,6 +2289,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   function handleSave(status: "draft" | "submitted") {
     if (!userId) { toast.error("You must be logged in to save a report"); return; }
+    if (csrCheck === "taken") {
+      toast.error("CSR number already exists. Use a different CSR No.");
+      const el = document.getElementById("field-csrNo");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus();
+      return;
+    }
     const errors = validate(status);
     if (errors.length) {
       setFormErrors(errors);
@@ -1803,7 +2333,26 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     };
 
     if (isEditMode && reportId) {
-      updateCalibrationReport({ reportId, ...payload }, { onSuccess, onError });
+      // Existing draft (server or local). Persist to IDB always; if it's a
+      // server-side draft and we're online, also PUT to the server.
+      updateLocalDraft(reportId, payload)
+        .then(() => {
+          if (reportIdIsLocal || isOffline) {
+            onSuccess();
+            return;
+          }
+          updateCalibrationReport({ reportId, ...payload }, { onSuccess, onError });
+        })
+        .catch((err) => onError(err));
+    } else if (isOffline) {
+      // Offline create — generate a local UUID, save to IDB, route to /calibration/<localId>.
+      // The sync queue will POST this when the device reconnects.
+      createLocalDraft(payload)
+        .then((draft) => {
+          toast.success("Saved on this device — will sync when online");
+          router.push(`/calibration/${draft.localId}`);
+        })
+        .catch((err) => onError(err));
     } else {
       generateCalibrationReport(payload, { onSuccess, onError });
     }
@@ -1868,7 +2417,19 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setActiveInstId(instId);
     const inst = instruments.find((i) => i.id === instId);
     const instrumentKey = makeKeyMap[inst?.meta.make ?? ""] ?? "";
-    setPanel({ type: "addParam", instId, instrumentKey });
+    setPanel({ type: "addParam", instId, instrumentKey, initialMode: "custom" });
+  };
+
+  /** Add a parameter inline (from the sidebar dropdown), bypassing the dialog. */
+  const handleAddParamDirect = (instId: string, name: string, unit: string, loadExamples: boolean) => {
+    const inst = instruments.find((i) => i.id === instId);
+    const instrumentKey = makeKeyMap[inst?.meta.make ?? ""] ?? "";
+    const p = makeParam(name, unit, instrumentKey, loadExamples, instrumentPresets);
+    setInstruments((ins) =>
+      ins.map((i) => i.id !== instId ? i : { ...i, params: [...i.params, p] })
+    );
+    setActiveInstId(instId);
+    setActiveParamId(p.id);
   };
 
   const handleAddParamConfirm = (name: string, unit: string, loadExamples: boolean) => {
@@ -2115,8 +2676,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               <X className="h-4 w-4" />
             </button>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">Jost's Engineering</div>
-              <div className="text-[11px] text-zinc-400">Calibration Lab · Kolkata</div>
+              <Wordmark size="sm" showDot caption="Calibration Suite" />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2177,11 +2737,14 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               activeParamId={activeParamId}
               canAddParam={!!(inst.meta.make && inst.meta.modelType)}
               readOnly={viewMode}
+              presets={instrumentPresets}
+              instrumentKey={makeKeyMap[inst.meta.make ?? ""] ?? ""}
               onSelectInstrument={(id) => { setActiveInstId(id); setPanel(null); }}
               onSelectParam={(instId, paramId) => { setActiveInstId(instId); setActiveParamId(paramId); setPanel(null); }}
               onRemoveInstrument={removeInstrument}
               onRemoveParam={removeParam}
               onAddParam={handleAddParam}
+              onAddParamDirect={handleAddParamDirect}
             />
           ))}
         </div>
@@ -2310,6 +2873,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800"
                   : autoSaveStatus === "error"
                   ? "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+                  : autoSaveStatus === "saved-local" && !isDirty
+                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
                   : autoSaveStatus === "saved" && !isDirty
                   ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
                   : isDirty
@@ -2322,6 +2887,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 <span className="font-normal">
                   {autoSaveStatus === "saving" ? "Saving…"
                     : autoSaveStatus === "error" ? "Save failed"
+                    : autoSaveStatus === "saved-local" && !isDirty && lastSavedAt ? `Saved on this device · will sync`
                     : autoSaveStatus === "saved" && !isDirty && lastSavedAt ? `Saved ${timeAgo(lastSavedAt)}`
                     : isDirty ? "Unsaved changes"
                     : "Up to date"}
@@ -2340,20 +2906,23 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   variant="outline"
                   size="sm"
                   onClick={handleTogglePdfPreview}
-                  disabled={pdfLoading}
-                  className={cn("gap-1.5 px-3 transition-colors", showPdfPreview ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400" : "")}
+                  disabled={pdfLoading || isOffline}
+                  title={isOffline ? "PDF preview requires internet — generated on the server" : undefined}
+                  className={cn("gap-1.5 px-2.5 sm:px-3 transition-colors", showPdfPreview ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400" : "")}
                 >
                   {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showPdfPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  {pdfLoading ? "Loading…" : showPdfPreview ? "Close preview" : "Preview PDF"}
+                  <span className="hidden sm:inline">{pdfLoading ? "Loading…" : showPdfPreview ? "Close preview" : "Preview PDF"}</span>
+                  <span className="sm:hidden">{pdfLoading ? "…" : showPdfPreview ? "Close" : "Preview"}</span>
                 </Button>
                 <div className="flex-1" />
                 <Button
                   size="sm"
                   onClick={() => setViewMode(false)}
-                  className="gap-1.5 px-4"
+                  className="gap-1.5 px-3 sm:px-4"
                 >
                   <PenLine className="h-3.5 w-3.5" />
-                  Edit Report
+                  <span className="hidden sm:inline">Edit Report</span>
+                  <span className="sm:hidden">Edit</span>
                 </Button>
               </div>
             )}
@@ -2394,7 +2963,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                     variant="outline"
                     size="sm"
                     onClick={handleTogglePdfPreview}
-                    disabled={pdfLoading}
+                    disabled={pdfLoading || isOffline}
+                    title={isOffline ? "PDF preview requires internet — generated on the server" : undefined}
                     className={cn("gap-1.5 px-2.5 lg:px-3 transition-colors", showPdfPreview ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-400" : "")}
                   >
                     {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showPdfPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -2414,7 +2984,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   variant="outline"
                   size="sm"
                   onClick={() => handleCompute(activeInstId)}
-                  disabled={isComputing || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
+                  disabled={isComputing || isOffline || !activeInst.meta.make || !activeInst.meta.modelType || activeInst.params.length === 0}
+                  title={isOffline ? "Compute requires internet — runs on the server" : undefined}
                   className="gap-1.5 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/40 hover:border-violet-300 dark:hover:border-violet-700 px-2.5 lg:px-3"
                 >
                   {isComputing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calculator className="h-3.5 w-3.5" />}
@@ -2432,7 +3003,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
                 {/* Submit */}
                 <div className="relative">
-                  <Button size="sm" onClick={() => handleSave("submitted")} disabled={isPending} className="px-2.5 lg:px-3">
+                  <Button
+                    size="sm"
+                    onClick={() => handleSave("submitted")}
+                    disabled={isPending || isOffline}
+                    title={isOffline ? "Submit requires internet — generates certificate on the server" : undefined}
+                    className="px-2.5 lg:px-3"
+                  >
                     <Send className="h-3.5 w-3.5 sm:hidden" />
                     <span className="hidden sm:inline">{isEditMode ? "Submit report" : "Create Report"}</span>
                   </Button>
@@ -2704,26 +3281,102 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 touched={touchedFields}
                 onTouch={handleTouch}
                 onChange={updateMeta}
+                csrCheckHelper={csrCheckHelper}
               />
             </div>
           </div>
 
           {/* Empty state — no params yet */}
-          {!activeParam && (
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <FlaskConical className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
-              <div className="text-sm font-semibold text-zinc-500">No parameters added yet</div>
-              {activeInst.meta.make && activeInst.meta.modelType ? (
-                <div className="text-xs text-zinc-400">
-                  Click <span className="font-semibold">+ Add parameter</span> in the sidebar to get started
-                </div>
-              ) : (
-                <div className="text-xs text-zinc-400">
-                  Select <span className="font-semibold">Make</span> and <span className="font-semibold">Model / Type</span> above, then add a parameter
-                </div>
-              )}
-            </div>
-          )}
+          {!activeParam && (() => {
+            const canAdd = !!(activeInst.meta.make && activeInst.meta.modelType);
+            const instKey = makeKeyMap[activeInst.meta.make ?? ""] ?? "";
+            const presetParams = instrumentPresets[instKey]?.params ?? {};
+            const presetUnits  = instrumentPresets[instKey]?.units ?? {};
+            const hasPresets   = Object.keys(presetParams).length > 0;
+            return (
+              <div className="bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
+                <FlaskConical className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
+                <div className="text-sm font-semibold text-zinc-500">No parameters added yet</div>
+                {canAdd ? (
+                  <>
+                    <div className="text-xs text-zinc-400">
+                      Pick a preset or add a custom parameter
+                    </div>
+                    {!viewMode && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" className="mt-1 gap-1.5">
+                            <Plus className="h-3.5 w-3.5" />
+                            Add parameter
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="center"
+                          sideOffset={4}
+                          className="w-[15rem] max-h-[60vh] overflow-y-auto"
+                        >
+                          {hasPresets && (
+                            <>
+                              <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground py-1">
+                                Presets
+                              </DropdownMenuLabel>
+                              {Object.keys(presetParams).map((pName) => {
+                                const pUnit = presetUnits[pName] ?? "";
+                                return (
+                                  <DropdownMenuSub key={pName}>
+                                    <DropdownMenuSubTrigger className="text-xs">
+                                      <span className="flex-1 truncate">{pName}</span>
+                                      {pUnit && (
+                                        <span className="text-[10px] font-mono text-muted-foreground min-w-[1.5rem] text-right">
+                                          {pUnit}
+                                        </span>
+                                      )}
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent className="w-56">
+                                      <DropdownMenuItem
+                                        onClick={() => handleAddParamDirect(activeInst.id, pName, pUnit, false)}
+                                        className="text-xs"
+                                      >
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="font-medium">Manual entry</span>
+                                          <span className="text-[10px] text-muted-foreground">Start blank</span>
+                                        </div>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleAddParamDirect(activeInst.id, pName, pUnit, true)}
+                                        className="text-xs"
+                                      >
+                                        <div className="flex flex-col gap-0.5">
+                                          <span className="font-medium">Load example values</span>
+                                          <span className="text-[10px] text-muted-foreground">Pre-filled sample readings</span>
+                                        </div>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                );
+                              })}
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => handleAddParam(activeInst.id)}
+                            className="text-xs"
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1.5" />
+                            Custom parameter…
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-xs text-zinc-400">
+                    Select <span className="font-semibold">Make</span> and <span className="font-semibold">Model / Type</span> above, then add a parameter
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Measurement / Results tabs */}
           {activeParam && <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
@@ -2775,8 +3428,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 readOnly={viewMode}
               />
             ) : (
-              <div className="p-4">
+              <div className="p-4 space-y-4">
                 <ResultsTable param={activeParam} />
+                <CalcTrace param={activeParam} />
               </div>
             )}
           </div>}
@@ -2815,7 +3469,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       <AddParamDialog
         open={panel?.type === "addParam"}
         instrumentKey={panel?.type === "addParam" ? panel.instrumentKey : ""}
+        initialMode={panel?.type === "addParam" ? panel.initialMode : undefined}
         presets={instrumentPresets}
+        equipmentParamNames={equipmentParamNames}
         onCancel={() => setPanel(null)}
         onConfirm={handleAddParamConfirm}
       />

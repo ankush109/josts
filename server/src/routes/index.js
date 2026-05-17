@@ -12,6 +12,8 @@ import calibrationRoutes from "./calibration.routes.js";
 import reportRoutes      from "./report.routes.js";
 import equipmentRoutes   from "./equipments.js"
 import instrumentRoutes  from "./instruments.routes.js";
+import supportRoutes     from "./support.routes.js";
+import dashboardRoutes   from "./dashboard.routes.js";
 const router = Router();
 
 /** Liveness probe — no auth required. */
@@ -25,5 +27,7 @@ router.use("/calibration-report", calibrationRoutes);
 router.use("/report",             reportRoutes);
 router.use("/equipments", equipmentRoutes)
 router.use("/instruments", instrumentRoutes);
+router.use("/support",    supportRoutes);
+router.use("/dashboard",  dashboardRoutes);
 
 export default router;

@@ -193,7 +193,7 @@ export default function Home() {
 
       `}</style>
 
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="force-light min-h-screen bg-white flex flex-col">
 
         {/* ── Navbar ── */}
         <header
@@ -211,7 +211,12 @@ export default function Home() {
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#2563eb" }}>
                 <ShieldCheck className="h-4 w-4 text-white" />
               </div>
-              <span className="text-xl font-bold text-white tracking-tight">Josts</span>
+              <span
+                className="text-2xl font-extrabold italic tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
+                style={{ fontFamily: '"Times New Roman", Times, serif' }}
+              >
+                Jasper
+              </span>
             </div>
             <Link
               href="/login"
@@ -251,7 +256,7 @@ export default function Home() {
             </div>
 
             <p className="text-base sm:text-lg text-blue-200/60 max-w-xl mx-auto leading-relaxed">
-              Josts Technologies' calibration portal gives your team a single, structured place to record measurements, generate ISO-compliant certificates, and track every instrument — end to end.
+              Jasper gives your team a single, structured place to record measurements, generate ISO-compliant certificates, and track every instrument — end to end.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
@@ -268,7 +273,7 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-              {["ISO Certified", "117+ Years of Excellence", "Pan-India"].map((t) => (
+              {["ISO Certified", "Offline-First", "Built for Engineers"].map((t) => (
                 <span key={t} className="text-[11px] px-3 py-1 rounded-full border border-white/10 text-white/30 tracking-wide">{t}</span>
               ))}
             </div>
@@ -339,7 +344,7 @@ export default function Home() {
                   Built for precision.<br />Designed for teams.
                 </h2>
                 <p className="text-slate-500 leading-relaxed">
-                  Josts Technologies has been a trusted name in measurement and calibration for over 117 years. This portal is the digital backbone of that legacy — purpose-built to eliminate paper-based workflows and give engineers a fast, reliable way to produce calibration records.
+                  Jasper is a modern calibration suite — purpose-built to eliminate paper-based workflows and give engineers a fast, reliable way to produce calibration records, even from the field.
                 </p>
                 <p className="text-slate-500 leading-relaxed">
                   From pressure gauges to flow meters, each instrument type has its own structured form with pre-defined parameters, ensuring every report is consistent, complete, and traceable from day one.
@@ -512,13 +517,18 @@ export default function Home() {
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#1e3a5f" }}>
                   <ShieldCheck className="h-4 w-4 text-blue-400" />
                 </div>
-                <span className="text-xl font-bold text-white tracking-tight">Josts</span>
+                <span
+                  className="text-2xl font-extrabold italic tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
+                  style={{ fontFamily: '"Times New Roman", Times, serif' }}
+                >
+                  Jasper
+                </span>
               </div>
               <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
-                117+ years of precision engineering. Josts Technologies is India's leading name in measurement, calibration, and testing instruments.
+                A modern calibration suite for measurement teams — offline-first, ISO-compliant, and engineered for the field.
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
-                {["ISO Certified", "Pan-India"].map((badge) => (
+                {["ISO Certified", "Offline-First"].map((badge) => (
                   <span key={badge} className="text-[10px] px-2.5 py-1 rounded-full border border-white/10 text-slate-500 tracking-wide">{badge}</span>
                 ))}
               </div>
@@ -539,15 +549,15 @@ export default function Home() {
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Contact</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Resources</h4>
               <ul className="space-y-3 text-sm text-slate-400">
                 <li className="flex items-start gap-2.5">
                   <Mail className="h-4 w-4 mt-0.5 shrink-0 text-slate-500" />
-                  <span>contact@josts.in</span>
+                  <span>support@jasper.app</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-slate-500" />
-                  <span>Mumbai, India</span>
+                  <span>India</span>
                 </li>
               </ul>
             </div>
@@ -555,7 +565,7 @@ export default function Home() {
 
           <div className="border-t border-white/5 py-5 px-5">
             <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
-              <p>© {new Date().getFullYear()} Josts Technologies. All rights reserved.</p>
+              <p>© {new Date().getFullYear()} Jasper. All rights reserved.</p>
               <p>ISO-Certified Calibration Portal</p>
             </div>
           </div>

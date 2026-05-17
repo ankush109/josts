@@ -14,9 +14,11 @@
 import mongoose             from "mongoose";
 import CalibrationReport    from "../models/Calibration.js";
 import Equipment            from "../models/Equipment.js";
+import Instrument           from "../models/Instrument.js";
 import User                 from "../models/User.js";
 import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
 import { getInstrumentLookup, MAKE_TO_INSTRUMENT_KEY } from "../constants/instrument-specs.js";
+import { normalizeParamName, getAcceptableNames } from "../constants/param-synonyms.js";
 import { toSI }                     from "../utils/unit-normalize.js";
 import { pushPdfJobToRedis }        from "../lib/redis.js";
 import logger                       from "../lib/logger.js";
@@ -52,19 +54,23 @@ function getInitials(name = "") {
 function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
   if (nomValue == null || !equipment?.parameters?.length) return null;
 
-  const normalize  = (s) => (s ?? "").toLowerCase().replace(/\s+/g, "");
-  const targetName = normalize(paramName);
+  const targetName = normalizeParamName(paramName);
+  const acceptable = getAcceptableNames(paramName);
 
-  // First match by name only — separate from the uncertainty check so we can give a precise error
+  // First match by name only — separate from the uncertainty check so we can give a precise error.
+  // Master-side names go through the same normaliser (drops "High"/"Low" qualifiers, whitespace, case)
+  // and are also checked against the synonym table in PARAM_ALIASES.
   const byName = equipment.parameters.filter(
-    (p) => normalize(p.parameterName) === targetName
+    (p) => acceptable.has(normalizeParamName(p.parameterName))
   );
 
   if (!byName.length) {
     logger.warn("[Traceability] No matching parameter found in master equipment", {
-      masterEquipment: equipment.equipmentName,
-      searchedFor:     paramName,
-      availableParams: [...new Set(equipment.parameters.map((p) => p.parameterName))],
+      masterEquipment:     equipment.equipmentName,
+      searchedFor:         paramName,
+      searchedNormalized:  targetName,
+      availableParams:     [...new Set(equipment.parameters.map((p) => p.parameterName))],
+      availableNormalized: [...new Set(equipment.parameters.map((p) => normalizeParamName(p.parameterName)))],
     });
     return null;
   }
@@ -174,6 +180,38 @@ async function buildEquipmentMap(instruments) {
 }
 
 /**
+ * Pre-fetches Instrument documents from DB for every make used by the
+ * instruments array and builds the same paramName → rangeLabel → RangeSpec
+ * lookup used by injectComputed. DB is authoritative; falls back to static
+ * constants at call-site if a make isn't in DB.
+ *
+ * @param {object[]} instruments
+ * @returns {Promise<Record<string, Record<string, Record<string, object>>>>} key → paramName → rangeLabel → RangeSpec
+ */
+async function buildInstrumentLookupMap(instruments) {
+  const makes = [...new Set(
+    (instruments ?? []).map((i) => i.make).filter(Boolean)
+  )];
+
+  if (!makes.length) return {};
+
+  const docs = await Instrument.find({ make: { $in: makes }, isActive: true }).lean();
+
+  const map = {};
+  for (const doc of docs) {
+    const lookup = {};
+    for (const param of doc.parameters ?? []) {
+      if (!param.parameterName) continue;
+      lookup[param.parameterName] = Object.fromEntries(
+        (param.ranges ?? []).map((r) => [r.label, r])
+      );
+    }
+    map[doc.key] = lookup;
+  }
+  return map;
+}
+
+/**
  * Generates a human-readable certificate number in the format:
  *   JK/DDMMYY/<CustomerFirstLetter>/<EngineerInitials>/<SequentialNo>
  *
@@ -210,12 +248,16 @@ async function generateCertNo(userId, customerName) {
  * @param {object[]} instruments
  * @param {Record<string, object>} equipmentMap - equipmentId → Equipment doc (pre-fetched)
  */
-export function injectComputed(instruments, equipmentMap = {}) {
+export function injectComputed(instruments, equipmentMap = {}, instrumentLookupMap = {}) {
   if (!Array.isArray(instruments)) return instruments;
 
   return instruments.map((inst) => {
-    const instrumentName   = MAKE_TO_INSTRUMENT_KEY[inst.make] ?? `${inst.make} ${inst.modelType}`.trim();
-    const lookup           = getInstrumentLookup(instrumentName);
+    const instrumentName   = `${inst.make} ${inst.modelType}`.trim();
+    const canonicalKey     = MAKE_TO_INSTRUMENT_KEY[inst.make] ?? instrumentName;
+    // DB-stored constants take precedence; fall back to static file for legacy instruments
+    const lookup           = instrumentLookupMap[instrumentName]
+      ?? instrumentLookupMap[canonicalKey]
+      ?? getInstrumentLookup(canonicalKey);
     const masterEquipment  = equipmentMap[String(inst.refStandard?.equipmentId ?? "")] ?? null;
 
     if (!masterEquipment && (!lookup || Object.keys(lookup).length === 0)) {
@@ -299,16 +341,17 @@ export function injectComputed(instruments, equipmentMap = {}) {
  * @returns {Promise<object>} The created Mongoose document.
  */
 export async function createReport(data, userId) {
-  const [certNo, equipmentMap] = await Promise.all([
+  const [certNo, equipmentMap, instrumentLookupMap] = await Promise.all([
     generateCertNo(data.createdBy ?? userId, data.customerName),
     buildEquipmentMap(data.instruments ?? []),
+    buildInstrumentLookupMap(data.instruments ?? []),
   ]);
 
   const report = await CalibrationReport.create({
     ...data,
     csrNo:       data.csrNo.trim(),
     certNo,
-    instruments: injectComputed(data.instruments ?? [], equipmentMap),
+    instruments: injectComputed(data.instruments ?? [], equipmentMap, instrumentLookupMap),
     signatures: {
       ...(data.signatures ?? {}),
       calibratedBy: data.createdBy ?? userId,
@@ -437,8 +480,11 @@ export async function updateReport(reportId, updates) {
   const { _id, createdBy, createdAt, __v, signatures: _sig, _updatedBy, ...safeUpdates } = updates;
 
   if (safeUpdates.instruments) {
-    const equipmentMap = await buildEquipmentMap(safeUpdates.instruments);
-    safeUpdates.instruments = injectComputed(safeUpdates.instruments, equipmentMap);
+    const [equipmentMap, instrumentLookupMap] = await Promise.all([
+      buildEquipmentMap(safeUpdates.instruments),
+      buildInstrumentLookupMap(safeUpdates.instruments),
+    ]);
+    safeUpdates.instruments = injectComputed(safeUpdates.instruments, equipmentMap, instrumentLookupMap);
   }
 
   // Fetch old doc for diff + calibratedBy backfill
@@ -535,8 +581,12 @@ export async function verifyOrReject(reportId, status, adminId) {
  * @param {object} instrument - Instrument object from the request body.
  * @returns {object} Same instrument object with `computed` fields populated.
  */
-export function previewCompute(instrument) {
-  const [result] = injectComputed([instrument]);
+export async function previewCompute(instrument) {
+  const [equipmentMap, instrumentLookupMap] = await Promise.all([
+    buildEquipmentMap([instrument]),
+    buildInstrumentLookupMap([instrument]),
+  ]);
+  const [result] = injectComputed([instrument], equipmentMap, instrumentLookupMap);
   return result;
 }
 

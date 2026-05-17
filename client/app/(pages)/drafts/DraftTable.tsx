@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -39,127 +39,159 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useGetDraftReports } from "@/app/hooks/query/useGetDrafts";
-import { getReportUrl } from "@/app/hooks/query/useGetReportUrl";
-import { 
-  EyeIcon, 
-  Trash,
-  Search,
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ArrowDown,
+  ArrowUp,
   ChevronLeft,
   ChevronRight,
-  ArrowUp,
-  ArrowDown,
-  MoreVertical,
   Edit,
-  FileText,
-  AlertCircle,
   FilePenLine,
+  Layers,
+  MoreVertical,
+  Search,
+  Trash,
+  AlertCircle,
+  CloudOff,
 } from "lucide-react";
-import { useDeleteReportMutation } from "@/app/hooks/mutation/useDeleteReportMutation";
-import { toast } from "sonner";
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Loading from "@/components/Loader";
+import { useGetCalibrationReports } from "@/app/hooks";
+import { useLocalDraftReports } from "@/app/hooks/useLocalDraftReports";
+import { authClient as AUTH_API } from "@/lib/api-client";
+import { EP_DELETE_CALIBRATION_REPORT } from "@/lib/endpoints";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CALIBRATION_REPORTS_KEY } from "@/app/hooks/query/useCalibrationReport";
+
+interface DraftRow {
+  _id: string;
+  csrNo: string;
+  customerName: string;
+  instrumentCount: number;
+  createdBy: { name?: string; email?: string };
+  createdAt: string;
+  updatedAt: string;
+  isLocal: boolean;
+}
 
 export default function DraftTable() {
-  const { data, isLoading, isError, refetch } = useGetDraftReports();
-  const { mutate: deleteReport } = useDeleteReportMutation();
-  
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError, refetch } = useGetCalibrationReports();
+  const { items: localItems } = useLocalDraftReports();
+
+  const { mutate: deleteReport, isPending: isDeleting } = useMutation({
+    mutationFn: (id: string) => AUTH_API.delete(EP_DELETE_CALIBRATION_REPORT(id)),
+    onSuccess: () => {
+      toast.success("Draft deleted");
+      queryClient.invalidateQueries({ queryKey: [CALIBRATION_REPORTS_KEY] });
+      setDeleteDialogOpen(false);
+      setReportToDelete(null);
+    },
+    onError: () => toast.error("Failed to delete draft"),
+  });
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [reportToDelete, setReportToDelete] = useState<string | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<DraftRow | null>(null);
 
-  async function handlePreview(id: string) {
-    try {
-      const reportData = await getReportUrl(id);
-      const reportUrl = reportData?.fileUrl;
-      if (reportUrl) {
-        window.open(reportUrl, "_blank");
-      }
-    } catch (error) {
-      toast.error("Failed to open draft");
+  const rows: DraftRow[] = useMemo(() => {
+    type CalibItem = {
+      _id: string;
+      status: string;
+      csrNo?: string;
+      customerName?: string;
+      instrumentCount?: number;
+      instruments?: unknown[];
+      createdBy?: { name?: string; email?: string };
+      createdAt: string;
+      updatedAt: string;
+    };
+    const items = (data?.items ?? []) as unknown as CalibItem[];
+    const serverDrafts: DraftRow[] = items
+      .filter((r) => r.status === "draft")
+      .map((r) => ({
+        _id: r._id,
+        csrNo: r.csrNo || "(no CSR)",
+        customerName: r.customerName ?? "",
+        instrumentCount: r.instrumentCount ?? r.instruments?.length ?? 0,
+        createdBy: {
+          name: r.createdBy?.name,
+          email: r.createdBy?.email,
+        },
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        isLocal: false,
+      }));
+    const local: DraftRow[] = localItems.map((r) => ({
+      _id: r._id,
+      csrNo: r.csrNo || "(unsaved)",
+      customerName: r.customerName ?? "",
+      instrumentCount: r.instrumentCount ?? 0,
+      createdBy: { name: r.createdBy?.name, email: r.createdBy?.email },
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      isLocal: true,
+    }));
+    return [...local, ...serverDrafts];
+  }, [data?.items, localItems]);
+
+  const filteredSorted = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+      ? rows.filter(
+          (r) =>
+            r.csrNo.toLowerCase().includes(q) ||
+            r.customerName.toLowerCase().includes(q) ||
+            r.createdBy?.name?.toLowerCase().includes(q),
+        )
+      : rows;
+    return [...filtered].sort((a, b) => {
+      const diff = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+      return sortOrder === "asc" ? diff : -diff;
+    });
+  }, [rows, searchQuery, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSorted.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentRows = filteredSorted.slice(startIndex, endIndex);
+
+  function confirmDelete(row: DraftRow) {
+    if (row.isLocal) {
+      toast.info("Local drafts can only be deleted from the calibration page");
+      return;
     }
-  }
-
-  function confirmDelete(reportId: string) {
-    setReportToDelete(reportId);
+    setReportToDelete(row);
     setDeleteDialogOpen(true);
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!reportToDelete) return;
-    
-    deleteReport(reportToDelete, {
-      onSuccess: () => {
-        toast.success("Draft deleted successfully");
-        refetch();
-        setDeleteDialogOpen(false);
-        setReportToDelete(null);
-      },
-      onError: () => {
-        toast.error("Failed to delete draft");
-      },
-    });
+    deleteReport(reportToDelete._id);
   }
 
-  const filteredAndSortedReports = useMemo(() => {
-    const reports = data?.drafts || [];
-    console.log("Reports:", reports);
-    let filtered = reports.filter((report: any) =>
-      report.payload?.title?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-    console.log("Filtered Reports:", filtered);
-    
-    filtered = [...filtered].sort((a: any, b: any) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
-    });
-    
-    return filtered;
-  }, [data?.drafts, searchQuery, sortOrder]);
-
-  const totalPages = Math.ceil(filteredAndSortedReports.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentReports = filteredAndSortedReports.slice(startIndex, endIndex);
-
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    setCurrentPage(1);
-  };
-
-  const handleSortToggle = () => {
-    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    setCurrentPage(1);
-  };
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const handleItemsPerPageChange = (value: string) => {
-    setItemsPerPage(Number(value));
-    setCurrentPage(1);
-  };
-
   if (isLoading) return <Loading />;
-  if (isError) return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6">
-          <div className="flex flex-col items-center text-center space-y-2">
-            <AlertCircle className="h-12 w-12 text-destructive" />
-            <h3 className="font-semibold text-lg">Error Loading Drafts</h3>
-            <p className="text-sm text-muted-foreground">Please try refreshing the page</p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <AlertCircle className="h-12 w-12 text-destructive" />
+              <h3 className="font-semibold text-lg">Error Loading Drafts</h3>
+              <p className="text-sm text-muted-foreground">Please try refreshing</p>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-2">
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -168,13 +200,13 @@ export default function DraftTable() {
           <CardTitle className="text-2xl font-bold">Draft Reports</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
             <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search by draft name..."
+                placeholder="Search by CSR No, customer, or engineer…"
                 value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 className="pl-10"
               />
             </div>
@@ -183,105 +215,111 @@ export default function DraftTable() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleSortToggle}
+                onClick={() => setSortOrder((s) => (s === "asc" ? "desc" : "asc"))}
                 className="flex items-center gap-2"
               >
-                {sortOrder === "asc" ? (
-                  <ArrowUp className="h-4 w-4" />
-                ) : (
-                  <ArrowDown className="h-4 w-4" />
-                )}
-                {sortOrder === "asc" ? "Oldest First" : "Newest First"}
+                {sortOrder === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                {sortOrder === "asc" ? "Oldest" : "Newest"}
               </Button>
 
               <Select
                 value={itemsPerPage.toString()}
-                onValueChange={handleItemsPerPageChange}
+                onValueChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); }}
               >
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-28 sm:w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="5">5 per page</SelectItem>
-                  <SelectItem value="10">10 per page</SelectItem>
-                  <SelectItem value="20">20 per page</SelectItem>
-                  <SelectItem value="50">50 per page</SelectItem>
+                  <SelectItem value="5">5 / page</SelectItem>
+                  <SelectItem value="10">10 / page</SelectItem>
+                  <SelectItem value="20">20 / page</SelectItem>
+                  <SelectItem value="50">50 / page</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted">
                 <TableRow>
-                  <TableHead className="font-semibold">Draft Name</TableHead>
-                  <TableHead className="font-semibold">Status</TableHead>
-                  <TableHead className="font-semibold">Reported By</TableHead>
-                  <TableHead className="font-semibold">Date Created</TableHead>
+                  <TableHead className="font-semibold">CSR No</TableHead>
+                  <TableHead className="font-semibold">Customer</TableHead>
+                  <TableHead className="font-semibold">Instruments</TableHead>
+                  <TableHead className="font-semibold">Created By</TableHead>
+                  <TableHead className="font-semibold">Last Edited</TableHead>
                   <TableHead className="font-semibold text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
 
               <TableBody>
-                {currentReports.length === 0 ? (
+                {currentRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12">
+                    <TableCell colSpan={6} className="text-center py-12">
                       <div className="flex flex-col items-center space-y-2">
                         <FilePenLine className="h-12 w-12 text-muted-foreground/40" />
                         <p className="text-muted-foreground font-medium">No drafts found</p>
-                        <p className="text-sm text-muted-foreground/70">Try adjusting your search criteria</p>
+                        <p className="text-sm text-muted-foreground/70">
+                          {searchQuery ? "Try adjusting your search" : "Drafts you save will appear here"}
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  currentReports.map((report: any) => (
-                    <TableRow key={report._id} className="hover:bg-muted/40 transition-colors">
+                  currentRows.map((row) => (
+                    <TableRow
+                      key={row._id}
+                      className="hover:bg-muted/40 transition-colors cursor-pointer"
+                      onClick={() => router.push(`/calibration/${row._id}`)}
+                    >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <FilePenLine className="h-4 w-4 text-primary" />
-                          {report.payload?.name || "Untitled Draft"}
+                          <FilePenLine className="h-4 w-4 text-primary shrink-0" />
+                          <span className="font-mono text-sm">{row.csrNo}</span>
+                          {row.isLocal && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              <CloudOff className="h-3 w-3" /> Local
+                            </span>
+                          )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                          <FileText className="h-3 w-3 mr-1" />
-                          {report.status}
-                        </Badge>
+                      <TableCell className="text-sm">
+                        {row.customerName || <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      <TableCell className="text-foreground">
-                        {report.reportedBy || "Unknown User"}
+                      <TableCell>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-muted text-muted-foreground">
+                          <Layers className="h-3 w-3" />
+                          {row.instrumentCount}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {row.createdBy?.name || <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {new Date(report.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
+                        {new Date(row.updatedAt).toLocaleDateString("en-IN", {
+                          year: "numeric", month: "short", day: "numeric",
                         })}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem asChild>
-                              <Link href={`/templates/${report._id}`} className="cursor-pointer">
+                              <Link href={`/calibration/${row._id}`} className="cursor-pointer">
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit Draft
                               </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handlePreview(report._id)}>
-                              <EyeIcon className="mr-2 h-4 w-4" />
-                              View Draft
-                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => confirmDelete(report._id)}
+                            <DropdownMenuItem
+                              onClick={() => confirmDelete(row)}
+                              disabled={row.isLocal}
                               className="text-destructive focus:text-destructive focus:bg-destructive/10"
                             >
                               <Trash className="mr-2 h-4 w-4" />
@@ -294,77 +332,33 @@ export default function DraftTable() {
                   ))
                 )}
               </TableBody>
-
-              {filteredAndSortedReports.length > 0 && (
-                <TableFooter>
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-sm text-muted-foreground">
-                      Showing {startIndex + 1}-{Math.min(endIndex, filteredAndSortedReports.length)} of {filteredAndSortedReports.length} drafts
-                    </TableCell>
-                  </TableRow>
-                </TableFooter>
-              )}
             </Table>
           </div>
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4">
-              <div className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  Previous
-                </Button>
-
-                <div className="hidden sm:flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((page) => {
-                      return (
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1)
-                      );
-                    })
-                    .map((page, index, array) => {
-                      const showEllipsisBefore =
-                        index > 0 && page - array[index - 1] > 1;
-
-                      return (
-                        <div key={page} className="flex gap-1">
-                          {showEllipsisBefore && (
-                            <span className="px-3 py-1 text-gray-400">...</span>
-                          )}
-                          <Button
-                            variant={currentPage === page ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => handlePageChange(page)}
-                            className="min-w-[40px]"
-                          >
-                            {page}
-                          </Button>
-                        </div>
-                      );
-                    })}
+          {filteredSorted.length > 0 && (
+            <div className="flex items-center justify-between pt-2 text-sm text-muted-foreground">
+              <span>
+                Showing {startIndex + 1}–{Math.min(endIndex, filteredSorted.length)} of {filteredSorted.length} draft{filteredSorted.length !== 1 ? "s" : ""}
+              </span>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span>Page {currentPage} of {totalPages}</span>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -373,15 +367,19 @@ export default function DraftTable() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this draft?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the draft from our servers.
+              This will permanently delete the draft. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-              Delete
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
