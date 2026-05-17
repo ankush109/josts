@@ -1,0 +1,24 @@
+services:
+
+  server:
+    image: ghcr.io/ankush109/josts-server:latest
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./server/.env
+    restart: unless-stopped
+
+  worker:
+    image: ghcr.io/ankush109/josts-worker:latest
+    env_file:
+      - ./worker/.env
+    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command: http server:5000 --domain=nonconvective-noncontroversial-gwen.ngrok-free.dev
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - server

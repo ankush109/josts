@@ -15,7 +15,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://f998-13-204-43-74.n
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  headers: { 
+  headers: {
     "Content-Type": "application/json",
     "ngrok-skip-browser-warning": "true"
   },
@@ -23,7 +23,7 @@ export const apiClient: AxiosInstance = axios.create({
 
 export const authClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  headers: { 
+  headers: {
     "Content-Type": "application/json",
     "ngrok-skip-browser-warning": "true"
   },

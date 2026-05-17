@@ -25,6 +25,7 @@ import {
 } from "@/lib/endpoints";
 import { CALIBRATION_REPORTS_KEY } from "./query/useCalibrationReport";
 import {
+  getDraft,
   listDirtyDrafts,
   markDraftSynced,
   markDraftFailed,
@@ -135,6 +136,26 @@ export async function runSyncNow(): Promise<SyncResult> {
     inFlight = false;
   }
   return result;
+}
+
+/**
+ * Retry syncing a single draft by localId. No-ops if the draft is not found
+ * or is already clean. Returns true on success, false on failure.
+ */
+export async function retrySingleDraft(localId: string): Promise<{ success: boolean; error?: string }> {
+  const draft = await getDraft(localId);
+  if (!draft || !draft.dirty) return { success: true };
+  try {
+    const { serverId } = await syncOne(draft);
+    await markDraftSynced(draft.localId, serverId);
+    await refreshPendingCount();
+    return { success: true };
+  } catch (err) {
+    const msg = extractErrorMessage(err);
+    await markDraftFailed(draft.localId, msg);
+    await refreshPendingCount();
+    return { success: false, error: msg };
+  }
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────────────

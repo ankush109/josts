@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { listDrafts, type OfflineDraft } from "../lib/offline-drafts";
+import { listDrafts, deleteDraft, type OfflineDraft } from "../lib/offline-drafts";
 import { subscribeToSyncQueue } from "./useSyncQueue";
 
 export type LocalReportListItem = {
@@ -91,5 +91,10 @@ export function useLocalDraftReports() {
     };
   }, [refresh]);
 
-  return { items, loading, refresh };
+  const remove = useCallback(async (localId: string) => {
+    await deleteDraft(localId);
+    await refresh();
+  }, [refresh]);
+
+  return { items, loading, refresh, remove };
 }

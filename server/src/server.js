@@ -45,6 +45,18 @@ app.use(express.json({ limit: "2mb" }));
 
 app.use(requestLogger);
 
+// ─── Metrics (local only — set ENABLE_METRICS=true to activate) ───────────────
+
+if (process.env.ENABLE_METRICS === "true") {
+  const { metricsMiddleware } = await import("./middleware/metrics.js");
+  const { register }          = await import("./lib/metricsRegistry.js");
+  app.use(metricsMiddleware);
+  app.get("/metrics", async (req, res) => {
+    res.set("Content-Type", register.contentType);
+    res.end(await register.metrics());
+  });
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 app.use(routes);

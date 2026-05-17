@@ -85,7 +85,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AuditEntry, CalibrationReportStatus } from "@/types/calibration";
 import { useLocalDraftReports } from "@/app/hooks/useLocalDraftReports";
-import { useSyncQueue } from "@/app/hooks/useSyncQueue";
+import { useSyncQueue, retrySingleDraft } from "@/app/hooks/useSyncQueue";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import { CloudOff, RefreshCw } from "lucide-react";
 
@@ -322,12 +322,16 @@ export default function CalibrationReportsTable() {
   const [auditReportId, setAuditReportId] = useState<string | null>(null);
   const { data: auditLog, isLoading: auditLoading } = useGetAuditLog(auditReportId);
 
+  const [discardLocalId,      setDiscardLocalId]      = useState<string | null>(null);
+  const [discardDialogOpen,   setDiscardDialogOpen]   = useState(false);
+  const [retryingId,          setRetryingId]          = useState<string | null>(null);
+
   // Server-side reports (from the API)
   const serverItems = (data?.items ?? []) as unknown as ReportListItem[];
 
   // Offline-only drafts (live in IndexedDB until the sync queue pushes them).
   // Rendered in their own table above the main list — NOT merged into `allItems`.
-  const { items: localItems } = useLocalDraftReports();
+  const { items: localItems, remove: removeLocalDraft } = useLocalDraftReports();
   const { syncNow, running: syncRunning } = useSyncQueue();
   const online = useOnlineStatus();
 
@@ -391,6 +395,29 @@ export default function CalibrationReportsTable() {
   }
 
   function confirmDelete(report: ReportListItem) { setReportToDelete(report); setDeleteDialogOpen(true); }
+
+  function confirmDiscardLocal(localId: string) { setDiscardLocalId(localId); setDiscardDialogOpen(true); }
+
+  async function handleRetryDraft(e: React.MouseEvent, localId: string) {
+    e.stopPropagation();
+    setRetryingId(localId);
+    const result = await retrySingleDraft(localId);
+    setRetryingId(null);
+    if (result.success) {
+      toast.success("Draft synced successfully");
+      queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+    } else {
+      toast.error(result.error ?? "Sync failed — try again");
+    }
+  }
+
+  async function handleDiscardLocal() {
+    if (!discardLocalId) return;
+    await removeLocalDraft(discardLocalId);
+    setDiscardDialogOpen(false);
+    setDiscardLocalId(null);
+    toast.success("Local draft discarded");
+  }
 
   function toTitleCase(str: string) {
     return str.replace(/\w+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -634,6 +661,7 @@ export default function CalibrationReportsTable() {
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-300">Instruments</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-300">Last edited</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-4 text-amber-900 dark:text-amber-300">Status</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -699,23 +727,54 @@ export default function CalibrationReportsTable() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-right pr-4">
+                    <TableCell className="text-right pr-4" onClick={(e) => e.stopPropagation()}>
                       {report.__syncError ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/50 dark:text-red-200 dark:border-red-700 cursor-default">
-                              <AlertCircle className="h-3 w-3" /> Sync failed
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="max-w-[280px] text-xs">
-                            {report.__syncError}
-                          </TooltipContent>
-                        </Tooltip>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-red-100 text-red-800 border border-red-300 dark:bg-red-900/50 dark:text-red-200 dark:border-red-700 cursor-default">
+                                <AlertCircle className="h-3 w-3" /> Sync failed
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-[280px] text-xs">
+                              {report.__syncError}
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => handleRetryDraft(e, report._id)}
+                                disabled={!online || retryingId === report._id}
+                                className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors disabled:opacity-40"
+                              >
+                                {retryingId === report._id
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <RefreshCw className="h-3.5 w-3.5" />}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="text-xs">
+                              {!online ? "Connect to internet to retry" : "Retry sync"}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-900/50 dark:text-amber-200 dark:border-amber-700">
                           📱 Local
                         </span>
                       )}
+                    </TableCell>
+                    <TableCell className="pr-3" onClick={(e) => e.stopPropagation()}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={() => confirmDiscardLocal(report._id)}
+                            className="p-1.5 rounded-md text-amber-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">Discard local draft</TooltipContent>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1061,6 +1120,31 @@ export default function CalibrationReportsTable() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
+        <AlertDialogContent className="max-w-sm p-5">
+          <AlertDialogHeader className="mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-7 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="h-3.5 w-3.5 text-red-600" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-sm font-semibold text-zinc-900 leading-tight">Discard Local Draft</AlertDialogTitle>
+                <p className="text-xs text-zinc-400">This will remove the draft from this device and stop any pending sync</p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogDescription className="text-sm text-zinc-500">
+            This draft has not been synced to the server. Discarding it will permanently delete it from this device.
+          </AlertDialogDescription>
+          <AlertDialogFooter className="mt-4 gap-2">
+            <AlertDialogCancel className="flex-1 h-9 text-sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDiscardLocal} className="flex-1 h-9 text-sm bg-red-600 hover:bg-red-700">
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="max-w-sm p-5">

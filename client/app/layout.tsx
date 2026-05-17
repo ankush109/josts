@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import RootProvider from "./provider";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
+import { Analytics } from "@vercel/analytics/next";
 const inter = Inter({ subsets: ["latin"] });
 
 const APP_NAME = "Jasper";
@@ -46,6 +47,7 @@ export default function RootLayout({
       <body style={{ fontFamily: '"Times New Roman", Times, serif' }}>
         <ServiceWorkerRegister />
         <RootProvider>{children}</RootProvider>
+        <Analytics />
       </body>
     </html>
   );
