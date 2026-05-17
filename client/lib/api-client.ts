@@ -11,7 +11,7 @@
 
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://f998-13-204-43-74.ngrok-free.app";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://13.204.43.74";
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,

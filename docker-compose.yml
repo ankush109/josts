@@ -13,12 +13,3 @@ services:
     env_file:
       - ./.env
     restart: unless-stopped
-
-  ngrok:
-    image: ngrok/ngrok:latest
-    restart: unless-stopped
-    command: http server:5000 --url=nonconvective-noncontroversial-gwen.ngrok-free.dev
-    env_file:
-      - ./.env
-    depends_on:
-      - server
