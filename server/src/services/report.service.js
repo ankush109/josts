@@ -14,6 +14,7 @@ import Report             from "../models/Report.js";
 import CalibrationReport  from "../models/Calibration.js";
 import { getSignedDownloadUrl, getSignedDownloadUrlAttachment } from "../lib/s3.js";
 import { pushPdfJobToRedis }    from "../lib/redis.js";
+import logger                   from "../lib/logger.js";
 
 // ─── Report CRUD ──────────────────────────────────────────────────────────────
 
@@ -71,7 +72,15 @@ export async function upsertReport(data, userId) {
   }
 
   if (report.status !== "draft") {
-    await pushPdfJobToRedis({ reportId: report._id, action });
+    try {
+      await pushPdfJobToRedis({ reportId: report._id, action });
+    } catch (err) {
+      logger.error("Failed to queue PDF job — report saved, PDF regeneration skipped", {
+        reportId: String(report._id),
+        action,
+        error:    err?.message,
+      });
+    }
   }
 
   return report;

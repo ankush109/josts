@@ -378,7 +378,15 @@ export async function createReport(data, userId) {
   await logAudit({ reportId: report._id, action: "created", performedBy: userId });
 
   if (report.status !== "draft") {
-    await pushPdfJobToRedis({ reportId: report._id, action: "create", type: "calibration" });
+    try {
+      await pushPdfJobToRedis({ reportId: report._id, action: "create", type: "calibration" });
+    } catch (err) {
+      logger.error("Failed to queue PDF job — report saved, PDF regeneration skipped", {
+        reportId: String(report._id),
+        action:   "create",
+        error:    err?.message,
+      });
+    }
   }
 
   return report;
@@ -536,7 +544,15 @@ export async function updateReport(reportId, updates) {
   }
 
   if (report.status !== "draft") {
-    await pushPdfJobToRedis({ reportId: report._id, action: "edit", type: "calibration" });
+    try {
+      await pushPdfJobToRedis({ reportId: report._id, action: "edit", type: "calibration" });
+    } catch (err) {
+      logger.error("Failed to queue PDF job — report saved, PDF regeneration skipped", {
+        reportId: String(report._id),
+        action:   "edit",
+        error:    err?.message,
+      });
+    }
   }
 
   return report;
