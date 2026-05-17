@@ -8,8 +8,8 @@
  * The calibration form sends shorter operator names like
  * "DC Current", "AC Voltage @50Hz", "Ratio".
  *
- * `normalizeParamName` collapses whitespace, lowercases, and strips
- * the "High"/"Low" range qualifiers that distinguish nothing for our
+ * `normalizeParamName` collapses whitespace, lowercases, strips parens
+ * and the "High"/"Low" range qualifiers that distinguish nothing for our
  * lookup. That handles most cases automatically.
  *
  * For the remaining mismatches (different suffixes, vendor-specific
@@ -22,13 +22,18 @@
 /**
  * Normalises a parameter name for comparison.
  *  - lowercases
+ *  - strips parenthetical / bracket qualifiers ("(4-Wire)", "[Series]", "(Hz)")
  *  - strips "high"/"low" range qualifier words
+ *  - strips zero-width / non-breaking unicode that survives \s
  *  - removes all whitespace
  */
 export function normalizeParamName(s) {
   return (s ?? "")
     .toLowerCase()
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
     .replace(/\b(high|low)\b/g, "")
+    .replace(/[\u00A0\u200B-\u200D\uFEFF]/g, "")
     .replace(/\s+/g, "");
 }
 

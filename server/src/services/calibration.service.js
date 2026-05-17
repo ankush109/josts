@@ -57,12 +57,26 @@ function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
   const targetName = normalizeParamName(paramName);
   const acceptable = getAcceptableNames(paramName);
 
-  // First match by name only — separate from the uncertainty check so we can give a precise error.
-  // Master-side names go through the same normaliser (drops "High"/"Low" qualifiers, whitespace, case)
-  // and are also checked against the synonym table in PARAM_ALIASES.
-  const byName = equipment.parameters.filter(
+  // 1) Exact normalised + alias match.
+  // Master-side names go through the same normaliser (drops "High"/"Low" qualifiers,
+  // parens, whitespace, case) and are also checked against PARAM_ALIASES.
+  let byName = equipment.parameters.filter(
     (p) => acceptable.has(normalizeParamName(p.parameterName))
   );
+
+  // 2) Substring fallback: master ⊇ form. Handles equipment entries that carry
+  // extra qualifier text the normaliser/alias table doesn't strip (e.g.
+  // "DC Voltage Range 1", "Resistance Section A"). One-directional only —
+  // we never accept master ⊊ form, to avoid mapping form "DC Voltage" onto
+  // master "AUX. DC Voltage", which would silently swap reference standards.
+  let matchedBy = "exact";
+  if (!byName.length && targetName) {
+    byName = equipment.parameters.filter((p) => {
+      const m = normalizeParamName(p.parameterName);
+      return m && m.includes(targetName);
+    });
+    if (byName.length) matchedBy = "substring";
+  }
 
   if (!byName.length) {
     logger.warn("[Traceability] No matching parameter found in master equipment", {
@@ -130,6 +144,8 @@ function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
     masterEquipment:  equipment.equipmentName,
     parameter:        paramName,
     nomValue:         `${nomValue} ${unit}`.trim(),
+    matchedBy,
+    matchedParam:     closest.parameterName,
     matchedRange:     closest.range ?? "—",
     matchedSubRange:  closest.subRange ?? "—",
     matchedStdValue:  `${closest.stdValue} ${closest.unit}`,

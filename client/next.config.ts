@@ -11,8 +11,16 @@ const withSerwist = withSerwistInit({
 
 
 const nextConfig: NextConfig = {
-    typescript: {
+  typescript: {
     ignoreBuildErrors: true,
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api-proxy/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_URL ?? "http://13.204.43.74"}/:path*`,
+      },
+    ];
   },
   images: {
     remotePatterns: [
