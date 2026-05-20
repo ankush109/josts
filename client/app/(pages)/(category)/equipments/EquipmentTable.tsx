@@ -122,11 +122,13 @@ const BLANK_FORM: CreateForm = {
 };
 
 type ActiveFilter = "all" | "active" | "inactive";
+type StatusFilter = "all" | "overdue" | "soon" | "ok";
 
 export default function EquipmentTable() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useGetEuipments(page);
 
@@ -179,6 +181,10 @@ export default function EquipmentTable() {
     if (q && !(e.equipmentName?.toLowerCase().includes(q) || e.idNo?.toLowerCase().includes(q) || e.make?.toLowerCase().includes(q) || e.serialNo?.toLowerCase().includes(q))) return false;
     if (activeFilter === "active"   && e.isActive === false) return false;
     if (activeFilter === "inactive" && e.isActive !== false) return false;
+    if (statusFilter !== "all") {
+      const s = getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined);
+      if (s !== statusFilter) return false;
+    }
     return true;
   });
 
@@ -240,9 +246,29 @@ export default function EquipmentTable() {
                   }`}
                 >
                   {opt.label}
-                  <span className={`text-[10px] tabular-nums ${activeFilter === opt.v ? "text-slate-400 dark:text-zinc-500" : "text-slate-400 dark:text-zinc-500"}`}>
-                    {opt.count}
-                  </span>
+                  <span className="text-[10px] tabular-nums text-slate-400 dark:text-zinc-500">{opt.count}</span>
+                </button>
+              ))}
+            </div>
+            {/* Due-status filter */}
+            <div className="inline-flex rounded-lg border border-slate-200 dark:border-zinc-700 overflow-hidden bg-slate-50 dark:bg-zinc-800/60">
+              {([
+                { v: "all",     label: "All Status", count: allItems.length },
+                { v: "ok",      label: "Valid",       count: valid },
+                { v: "soon",    label: "Due Soon",    count: soon },
+                { v: "overdue", label: "Overdue",     count: overdue },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.v}
+                  onClick={() => setStatusFilter(opt.v as StatusFilter)}
+                  className={`px-3 h-8 text-[11px] font-medium transition-colors flex items-center gap-1.5 ${
+                    statusFilter === opt.v
+                      ? "bg-white dark:bg-zinc-900 text-slate-800 dark:text-zinc-100 shadow-sm"
+                      : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  {opt.label}
+                  <span className="text-[10px] tabular-nums text-slate-400 dark:text-zinc-500">{opt.count}</span>
                 </button>
               ))}
             </div>

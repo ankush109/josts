@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { format, parseISO, isPast, differenceInDays } from "date-fns";
 import {
   ArrowLeft, Calendar, AlertCircle, CheckCircle2, Clock, FlaskConical,
-  Building2, Award, Activity, Pencil, Save, X, Power, Plus, Trash2, History, RefreshCw,
+  Award, Activity, Pencil, Save, X, Power, Plus, Trash2, History, RefreshCw,
+  Upload, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +18,10 @@ import { useGetEquipmentHistory } from "@/app/hooks/query/useGetEquipmentHistory
 import {
   useUpdateEquipment,
   useSetEquipmentActive,
+  useDeleteEquipment,
 } from "@/app/hooks/mutate/useUpdateEquipment";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
+import { useAuth } from "@/app/provider/AuthProvider";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -58,14 +62,20 @@ interface Parameter {
   parameterName?: string;
   range?:         string;
   subRange?:      string;
-  stdValue?:      number | null;
-  ducReading?:    number | null;
+  stdValue?:      number | string | null;
+  ducReading?:    number | string | null;
   unit?:          string;
-  errorPct?:      number | null;
-  uncertaintyPct?: number | null;
+  errorPct?:      number | string | null;
+  uncertaintyPct?: number | string | null;
+  accuracy?:      number | string | null;
   remarks?:       string;
   [k: string]: any;
 }
+
+const NUMERIC_PARAM_KEYS = new Set(["stdValue", "ducReading", "errorPct", "uncertaintyPct", "accuracy"]);
+
+const isPartialNumeric = (v: string): boolean =>
+  v === "" || /^-?\d*\.?\d*$/.test(v);
 
 interface EquipmentDoc {
   _id?:           string;
@@ -86,14 +96,13 @@ interface EquipmentDoc {
   updatedAt?:     string;
 }
 
-const PARAM_COLS: { key: keyof Parameter; label: string; align: "left" | "right" | "center" }[] = [
+const BASE_PARAM_COLS: { key: keyof Parameter; label: string; align: "left" | "right" | "center" }[] = [
   { key: "range",          label: "Range",           align: "left"  },
   { key: "subRange",       label: "Sub Range",       align: "left"  },
   { key: "stdValue",       label: "Std. Value",      align: "right" },
   { key: "ducReading",     label: "DUC Reading",     align: "right" },
   { key: "unit",           label: "Unit",            align: "center"},
   { key: "errorPct",       label: "Error (%)",       align: "right" },
-  { key: "uncertaintyPct", label: "Uncertainty (%)", align: "right" },
   { key: "remarks",        label: "Remarks",         align: "left"  },
 ];
 
@@ -113,6 +122,12 @@ export default function EquipmentDetailPage() {
   const [editMode, setEditMode] = useState(false);
   const isOffline = !useOnlineStatus();
   const [draft, setDraft] = useState<EquipmentDoc | null>(null);
+  const [showAccuracy, setShowAccuracy] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const isAdmin = (user as any)?.role === "admin";
+  const { mutate: deleteEquipment, isPending: isDeleting } = useDeleteEquipment();
 
   useEffect(() => { if (eq) setDraft(structuredClone(eq)); }, [eq]);
 
@@ -148,10 +163,22 @@ export default function EquipmentDetailPage() {
       parameters: (d.parameters ?? []).map((p, i) => (i === idx ? { ...p, ...patch } : p)),
     });
 
+  const BLANK_PARAM = (): Parameter => ({
+    parameterName: "", range: "", subRange: "", stdValue: null, ducReading: null,
+    unit: "", errorPct: null, uncertaintyPct: null, accuracy: null, remarks: "",
+  });
+
   const addParam = () =>
+    setDraft((d) => d && { ...d, parameters: [...(d.parameters ?? []), BLANK_PARAM()] });
+
+  const insertParam = (afterIdx: number) =>
     setDraft((d) => d && {
       ...d,
-      parameters: [...(d.parameters ?? []), { parameterName: "", range: "", subRange: "", stdValue: null, ducReading: null, unit: "", errorPct: null, uncertaintyPct: null, remarks: "" }],
+      parameters: [
+        ...(d.parameters ?? []).slice(0, afterIdx + 1),
+        BLANK_PARAM(),
+        ...(d.parameters ?? []).slice(afterIdx + 1),
+      ],
     });
 
   const removeParam = (idx: number) =>
@@ -160,11 +187,70 @@ export default function EquipmentDetailPage() {
       parameters: (d.parameters ?? []).filter((_, i) => i !== idx),
     });
 
+  const sanitizeParams = (params: Parameter[]): Parameter[] =>
+    params.map((p) => ({
+      ...p,
+      stdValue:      num(String(p.stdValue ?? "")),
+      ducReading:    num(String(p.ducReading ?? "")),
+      errorPct:      num(String(p.errorPct ?? "")),
+      uncertaintyPct: num(String(p.uncertaintyPct ?? "")),
+      accuracy:      num(String(p.accuracy ?? "")),
+    }));
+
   const onSave = () => {
-    update({ id, payload: draft }, {
+    if (!draft) return;
+    const payload = { ...draft, parameters: sanitizeParams(draft.parameters ?? []) };
+    update({ id, payload }, {
       onSuccess: () => { toast.success("Equipment saved"); setEditMode(false); },
       onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Save failed"),
     });
+  };
+
+  const onDelete = () => {
+    deleteEquipment(id, {
+      onSuccess: () => { toast.success("Equipment deleted"); router.push("/equipments"); },
+      onError:   () => toast.error("Failed to delete equipment"),
+    });
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const wb = XLSX.read(ev.target?.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (rows.length < 2) { toast.error("Excel file appears empty"); return; }
+        const header = rows[0].map((h: any) => String(h ?? "").toLowerCase().trim());
+        const parsed: Parameter[] = rows.slice(1).filter((r) => r.some(Boolean)).map((r) => {
+          const get = (key: string) => {
+            const i = header.findIndex((h) => h.includes(key));
+            return i >= 0 ? String(r[i] ?? "") : "";
+          };
+          return {
+            parameterName: get("parameter"),
+            range:         get("range"),
+            subRange:      get("sub"),
+            stdValue:      num(get("std")) ?? num(get("standard")),
+            ducReading:    num(get("duc")) ?? num(get("reading")),
+            unit:          get("unit"),
+            errorPct:      num(get("error")),
+            uncertaintyPct: num(get("uncertainty")),
+            accuracy:      num(get("accuracy")),
+            remarks:       get("remark"),
+          };
+        });
+        setDraft((d) => d && { ...d, parameters: parsed });
+        toast.success(`Loaded ${parsed.length} rows from Excel`);
+      } catch {
+        toast.error("Failed to parse Excel file");
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const onCancel = () => { setDraft(structuredClone(eq)); setEditMode(false); };
@@ -205,6 +291,21 @@ export default function EquipmentDetailPage() {
           <Power className="h-3.5 w-3.5" />
           {draft.isActive ? "Deactivate" : "Activate"}
         </Button>
+        {isAdmin && !draft.isActive && (
+          deleteConfirm ? (
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-white/70">Confirm delete?</span>
+              <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm(false)} className="text-white/70 hover:text-white hover:bg-white/10 h-7 px-2">No</Button>
+              <Button size="sm" onClick={onDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 h-7 px-2 gap-1">
+                <Trash2 className="h-3 w-3" />{isDeleting ? "…" : "Yes, delete"}
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm(true)} className="text-red-300 hover:text-red-100 hover:bg-red-900/30 gap-1.5">
+              <Trash2 className="h-3.5 w-3.5" /> Delete
+            </Button>
+          )
+        )}
         {!editMode ? (
           <Button
             size="sm"
@@ -275,91 +376,130 @@ export default function EquipmentDetailPage() {
         </div>
 
         {/* Parameters */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 dark:bg-blue-500/15 flex items-center justify-center">
-                <Activity className="h-4 w-4 text-[#1e3a5f] dark:text-blue-400" />
+        {(() => {
+          const paramCols = [
+            ...BASE_PARAM_COLS.slice(0, 6),
+            showAccuracy
+              ? { key: "accuracy"      as keyof Parameter, label: "Accuracy (%)", align: "right" as const }
+              : { key: "uncertaintyPct" as keyof Parameter, label: "Uncertainty (%)", align: "right" as const },
+            BASE_PARAM_COLS[6],
+          ];
+          return (
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 dark:bg-blue-500/15 flex items-center justify-center shrink-0">
+                  <Activity className="h-4 w-4 text-[#1e3a5f] dark:text-blue-400" />
+                </div>
+                <div>
+                  <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">Calibration Results</span>
+                  <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-2">{parameters.length} reading{parameters.length === 1 ? "" : "s"}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">Calibration Results</span>
-                <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-2">{parameters.length} reading{parameters.length === 1 ? "" : "s"}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Traceability / Accuracy toggle */}
+                <button
+                  onClick={() => setShowAccuracy((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg border border-slate-200 dark:border-zinc-700 text-[11px] font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  {showAccuracy ? <ToggleRight className="h-3.5 w-3.5 text-blue-500" /> : <ToggleLeft className="h-3.5 w-3.5 text-slate-400" />}
+                  {showAccuracy ? "Accuracy" : "Traceability"}
+                </button>
+                {editMode && (
+                  <>
+                    {/* Excel upload */}
+                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
+                    <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-1.5 h-8">
+                      <Upload className="h-3.5 w-3.5" /> Upload Excel
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={addParam} className="gap-1.5 h-8">
+                      <Plus className="h-3.5 w-3.5" /> Add row
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
-            {editMode && (
-              <Button size="sm" variant="outline" onClick={addParam} className="gap-1.5">
-                <Plus className="h-3.5 w-3.5" /> Add row
-              </Button>
-            )}
-          </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[12px]">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-zinc-800/50 border-b border-slate-200 dark:border-zinc-800">
-                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest w-8">#</th>
-                  <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Parameter</th>
-                  {PARAM_COLS.map((c) => (
-                    <th key={String(c.key)} className={`px-3 py-3 text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest whitespace-nowrap text-${c.align}`}>
-                      {c.label}
-                    </th>
-                  ))}
-                  {editMode && <th className="px-3 py-3 w-10"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {parameters.map((p, i) => (
-                  <tr key={i} className="border-b border-slate-100 dark:border-zinc-800 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40">
-                    <td className="px-3 py-2 text-slate-300 dark:text-zinc-600 text-[11px] font-mono">{i + 1}</td>
-                    <td className="px-3 py-2">
-                      {editMode ? (
-                        <Input value={p.parameterName ?? ""} onChange={(e) => updateParam(i, { parameterName: e.target.value })} className="h-8 text-[12px]" />
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60">
-                          {p.parameterName || "—"}
-                        </span>
-                      )}
-                    </td>
-                    {PARAM_COLS.map((c) => (
-                      <td key={String(c.key)} className={`px-3 py-2 font-mono text-[12px] text-${c.align}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-[12px]">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-zinc-800/50 border-b border-slate-200 dark:border-zinc-800">
+                    <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest w-8">#</th>
+                    <th className="px-3 py-3 text-left text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Parameter</th>
+                    {paramCols.map((c) => (
+                      <th key={String(c.key)} className={`px-3 py-3 text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-widest whitespace-nowrap text-${c.align}`}>
+                        {c.label}
+                      </th>
+                    ))}
+                    {editMode && <th className="px-3 py-3 w-20"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parameters.map((p, i) => (
+                    <tr key={i} className="border-b border-slate-100 dark:border-zinc-800 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 group/row">
+                      <td className="px-3 py-2 text-slate-300 dark:text-zinc-600 text-[11px] font-mono">{i + 1}</td>
+                      <td className="px-3 py-2">
                         {editMode ? (
-                          <Input
-                            value={p[c.key] == null ? "" : String(p[c.key])}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              if (c.key === "stdValue" || c.key === "ducReading" || c.key === "errorPct" || c.key === "uncertaintyPct") {
-                                updateParam(i, { [c.key]: raw === "" ? null : num(raw) } as Partial<Parameter>);
-                              } else {
-                                updateParam(i, { [c.key]: raw } as Partial<Parameter>);
-                              }
-                            }}
-                            className={`h-8 text-[12px] font-mono ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
-                          />
+                          <Input value={p.parameterName ?? ""} onChange={(e) => updateParam(i, { parameterName: e.target.value })} className="h-8 text-[12px]" />
                         ) : (
-                          renderCell(c.key, p[c.key])
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60">
+                            {p.parameterName || "—"}
+                          </span>
                         )}
                       </td>
-                    ))}
-                    {editMode && (
-                      <td className="px-3 py-2 text-right">
-                        <button onClick={() => removeParam(i)} className="text-red-400 hover:text-red-600">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                      {paramCols.map((c) => (
+                        <td key={String(c.key)} className={`px-3 py-2 font-mono text-[12px] text-${c.align}`}>
+                          {editMode ? (
+                            <Input
+                              value={p[c.key] == null ? "" : String(p[c.key])}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (NUMERIC_PARAM_KEYS.has(String(c.key))) {
+                                  if (!isPartialNumeric(raw)) return;
+                                  const isIntermediate = raw === "-" || raw === "." || raw === "-." || raw.endsWith(".");
+                                  updateParam(i, { [c.key]: raw === "" ? null : isIntermediate ? raw : (num(raw) ?? raw) } as any);
+                                } else {
+                                  updateParam(i, { [c.key]: raw } as Partial<Parameter>);
+                                }
+                              }}
+                              className={`h-8 text-[12px] font-mono ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
+                            />
+                          ) : (
+                            renderCell(c.key, p[c.key])
+                          )}
+                        </td>
+                      ))}
+                      {editMode && (
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              title="Insert row below"
+                              onClick={() => insertParam(i)}
+                              className="text-slate-300 hover:text-blue-500 dark:text-zinc-600 dark:hover:text-blue-400 opacity-0 group-hover/row:opacity-100 transition-opacity"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => removeParam(i)} className="text-red-400 hover:text-red-600">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  {parameters.length === 0 && (
+                    <tr>
+                      <td colSpan={paramCols.length + 2} className="px-4 py-8 text-center text-slate-400 dark:text-zinc-500 text-[12px]">
+                        No calibration readings.{editMode && " Use 'Add row' or 'Upload Excel' to get started."}
                       </td>
-                    )}
-                  </tr>
-                ))}
-                {parameters.length === 0 && (
-                  <tr>
-                    <td colSpan={PARAM_COLS.length + 2} className="px-4 py-8 text-center text-slate-400 dark:text-zinc-500 text-[12px]">
-                      No calibration readings.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+          );
+        })()}
 
         {/* History */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">

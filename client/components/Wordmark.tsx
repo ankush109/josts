@@ -1,30 +1,19 @@
-/**
- * @fileoverview Animated brand wordmark for "Jasper" — the calibration portal.
- *
- * Renders the app name with a subtle blue→violet gradient, a tiny pulsing
- * accent dot, and a serif italic styling so it reads as a product name
- * distinct from the surrounding UI copy.
- */
-
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 interface WordmarkProps {
-  /** Visual size preset. */
   size?: "xs" | "sm" | "md" | "lg" | "xl";
-  /** Show the pulsing accent dot to the left. */
   showDot?: boolean;
-  /** Optional caption rendered below the wordmark (e.g. "Calibration Suite"). */
   caption?: string;
-  /** Extra classes for the root span. */
   className?: string;
 }
 
 const SIZE_MAP: Record<NonNullable<WordmarkProps["size"]>, string> = {
-  xs: "text-sm",
-  sm: "text-base",
-  md: "text-xl",
-  lg: "text-3xl",
-  xl: "text-5xl",
+  xs: "h-4",
+  sm: "h-5",
+  md: "h-6",
+  lg: "h-8",
+  xl: "h-12",
 };
 
 const CAPTION_SIZE_MAP: Record<NonNullable<WordmarkProps["size"]>, string> = {
@@ -50,17 +39,22 @@ export default function Wordmark({
             <span className="relative h-2 w-2 rounded-full bg-gradient-to-br from-blue-500 to-violet-500" />
           </span>
         )}
-        <span
-          className={cn(
-            "font-extrabold tracking-tight italic bg-clip-text text-transparent select-none",
-            "bg-gradient-to-br from-blue-600 via-indigo-500 to-violet-600",
-            "dark:from-blue-400 dark:via-indigo-300 dark:to-violet-400",
-            SIZE_MAP[size],
-          )}
-          style={{ fontFamily: '"Times New Roman", Times, serif' }}
-        >
-          Jasper
-        </span>
+        {/* Light mode logo — hidden in dark mode */}
+        <Image
+          src="/jasper_dark.png"
+          alt="Jasper"
+          width={200}
+          height={60}
+          className={cn("w-auto dark:hidden jasper-logo-dark", SIZE_MAP[size])}
+        />
+        {/* Dark mode logo — hidden in light mode */}
+        <Image
+          src="/jasper_light.png"
+          alt="Jasper"
+          width={200}
+          height={60}
+          className={cn("w-auto hidden dark:block jasper-logo-light", SIZE_MAP[size])}
+        />
       </span>
       {caption && (
         <span

@@ -115,6 +115,10 @@ export const EP_CHECK_CSR_NO = () =>
 export const EP_EQUIPMEMTS = () => `/equipments`
 export const EP_EQUIPMENTS_PARAMS_SUMMARY = () => `/equipments/params-summary`
 
+/** DELETE /equipments/:id */
+export const EP_EQUIPMENT_DELETE = (id: string | number) =>
+  `/equipments/${id}` as const;
+
 /** PATCH /equipments/:id/active — body `{ isActive: boolean }` */
 export const EP_EQUIPMENT_ACTIVE = (id: string | number) =>
   `/equipments/${id}/active` as const;

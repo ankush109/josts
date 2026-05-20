@@ -22,7 +22,7 @@ const NAV_LINKS = [
   { href: "/dashboard",   label: "Dashboard",           icon: LayoutDashboard, adminOnly: true },
   { href: "/calibration", label: "Calibration Reports", icon: FileText,        adminOnly: false },
   { href: "/drafts",      label: "Drafts",              icon: FilePlus,        adminOnly: false },
-  { href: "/equipments",  label: "Equipments",          icon: FilePlus,        adminOnly: false },
+  { href: "/equipments",  label: "Standard Equipments",  icon: FilePlus,        adminOnly: false },
   { href: "/instruments", label: "Instruments",         icon: FlaskConical,    adminOnly: false },
 ] as const;
 

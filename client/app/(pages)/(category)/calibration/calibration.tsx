@@ -364,7 +364,6 @@ const MetaGrid: FC<{
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-      <Field label="CSR No"              k="csrNo"         {...sharedProps} required autoFocus={autoFocusCsr} helper={csrCheckHelper} />
       <Field label="Cal Date"            k="calDate"       {...sharedProps} type="date" />
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
@@ -1498,7 +1497,7 @@ const SbInstrument: FC<{
           <div className="min-w-0 flex-1">
             <div className={cn("text-xs font-semibold truncate", isActive ? "text-blue-900 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-200")}>{label}</div>
             {sub && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</div>}
-            <div className="text-[10px] text-zinc-400 mt-0.5 font-mono">{inst.meta.csrNo || "No CSR yet"}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5 font-mono">{inst.meta.slNo || inst.meta.nomenclature || "—"}</div>
             {/* Completion bar */}
             {(() => {
               const pct = getInstCompletion(inst);
@@ -2062,9 +2061,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   }
 
   useEffect(() => {
-    // Only auto-save in edit mode (not view mode) for draft reports with unsaved changes
+    // Only auto-save in edit mode (not view mode) with unsaved changes
     if (!isEditMode || viewMode || !isDirty || !hydrated || !userId || !reportId) return;
-    if (existingReport?.status && existingReport.status !== "draft") return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
       setAutoSaveStatus("saving");
@@ -2161,8 +2159,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     // ── Per-instrument fields ────────────────────────────────────────────────
     for (const inst of instruments) {
       const lbl = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
-      if (!inst.meta.csrNo.trim())
-        errors.push({ message: `[${lbl}] CSR No is required`, instId: inst.id, fieldId: "field-csrNo" });
       if (!inst.meta.nomenclature.trim())
         errors.push({ message: `[${lbl}] Nomenclature of DUC is required`, instId: inst.id, fieldId: "field-nomenclature" });
       if (!inst.meta.make.trim())
@@ -2289,13 +2285,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   function handleSave(status: "draft" | "submitted") {
     if (!userId) { toast.error("You must be logged in to save a report"); return; }
-    if (csrCheck === "taken") {
-      toast.error("CSR number already exists. Use a different CSR No.");
-      const el = document.getElementById("field-csrNo");
-      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      el?.focus();
-      return;
-    }
     const errors = validate(status);
     if (errors.length) {
       setFormErrors(errors);
@@ -2318,9 +2307,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       cleanSnapshot.current = { instruments, reportMeta };
       toast.success(successMsg);
       queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
-      if (status === "draft" && isEditMode) {
-        setView("results");
-        setHydrated(false); // re-hydrate to get computed values back
+      if (isEditMode) {
+        setViewMode(true);
+        setHydrated(false);
       } else {
         router.push("/calibration");
       }
@@ -2328,8 +2317,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
     const onError = (err: any) => {
       const msg = err?.response?.data?.message ?? "Failed to save report";
-      const is409 = err?.response?.status === 409;
-      toast.error(is409 ? "CSR number already exists. Use a different CSR No." : msg);
+      toast.error(msg);
     };
 
     if (isEditMode && reportId) {
@@ -3001,7 +2989,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   <span className="hidden sm:inline ml-1">{isPending ? "Saving…" : "Save draft"}</span>
                 </Button>
 
-                {/* Submit */}
+                {/* Submit / Save */}
                 <div className="relative">
                   <Button
                     size="sm"
@@ -3011,7 +2999,11 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                     className="px-2.5 lg:px-3"
                   >
                     <Send className="h-3.5 w-3.5 sm:hidden" />
-                    <span className="hidden sm:inline">{isEditMode ? "Submit report" : "Create Report"}</span>
+                    <span className="hidden sm:inline">
+                      {!isEditMode ? "Create Report"
+                        : existingReport?.status === "draft" ? "Submit report"
+                        : "Save changes"}
+                    </span>
                   </Button>
                   {formErrors.length > 0 && (
                     <span
@@ -3045,7 +3037,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
         {/* ── Create mode: step progress strip ── */}
         {!isEditMode && (() => {
-          const hasMeta  = instruments.some((i) => i.meta.csrNo.trim() && i.meta.nomenclature.trim());
+          const hasMeta  = instruments.some((i) => i.meta.nomenclature.trim() && i.meta.make.trim());
           const hasParam = instruments.some((i) => i.params.length > 0);
           const hasReads = instruments.some((i) =>
             i.params.some((p) => p.ranges.some((r) => r.measurements.some((m) => m.readings.some((v) => v !== ""))))

@@ -1,15 +1,7 @@
-/**
- * @fileoverview Left-side branding panel for auth pages (login & register).
- *
- * Displays the Jasper wordmark with a typewriter animation and a rotating
- * tagline carousel.
- */
-
 "use client";
 
 import { useState, useEffect } from "react";
 
-/** Taglines rotated every 3 seconds on the auth branding panel. */
 const TAGLINES = [
   "Calibration reports that work offline, anywhere.",
   "Built for engineers, not paperwork.",
@@ -25,16 +17,7 @@ const TYPEWRITER_INTERVAL_MS = 80;
 const TAGLINE_INTERVAL_MS = 3000;
 const TAGLINE_FADE_DURATION_MS = 400;
 
-/**
- * Animated left panel shown on the login and register pages.
- *
- * Renders a navy background with dot-grid texture, a typewriter Jasper
- * wordmark, and a fading tagline carousel.
- *
- * Only visible on `lg` screens and above (hidden on mobile).
- */
 export function AuthBrandingPanel() {
-  // ── Typewriter ─────────────────────────────────────────────────────────
   const [displayedText, setDisplayedText] = useState("");
   const [typewriterDone, setTypewriterDone] = useState(false);
 
@@ -51,7 +34,6 @@ export function AuthBrandingPanel() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Tagline carousel ───────────────────────────────────────────────────
   const [taglineIndex, setTaglineIndex] = useState(0);
   const [taglineFade, setTaglineFade] = useState(true);
 

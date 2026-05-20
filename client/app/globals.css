@@ -258,3 +258,7 @@
 /* Dividers */
 .dark .force-light .divide-zinc-100   > * + * { border-color: oklch(0.93 0.008 264); }
 .dark .force-light .divide-slate-100  > * + * { border-color: oklch(0.94 0.010 264); }
+
+/* Always show dark logo on light-forced pages (e.g. login in dark system mode) */
+.dark .force-light .jasper-logo-dark  { display: block !important; }
+.dark .force-light .jasper-logo-light { display: none !important; }
