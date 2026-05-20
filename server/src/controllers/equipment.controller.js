@@ -1,6 +1,7 @@
 import Equipment from "../models/Equipment.js";
 import * as EquipementService from "../services/equipment.service.js"
 import { getEquipmentAudit } from "../services/equipment-audit.service.js";
+import { getPresignedUploadUrl, getSignedDownloadUrl } from "../lib/s3.js";
 
 // Returns all equipment with only _id, equipmentName, and parameter names — used by the calibration form combobox
 export const getEquipmentParamSummary = async (req, res, next) => {
@@ -90,6 +91,35 @@ export const getEquipmentHistory = async (req, res, next) => {
   try {
     const data = await getEquipmentAudit(req.params.id);
     res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getTraceabilityPresignUrl = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const contentType = req.body?.contentType
+      ?? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const key = `traceability/equipment-${id}`;
+    const uploadUrl = await getPresignedUploadUrl(key, contentType);
+    res.status(200).json({ success: true, uploadUrl, key });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getTraceabilityDownloadUrl = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const equipment = await Equipment.findById(id).select("traceabilityFileKey").lean();
+    if (!equipment?.traceabilityFileKey) {
+      const err = new Error("No traceability file attached to this equipment");
+      err.statusCode = 404;
+      throw err;
+    }
+    const downloadUrl = await getSignedDownloadUrl(equipment.traceabilityFileKey);
+    res.status(200).json({ success: true, downloadUrl });
   } catch (err) {
     next(err);
   }

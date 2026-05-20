@@ -13,7 +13,6 @@ import { z } from "zod";
  * Schema for POST /calibration-report (create).
  */
 export const createCalibrationSchema = z.object({
-  csrNo:    z.string().min(1, "CSR number is required").max(100),
   createdBy: z.string().length(24, "Invalid user ID"),
   formatNo:            z.string().optional(),
   status:              z.enum(["draft", "submitted"]).optional(),

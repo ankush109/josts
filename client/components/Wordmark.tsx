@@ -33,39 +33,25 @@ export default function Wordmark({
   return (
     <span className={cn("inline-flex flex-col leading-none", className)}>
       <span className="inline-flex items-center gap-1.5">
-        {showDot && (
-          <span className="relative inline-flex h-2 w-2 shrink-0">
-            <span className="absolute inset-0 rounded-full bg-blue-400 opacity-60 animate-ping" />
-            <span className="relative h-2 w-2 rounded-full bg-gradient-to-br from-blue-500 to-violet-500" />
-          </span>
-        )}
+      
         {/* Light mode logo — hidden in dark mode */}
-        <Image
-          src="/jasper_dark.png"
-          alt="Jasper"
-          width={200}
-          height={60}
-          className={cn("w-auto dark:hidden jasper-logo-dark", SIZE_MAP[size])}
-        />
-        {/* Dark mode logo — hidden in light mode */}
         <Image
           src="/jasper_light.png"
           alt="Jasper"
-          width={200}
-          height={60}
-          className={cn("w-auto hidden dark:block jasper-logo-light", SIZE_MAP[size])}
+          width={300}
+          height={100}
+          className={cn("w-auto dark:hidden", SIZE_MAP[size])}
+        />
+        {/* Dark mode logo — hidden in light mode */}
+        <Image
+          src="/jasper_dark.png"
+          alt="Jasper"
+         width={300}
+          height={100}
+          className={cn("w-auto hidden dark:block", SIZE_MAP[size])}
         />
       </span>
-      {caption && (
-        <span
-          className={cn(
-            "mt-0.5 font-semibold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500",
-            CAPTION_SIZE_MAP[size],
-          )}
-        >
-          {caption}
-        </span>
-      )}
+   
     </span>
   );
 }

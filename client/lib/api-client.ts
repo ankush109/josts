@@ -5,9 +5,9 @@
  * - `apiClient`   – unauthenticated (login, register)
  * - `authClient`  – automatically injects the Bearer token from localStorage
  *
- * The auth client also handles 401 responses by clearing credentials and
+ * The auth client also handles 401 responses by clea ring credentials and
  * redirecting the user back to the login page.
- */
+ */ 
 
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
 

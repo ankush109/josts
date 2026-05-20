@@ -25,7 +25,6 @@ import {
   getDraft,
 } from "@/app/lib/offline-drafts";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
-import { useCheckCsrNo } from "@/app/hooks/useCheckCsrNo";
 import { cn } from "@/lib/utils";
 import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine, GitBranch, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -348,14 +347,12 @@ const MetaGrid: FC<{
   instParamNames: string[];
   modelLocked?: boolean;
   showErrors?: boolean;
-  autoFocusCsr?: boolean;
   readOnly?: boolean;
   hasPreset?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
   onChange: (key: keyof InstrumentMeta, val: string) => void;
-  csrCheckHelper?: React.ReactNode;
-}> = ({ meta, instParamNames, modelLocked, showErrors, autoFocusCsr, readOnly, hasPreset, touched, onTouch, onChange, csrCheckHelper }) => {
+}> = ({ meta, instParamNames, modelLocked, showErrors, readOnly, hasPreset, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const sharedProps = { meta, showErrors, touched, onTouch, onChange, readOnly };
@@ -1683,7 +1680,7 @@ const AddInstrumentPanel: FC<{
       </div>
       {currentMeta.nomenclature && (
         <Badge variant="outline" className="mt-1.5 text-[11px]">
-          {currentMeta.nomenclature} · {currentMeta.csrNo || "no CSR"}
+          {currentMeta.nomenclature}
         </Badge>
       )}
     </button>
@@ -2109,31 +2106,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const activeInst  = instruments.find((i) => i.id === activeInstId)  ?? instruments[0];
   const activeParam = activeInst.params.find((p) => p.id === activeParamId) ?? activeInst.params[0] ?? null;
 
-  const csrCheck = useCheckCsrNo(instruments[0]?.meta.csrNo ?? "", reportId ?? null);
-  const csrCheckHelper = (() => {
-    if (csrCheck === "checking") {
-      return (
-        <span className="text-[10px] text-slate-500 flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" /> Checking availability…
-        </span>
-      );
-    }
-    if (csrCheck === "available") {
-      return (
-        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-          <CheckCircle2 className="h-3 w-3" /> CSR No is available
-        </span>
-      );
-    }
-    if (csrCheck === "taken") {
-      return (
-        <span className="text-[10px] text-destructive flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" /> This CSR No is already used by another report
-        </span>
-      );
-    }
-    return null;
-  })();
 
   const { user } = useAuth();
   const userId = user?.id ?? (user as any)?._id ?? null;
@@ -2786,7 +2758,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   <div className="flex items-center gap-2 mb-0.5">
                     <FlaskConical className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                     <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 truncate">
-                      {activeInst.meta.nomenclature || "Instrument"} · {activeInst.meta.csrNo || "No CSR"}
+                      {activeInst.meta.nomenclature || "Instrument"}
                     </span>
                   </div>
                   {activeParam ? (
@@ -2819,7 +2791,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                       const count = formErrors.length > 0
                         ? formErrors.length
                         : instruments.reduce((acc, inst) => {
-                            if (!inst.meta.csrNo.trim())        acc++;
                             if (!inst.meta.nomenclature.trim()) acc++;
                             return acc;
                           }, 0);
@@ -3261,7 +3232,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 })()}
                 modelLocked={activeInst.params.length > 0}
                 showErrors={formErrors.length > 0}
-                autoFocusCsr={!isEditMode}
                 readOnly={viewMode}
                 hasPreset={
                   activeInst.meta.make
@@ -3273,7 +3243,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 touched={touchedFields}
                 onTouch={handleTouch}
                 onChange={updateMeta}
-                csrCheckHelper={csrCheckHelper}
               />
             </div>
           </div>

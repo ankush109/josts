@@ -33,7 +33,6 @@ export interface DashboardStats {
   }[];
   recentReports: {
     _id: string;
-    csrNo: string;
     customerName: string;
     status: string;
     createdAt: string;

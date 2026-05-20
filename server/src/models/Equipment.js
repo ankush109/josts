@@ -32,6 +32,8 @@ const equipmentSchema = new Schema(
       },
     ],
 
+    traceabilityFileKey: { type: String },
+
     // App-level metadata
     isActive: { type: Boolean, default: true },
     addedBy: { type: Schema.Types.ObjectId, ref: "User" },

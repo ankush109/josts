@@ -7,7 +7,7 @@
  * from here rather than constructing their own clients.
  */
 
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -30,6 +30,22 @@ export const s3Client = new S3Client({
  * @returns {Promise<string>} Pre-signed URL string.
  * @throws Will throw if S3 returns an error (e.g. object not found).
  */
+/**
+ * Generates a pre-signed PUT URL so the browser can upload directly to S3.
+ *
+ * @param {string} key         - S3 object key (file path within the bucket).
+ * @param {string} contentType - MIME type of the file being uploaded.
+ * @returns {Promise<string>} Pre-signed URL string valid for 5 minutes.
+ */
+export async function getPresignedUploadUrl(key, contentType) {
+  const command = new PutObjectCommand({
+    Bucket:      process.env.AWS_S3_BUCKET,
+    Key:         key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(s3Client, command, { expiresIn: 300 });
+}
+
 export async function getSignedDownloadUrl(key) {
   const command = new GetObjectCommand({
     Bucket: process.env.AWS_S3_BUCKET,

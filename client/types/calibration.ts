@@ -29,7 +29,6 @@ export interface ReportMeta {
 
 /** Per-instrument fields (DUC info, reference standard, environment). */
 export interface InstrumentMeta {
-  csrNo: string;
   calDate: string;
   jobId: string;
   idNo: string;

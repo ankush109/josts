@@ -64,7 +64,6 @@ import { CALIBRATION_REPORTS_KEY } from "@/app/hooks/query/useCalibrationReport"
 
 interface DraftRow {
   _id: string;
-  csrNo: string;
   customerName: string;
   instrumentCount: number;
   createdBy: { name?: string; email?: string };
@@ -101,7 +100,6 @@ export default function DraftTable() {
     type CalibItem = {
       _id: string;
       status: string;
-      csrNo?: string;
       customerName?: string;
       instrumentCount?: number;
       instruments?: unknown[];
@@ -114,7 +112,6 @@ export default function DraftTable() {
       .filter((r) => r.status === "draft")
       .map((r) => ({
         _id: r._id,
-        csrNo: r.csrNo || "(no CSR)",
         customerName: r.customerName ?? "",
         instrumentCount: r.instrumentCount ?? r.instruments?.length ?? 0,
         createdBy: {
@@ -127,7 +124,6 @@ export default function DraftTable() {
       }));
     const local: DraftRow[] = localItems.map((r) => ({
       _id: r._id,
-      csrNo: r.csrNo || "(unsaved)",
       customerName: r.customerName ?? "",
       instrumentCount: r.instrumentCount ?? 0,
       createdBy: { name: r.createdBy?.name, email: r.createdBy?.email },
@@ -143,7 +139,6 @@ export default function DraftTable() {
     const filtered = q
       ? rows.filter(
           (r) =>
-            r.csrNo.toLowerCase().includes(q) ||
             r.customerName.toLowerCase().includes(q) ||
             r.createdBy?.name?.toLowerCase().includes(q),
         )
@@ -275,7 +270,7 @@ export default function DraftTable() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <FilePenLine className="h-4 w-4 text-primary shrink-0" />
-                          <span className="font-mono text-sm">{row.csrNo}</span>
+                          <span className="font-mono text-sm">{row.customerName || "—"}</span>
                           {row.isLocal && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                               <CloudOff className="h-3 w-3" /> Local

@@ -62,7 +62,6 @@ export const BLANK_REPORT_META: ReportMeta = {
 
 /** Default empty instrument metadata used when adding a new instrument. */
 export const BLANK_INSTRUMENT_META: InstrumentMeta = {
-  csrNo:          "",
   calDate:        "",
   jobId:          "",
   idNo:           "NA",

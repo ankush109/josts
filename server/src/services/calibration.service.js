@@ -365,7 +365,6 @@ export async function createReport(data, userId) {
 
   const report = await CalibrationReport.create({
     ...data,
-    csrNo:       data.csrNo.trim(),
     certNo,
     instruments: injectComputed(data.instruments ?? [], equipmentMap, instrumentLookupMap),
     signatures: {
@@ -424,7 +423,7 @@ export async function listReports(query, reqUser) {
 
   const [reports, total] = await Promise.all([
     CalibrationReport.find(filter)
-      .select("csrNo formatNo status createdBy signatures createdAt updatedAt instruments filePaths customerName")
+      .select("formatNo status createdBy signatures createdAt updatedAt instruments filePaths customerName")
       .populate("createdBy",               "name email")
       .populate("signatures.calibratedBy", "name email signatureName")
       .populate("signatures.verifiedBy",   "name email signatureName")
@@ -437,7 +436,6 @@ export async function listReports(query, reqUser) {
 
   const items = reports.map((r) => ({
     _id:             r._id,
-    csrNo:           r.csrNo,
     formatNo:        r.formatNo,
     status:          r.status,
     createdBy:       r.createdBy,

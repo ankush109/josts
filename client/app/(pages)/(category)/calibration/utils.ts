@@ -221,7 +221,7 @@ export function getParamStatus(param: Parameter): ParamStatus {
  * Returns an integer 0–100 representing how complete an instrument's data is.
  *
  * Scoring:
- *  - 50 points for required metadata fields (csrNo, nomenclature, make,
+ *  - 50 points for required metadata fields (nomenclature, make,
  *    modelType, calDate, slNo)
  *  - 50 points for parameters where all readings are "ok"
  *
@@ -229,7 +229,7 @@ export function getParamStatus(param: Parameter): ParamStatus {
  */
 export function getInstCompletion(inst: Instrument): number {
   const metaKeys: (keyof InstrumentMeta)[] = [
-    "csrNo", "nomenclature", "make", "modelType", "calDate", "slNo",
+    "nomenclature", "make", "modelType", "calDate", "slNo",
   ];
   const metaScore =
     metaKeys.filter((k) => inst.meta[k]?.trim()).length / metaKeys.length;
@@ -271,10 +271,7 @@ export function buildPayload(
   createdBy: string,
   rm: ReportMeta,
 ) {
-  const csrNo = instruments[0]?.meta.csrNo ?? "";
-
   return {
-    csrNo,
     status,
     createdBy,
     customerName:        rm.customerName,
@@ -344,7 +341,6 @@ export function mapApiToInstruments(
   return instruments.map((inst: any) => ({
     id: inst._id ?? uid(),
     meta: {
-      csrNo:           (apiReport.csrNo as string) ?? "",
       calDate:         inst.calDate ? inst.calDate.slice(0, 10) : "",
       jobId:           inst.jobId ?? "",
       idNo:            inst.idNo ?? "NA",

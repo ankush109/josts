@@ -27,7 +27,6 @@ import * as CalibrationController from "../controllers/calibration.controller.js
 const router = Router();
 
 router.post(  "/compute",          authMiddleware,                         validate(computePreviewSchema),      CalibrationController.computePreview);
-router.get(   "/check-csr",        authMiddleware,                                                              CalibrationController.checkCsrNo);
 router.post(  "/",                 authMiddleware,                         validate(createCalibrationSchema),   CalibrationController.createReport);
 router.get(   "/",                 authMiddleware,                                                              CalibrationController.listReports);
 router.get(   "/:reportId",        authMiddleware,                                                              CalibrationController.getReport);

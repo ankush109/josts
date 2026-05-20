@@ -95,7 +95,6 @@ type ReportStatus = CalibrationReportStatus;
 
 interface ReportListItem {
   _id: string;
-  csrNo: string;
   formatNo: string;
   status: ReportStatus;
   createdBy: { _id: string; name: string; email: string };
@@ -366,7 +365,6 @@ export default function CalibrationReportsTable() {
       const q = searchQuery.toLowerCase();
       list = list.filter(
         (r) =>
-          r.csrNo.toLowerCase().includes(q) ||
           r.createdBy?.name?.toLowerCase().includes(q)
       );
     }
@@ -692,7 +690,7 @@ export default function CalibrationReportsTable() {
                           )} />
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-sm text-amber-950 dark:text-amber-200">{report.csrNo}</p>
+                          <p className="font-semibold text-sm text-amber-950 dark:text-amber-200">{report.formatNo}</p>
                           {report.__syncError ? (
                             <p className="text-xs text-red-700 dark:text-red-400 flex items-center gap-1 mt-0.5">
                               <AlertCircle className="h-3 w-3 shrink-0" />
@@ -863,7 +861,7 @@ export default function CalibrationReportsTable() {
                             <FlaskConical className="h-3.5 w-3.5" style={{ color: navy }} />
                           </div>
                           <div>
-                            <p className="font-semibold text-sm" style={{ color: navy }}>{report.csrNo}</p>
+                            <p className="font-semibold text-sm" style={{ color: navy }}>{report.formatNo}</p>
                             <p className="text-xs text-slate-400 dark:text-zinc-500">{report.formatNo}</p>
                           </div>
                         </div>
@@ -1165,8 +1163,8 @@ export default function CalibrationReportsTable() {
               {reportToDelete && (
                 <>
                   <div className="flex items-center justify-between py-1.5 border-b border-zinc-100">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">CSR No</span>
-                    <span className="text-sm font-bold text-zinc-900 font-mono">{reportToDelete.csrNo}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Format No</span>
+                    <span className="text-sm font-bold text-zinc-900 font-mono">{reportToDelete.formatNo}</span>
                   </div>
                   {reportToDelete.instruments?.length > 0 && (
                     <div className="flex items-start justify-between py-1.5">

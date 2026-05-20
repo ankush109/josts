@@ -17,7 +17,6 @@ import { subscribeToSyncQueue } from "./useSyncQueue";
 
 export type LocalReportListItem = {
   _id: string;                 // localId (used as React key + edit-URL path)
-  csrNo: string;
   formatNo: string;
   status: "draft";
   createdBy: { _id: string; name: string; email: string };
@@ -45,7 +44,6 @@ function draftToReportItem(d: OfflineDraft): LocalReportListItem {
   }));
   return {
     _id:             d.localId,
-    csrNo:           p.csrNo ?? "(unsaved)",
     formatNo:        "",
     status:          "draft",
     createdBy:       { _id: p.createdBy ?? "", name: "You (offline)", email: "" },

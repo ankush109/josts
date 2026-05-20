@@ -107,9 +107,6 @@ export const EP_CALIBRATION_AUDIT_LOG = (reportId: string) =>
 export const EP_COMPUTE_CALIBRATION = () =>
   `/calibration-report/compute` as const;
 
-/** GET /calibration-report/check-csr — uniqueness check for CSR No */
-export const EP_CHECK_CSR_NO = () =>
-  `/calibration-report/check-csr` as const;
 
 
 export const EP_EQUIPMEMTS = () => `/equipments`
@@ -126,6 +123,14 @@ export const EP_EQUIPMENT_ACTIVE = (id: string | number) =>
 /** GET /equipments/:id/history — audit log entries */
 export const EP_EQUIPMENT_HISTORY = (id: string | number) =>
   `/equipments/${id}/history` as const;
+
+/** POST /equipments/:id/traceability-presign — get presigned S3 PUT URL */
+export const EP_EQUIPMENT_TRACEABILITY_PRESIGN = (id: string | number) =>
+  `/equipments/${id}/traceability-presign` as const;
+
+/** GET /equipments/:id/traceability-url — get presigned S3 GET URL */
+export const EP_EQUIPMENT_TRACEABILITY_URL = (id: string | number) =>
+  `/equipments/${id}/traceability-url` as const;
 
 // ── Instruments (DUC instrument master) ────────────────────────────────────
 

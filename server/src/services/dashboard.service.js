@@ -56,7 +56,7 @@ export async function getDashboardStats(reqUser) {
       .lean(),
 
     CalibrationReport.find(baseFilter)
-      .select("_id csrNo customerName status createdAt createdBy")
+      .select("_id customerName status createdAt createdBy")
       .sort({ updatedAt: -1 })
       .limit(5)
       .populate("createdBy", "name")
@@ -76,7 +76,7 @@ export async function getDashboardStats(reqUser) {
               as: "userDoc",
             },
           },
-          { $unwind: { path: "$userDoc", preserveNullAndEmpty: false } },
+          { $unwind: { path: "$userDoc", preserveNullAndEmptyArrays: false } },
           {
             $project: {
               _id: 0,
@@ -118,7 +118,6 @@ export async function getDashboardStats(reqUser) {
     engineers: engineersRaw,
     recentReports: recentReports.map((r) => ({
       _id: r._id,
-      csrNo: r.csrNo,
       customerName: r.customerName,
       status: r.status,
       createdAt: r.createdAt,

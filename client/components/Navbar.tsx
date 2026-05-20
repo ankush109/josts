@@ -69,7 +69,7 @@ export default function Navbar() {
           {/* Jasper wordmark */}
           <Link href="/" className="flex-shrink-0 flex items-center group">
             <div className="hidden sm:block">
-              <Wordmark size="lg" showDot caption="Calibration Suite" />
+              <Wordmark size="xl" showDot caption="Calibration Suite" />
             </div>
             <div className="sm:hidden">
               <Wordmark size="md" showDot />

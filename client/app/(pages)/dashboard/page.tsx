@@ -197,7 +197,7 @@ function RecentReportsList({ reports }: { reports: DashboardStats["recentReports
             className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-border last:border-0 hover:bg-accent/30 transition-colors"
           >
             <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded">
-              {r.csrNo}
+              {r.customerName}
             </span>
             <span className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">
               {r.customerName || "—"}

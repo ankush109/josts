@@ -165,8 +165,6 @@ const signaturesSchema = new mongoose.Schema(
 
 const calibrationReportSchema = new mongoose.Schema(
   {
-    /** Customer Service Request number — must be unique. */
-    csrNo: { type: String, required: true, unique: true, trim: true },
     /** Internal certificate number generated server-side. */
     certNo:              { type: String, trim: true, default: "" },
     formatNo:            { type: String, trim: true, default: "JECL/KOL/LAB/FM/36B" },
@@ -203,7 +201,6 @@ calibrationReportSchema.index({ createdBy: 1, createdAt: -1 });
 calibrationReportSchema.index({ status: 1, createdAt: -1 });
 calibrationReportSchema.index(
   {
-    csrNo:                      "text",
     "instruments.nomenclature": "text",
     "instruments.make":         "text",
   },

@@ -9,10 +9,12 @@ router.get("/",                authMiddleware, EquipmentController.getEquipmentL
 router.post("/",               authMiddleware, EquipmentController.createEquipment);
 router.get("/params-summary",  authMiddleware, EquipmentController.getEquipmentParamSummary);
 
-router.get("/:id",             authMiddleware, EquipmentController.getEquipmentDetails);
-router.get("/:id/history",     authMiddleware, EquipmentController.getEquipmentHistory);
-router.put("/:id",             authMiddleware, EquipmentController.updateEquipment);
-router.patch("/:id/active",    authMiddleware, EquipmentController.setEquipmentActive);
-router.delete("/:id",          authMiddleware, EquipmentController.deleteEquipment);
+router.get("/:id",                        authMiddleware, EquipmentController.getEquipmentDetails);
+router.get("/:id/history",                authMiddleware, EquipmentController.getEquipmentHistory);
+router.get("/:id/traceability-url",       authMiddleware, EquipmentController.getTraceabilityDownloadUrl);
+router.post("/:id/traceability-presign",  authMiddleware, EquipmentController.getTraceabilityPresignUrl);
+router.put("/:id",                        authMiddleware, EquipmentController.updateEquipment);
+router.patch("/:id/active",               authMiddleware, EquipmentController.setEquipmentActive);
+router.delete("/:id",                     authMiddleware, EquipmentController.deleteEquipment);
 
 export default router;

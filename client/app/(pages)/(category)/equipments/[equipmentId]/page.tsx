@@ -6,10 +6,9 @@ import { format, parseISO, isPast, differenceInDays } from "date-fns";
 import {
   ArrowLeft, Calendar, AlertCircle, CheckCircle2, Clock, FlaskConical,
   Award, Activity, Pencil, Save, X, Power, Plus, Trash2, History, RefreshCw,
-  Upload, ToggleLeft, ToggleRight,
+  Upload, ToggleLeft, ToggleRight, FileSpreadsheet, Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import * as XLSX from "xlsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +21,11 @@ import {
 } from "@/app/hooks/mutate/useUpdateEquipment";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import { useAuth } from "@/app/provider/AuthProvider";
+import { authClient } from "@/lib/api-client";
+import {
+  EP_EQUIPMENT_TRACEABILITY_PRESIGN,
+  EP_EQUIPMENT_TRACEABILITY_URL,
+} from "@/lib/endpoints";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -78,22 +82,23 @@ const isPartialNumeric = (v: string): boolean =>
   v === "" || /^-?\d*\.?\d*$/.test(v);
 
 interface EquipmentDoc {
-  _id?:           string;
-  equipmentName?: string;
-  make?:          string;
-  model?:         string;
-  serialNo?:      string;
-  idNo?:          string;
-  certificateNo?: string;
-  calLab?:        string;
-  nablCert?:      string;
-  calDate?:       string | null;
-  nextDue?:       string | null;
-  nominalRatio?:  string;
-  parameters?:    Parameter[];
-  isActive?:      boolean;
-  createdAt?:     string;
-  updatedAt?:     string;
+  _id?:                  string;
+  equipmentName?:        string;
+  make?:                 string;
+  model?:                string;
+  serialNo?:             string;
+  idNo?:                 string;
+  certificateNo?:        string;
+  calLab?:               string;
+  nablCert?:             string;
+  calDate?:              string | null;
+  nextDue?:              string | null;
+  nominalRatio?:         string;
+  parameters?:           Parameter[];
+  traceabilityFileKey?:  string;
+  isActive?:             boolean;
+  createdAt?:            string;
+  updatedAt?:            string;
 }
 
 const BASE_PARAM_COLS: { key: keyof Parameter; label: string; align: "left" | "right" | "center" }[] = [
@@ -124,6 +129,7 @@ export default function EquipmentDetailPage() {
   const [draft, setDraft] = useState<EquipmentDoc | null>(null);
   const [showAccuracy, setShowAccuracy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
@@ -213,44 +219,42 @@ export default function EquipmentDetailPage() {
     });
   };
 
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const wb = XLSX.read(ev.target?.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        if (rows.length < 2) { toast.error("Excel file appears empty"); return; }
-        const header = rows[0].map((h: any) => String(h ?? "").toLowerCase().trim());
-        const parsed: Parameter[] = rows.slice(1).filter((r) => r.some(Boolean)).map((r) => {
-          const get = (key: string) => {
-            const i = header.findIndex((h) => h.includes(key));
-            return i >= 0 ? String(r[i] ?? "") : "";
-          };
-          return {
-            parameterName: get("parameter"),
-            range:         get("range"),
-            subRange:      get("sub"),
-            stdValue:      num(get("std")) ?? num(get("standard")),
-            ducReading:    num(get("duc")) ?? num(get("reading")),
-            unit:          get("unit"),
-            errorPct:      num(get("error")),
-            uncertaintyPct: num(get("uncertainty")),
-            accuracy:      num(get("accuracy")),
-            remarks:       get("remark"),
-          };
-        });
-        setDraft((d) => d && { ...d, parameters: parsed });
-        toast.success(`Loaded ${parsed.length} rows from Excel`);
-      } catch {
-        toast.error("Failed to parse Excel file");
-      } finally {
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-    };
-    reader.readAsArrayBuffer(file);
+    setIsUploading(true);
+    try {
+      const presignRes = await authClient.post(EP_EQUIPMENT_TRACEABILITY_PRESIGN(id), {
+        contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const { uploadUrl, key } = presignRes.data;
+      await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+      });
+      update(
+        { id, payload: { ...eq, traceabilityFileKey: key } },
+        {
+          onSuccess: () => toast.success("Traceability certificate uploaded"),
+          onError:   () => toast.error("Uploaded to S3 but failed to save reference"),
+        },
+      );
+    } catch {
+      toast.error("Failed to upload certificate");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDownloadCertificate = async () => {
+    try {
+      const res = await authClient.get(EP_EQUIPMENT_TRACEABILITY_URL(id));
+      window.open(res.data.downloadUrl, "_blank");
+    } catch {
+      toast.error("Failed to get download URL");
+    }
   };
 
   const onCancel = () => { setDraft(structuredClone(eq)); setEditMode(false); };
@@ -267,6 +271,7 @@ export default function EquipmentDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
       {/* Top bar */}
       <div className="bg-[#1e3a5f] dark:bg-zinc-900 dark:border-b dark:border-zinc-800 text-white px-6 py-4 flex items-center gap-4 shadow-md">
         <Button variant="ghost" size="icon" className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10 shrink-0" onClick={() => router.push("/equipments")}>
@@ -372,6 +377,33 @@ export default function EquipmentDetailPage() {
                 } />
               </>
             )}
+            <InfoRow
+              label="Certificate File"
+              value={
+                <div className="flex items-center gap-2">
+                  {draft.traceabilityFileKey ? (
+                    <button
+                      onClick={handleDownloadCertificate}
+                      className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                      View Excel
+                      <Download className="h-3 w-3" />
+                    </button>
+                  ) : (
+                    <span className="text-[12px] text-slate-400 dark:text-zinc-500">No file attached</span>
+                  )}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 border border-slate-200 dark:border-zinc-700 rounded px-2 py-0.5 disabled:opacity-50"
+                  >
+                    <Upload className="h-3 w-3" />
+                    {isUploading ? "Uploading…" : draft.traceabilityFileKey ? "Replace" : "Attach"}
+                  </button>
+                </div>
+              }
+            />
           </Card>
         </div>
 
@@ -406,16 +438,9 @@ export default function EquipmentDetailPage() {
                   {showAccuracy ? "Accuracy" : "Traceability"}
                 </button>
                 {editMode && (
-                  <>
-                    {/* Excel upload */}
-                    <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
-                    <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} className="gap-1.5 h-8">
-                      <Upload className="h-3.5 w-3.5" /> Upload Excel
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={addParam} className="gap-1.5 h-8">
-                      <Plus className="h-3.5 w-3.5" /> Add row
-                    </Button>
-                  </>
+                  <Button size="sm" variant="outline" onClick={addParam} className="gap-1.5 h-8">
+                    <Plus className="h-3.5 w-3.5" /> Add row
+                  </Button>
                 )}
               </div>
             </div>

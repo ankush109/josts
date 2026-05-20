@@ -225,7 +225,7 @@ export async function getReportSignedUrl(reportId, isCalibration, forDownload = 
     const fileUrls = await Promise.all(
       report.filePaths.map((key, i) => {
         if (!forDownload) return getSignedDownloadUrl(key);
-        const filename = `${report.csrNo || reportId}_instrument_${i + 1}.pdf`.replace(/\s+/g, "_");
+        const filename = `${reportId}_instrument_${i + 1}.pdf`.replace(/\s+/g, "_");
         return getSignedDownloadUrlAttachment(key, filename);
       })
     );
