@@ -6,7 +6,8 @@ import { format, parseISO, isPast, differenceInDays } from "date-fns";
 import {
   ArrowLeft, Calendar, AlertCircle, CheckCircle2, Clock, FlaskConical,
   Award, Activity, Pencil, Save, X, Power, Plus, Trash2, History, RefreshCw,
-  Upload, ToggleLeft, ToggleRight, FileSpreadsheet, Download,
+  Upload, ToggleLeft, ToggleRight, FileSpreadsheet, Download, FileText, Eye,
+  Paperclip,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +97,7 @@ interface EquipmentDoc {
   nominalRatio?:         string;
   parameters?:           Parameter[];
   traceabilityFileKey?:  string;
+  traceabilityFiles?:    { key: string; name: string; uploadedBy?: string; uploadedAt?: string }[];
   isActive?:             boolean;
   createdAt?:            string;
   updatedAt?:            string;
@@ -130,6 +132,8 @@ export default function EquipmentDetailPage() {
   const [showAccuracy, setShowAccuracy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
@@ -141,6 +145,17 @@ export default function EquipmentDetailPage() {
     if (!eq || !draft) return false;
     return JSON.stringify(eq) !== JSON.stringify(draft);
   }, [eq, draft]);
+
+  const allFiles = useMemo(() => {
+    const files: { key: string; name: string; uploadedBy?: string; uploadedAt?: string; isLegacy?: boolean }[] = [];
+    if (draft?.traceabilityFileKey) {
+      files.push({ key: draft.traceabilityFileKey, name: "Traceability Certificate", isLegacy: true });
+    }
+    for (const f of draft?.traceabilityFiles ?? []) {
+      files.push(f);
+    }
+    return files;
+  }, [draft?.traceabilityFileKey, draft?.traceabilityFiles]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -219,41 +234,84 @@ export default function EquipmentDetailPage() {
     });
   };
 
-  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
     setIsUploading(true);
     try {
-      const presignRes = await authClient.post(EP_EQUIPMENT_TRACEABILITY_PRESIGN(id), {
-        contentType: file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const { uploadUrl, key } = presignRes.data;
-      await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-      });
+      const uploaded: { key: string; name: string; uploadedBy: string; uploadedAt: string }[] = [];
+      for (const file of files) {
+        const presignRes = await authClient.post(EP_EQUIPMENT_TRACEABILITY_PRESIGN(id), {
+          contentType: file.type || "application/octet-stream",
+          filename: file.name,
+        });
+        const { uploadUrl, key } = presignRes.data;
+        await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+        });
+        uploaded.push({ key, name: file.name, uploadedBy: user?.name ?? "Unknown", uploadedAt: new Date().toISOString() });
+      }
+      const existing = eq.traceabilityFiles ?? [];
       update(
-        { id, payload: { ...eq, traceabilityFileKey: key } },
+        { id, payload: { ...eq, traceabilityFiles: [...existing, ...uploaded] } },
         {
-          onSuccess: () => toast.success("Traceability certificate uploaded"),
+          onSuccess: () => toast.success(`${uploaded.length} file${uploaded.length > 1 ? "s" : ""} uploaded`),
           onError:   () => toast.error("Uploaded to S3 but failed to save reference"),
         },
       );
     } catch {
-      toast.error("Failed to upload certificate");
+      toast.error("Failed to upload file");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleDownloadCertificate = async () => {
+  const handlePreview = async (fileKey: string, name: string) => {
     try {
-      const res = await authClient.get(EP_EQUIPMENT_TRACEABILITY_URL(id));
+      const res = await authClient.get(`${EP_EQUIPMENT_TRACEABILITY_URL(id)}?key=${encodeURIComponent(fileKey)}`);
+      const url: string = res.data.downloadUrl;
+      const isPdf = name.toLowerCase().endsWith(".pdf");
+      if (isPdf) {
+        setPreviewName(name);
+        setPreviewUrl(url);
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch {
+      toast.error("Failed to get file URL");
+    }
+  };
+
+  const handleDownloadFile = async (fileKey: string) => {
+    try {
+      const res = await authClient.get(`${EP_EQUIPMENT_TRACEABILITY_URL(id)}?key=${encodeURIComponent(fileKey)}`);
       window.open(res.data.downloadUrl, "_blank");
     } catch {
-      toast.error("Failed to get download URL");
+      toast.error("Failed to get file URL");
+    }
+  };
+
+  const handleDeleteFile = (fileKey: string, isLegacy?: boolean) => {
+    if (isLegacy) {
+      update(
+        { id, payload: { ...eq, traceabilityFileKey: undefined } },
+        {
+          onSuccess: () => toast.success("File removed"),
+          onError:   () => toast.error("Failed to remove file"),
+        },
+      );
+    } else {
+      const remaining = (eq.traceabilityFiles ?? []).filter((f) => f.key !== fileKey);
+      update(
+        { id, payload: { ...eq, traceabilityFiles: remaining } },
+        {
+          onSuccess: () => toast.success("File removed"),
+          onError:   () => toast.error("Failed to remove file"),
+        },
+      );
     }
   };
 
@@ -271,7 +329,7 @@ export default function EquipmentDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv,.pdf" multiple className="hidden" onChange={handleFileUpload} />
       {/* Top bar */}
       <div className="bg-[#1e3a5f] dark:bg-zinc-900 dark:border-b dark:border-zinc-800 text-white px-6 py-4 flex items-center gap-4 shadow-md">
         <Button variant="ghost" size="icon" className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/10 shrink-0" onClick={() => router.push("/equipments")}>
@@ -377,34 +435,75 @@ export default function EquipmentDetailPage() {
                 } />
               </>
             )}
-            <InfoRow
-              label="Certificate File"
-              value={
-                <div className="flex items-center gap-2">
-                  {draft.traceabilityFileKey ? (
-                    <button
-                      onClick={handleDownloadCertificate}
-                      className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                    >
-                      <FileSpreadsheet className="h-3.5 w-3.5" />
-                      View Excel
-                      <Download className="h-3 w-3" />
-                    </button>
-                  ) : (
-                    <span className="text-[12px] text-slate-400 dark:text-zinc-500">No file attached</span>
-                  )}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 border border-slate-200 dark:border-zinc-700 rounded px-2 py-0.5 disabled:opacity-50"
-                  >
-                    <Upload className="h-3 w-3" />
-                    {isUploading ? "Uploading…" : draft.traceabilityFileKey ? "Replace" : "Attach"}
-                  </button>
-                </div>
-              }
-            />
           </Card>
+        </div>
+
+        {/* Certificate Files */}
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-[#1e3a5f]/10 dark:bg-blue-500/15 flex items-center justify-center shrink-0">
+              <Paperclip className="h-4 w-4 text-[#1e3a5f] dark:text-blue-400" />
+            </div>
+            <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200 flex-1">
+              Certificate Files
+              <span className="text-[11px] font-normal text-slate-400 dark:text-zinc-500 ml-2">{allFiles.length} file{allFiles.length !== 1 ? "s" : ""}</span>
+            </span>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 border border-slate-200 dark:border-zinc-700 rounded-lg px-3 h-8 disabled:opacity-50 transition-colors"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {isUploading ? "Uploading…" : "Attach"}
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-zinc-800">
+            {allFiles.length === 0 && (
+              <div className="px-5 py-8 text-center text-[12px] text-slate-400 dark:text-zinc-500">
+                No files attached. Click <span className="font-medium">Attach</span> to upload a PDF or Excel certificate.
+              </div>
+            )}
+            {allFiles.map((file) => {
+              const isPdf = file.name.toLowerCase().endsWith(".pdf");
+              const FileIcon = isPdf ? FileText : FileSpreadsheet;
+              const iconColor = isPdf ? "text-red-400" : "text-emerald-500";
+              return (
+                <div key={file.key} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 group/file">
+                  <FileIcon className={`h-4 w-4 shrink-0 ${iconColor}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-slate-700 dark:text-zinc-200 truncate">{file.name}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-zinc-500">
+                      {file.uploadedBy && <span className="font-medium text-slate-500 dark:text-zinc-400">{file.uploadedBy}</span>}
+                      {file.uploadedBy && file.uploadedAt && <span> · </span>}
+                      {file.uploadedAt && <span>{fmt(file.uploadedAt)}</span>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity">
+                    {isPdf && (
+                      <button
+                        onClick={() => handlePreview(file.key, file.name)}
+                        className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline px-2 py-0.5"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Preview
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDownloadFile(file.key)}
+                      className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 border border-slate-200 dark:border-zinc-700 rounded px-2 py-0.5"
+                    >
+                      <Download className="h-3 w-3" /> Download
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFile(file.key, file.isLegacy)}
+                      className="text-slate-300 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 p-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Parameters */}
@@ -573,6 +672,42 @@ export default function EquipmentDetailPage() {
           <span>Last updated: {fmt(eq.updatedAt)}</span>
         </div>
       </div>
+
+      {/* PDF Preview Modal */}
+      {previewUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden"
+            style={{ height: "85vh" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="h-4 w-4 text-red-400 shrink-0" />
+                <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200 truncate">{previewName}</span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => window.open(previewUrl, "_blank")}
+                  className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download
+                </button>
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <iframe src={previewUrl} className="flex-1 w-full" title={previewName} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

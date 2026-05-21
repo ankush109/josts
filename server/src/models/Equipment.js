@@ -33,6 +33,14 @@ const equipmentSchema = new Schema(
     ],
 
     traceabilityFileKey: { type: String },
+    traceabilityFiles: [
+      {
+        key:          { type: String },
+        name:         { type: String },
+        uploadedBy:   { type: String },
+        uploadedAt:   { type: Date, default: Date.now },
+      },
+    ],
 
     // App-level metadata
     isActive: { type: Boolean, default: true },

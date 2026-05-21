@@ -99,9 +99,10 @@ export const getEquipmentHistory = async (req, res, next) => {
 export const getTraceabilityPresignUrl = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const contentType = req.body?.contentType
-      ?? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    const key = `traceability/equipment-${id}`;
+    const contentType = req.body?.contentType ?? "application/octet-stream";
+    const rawName = req.body?.filename ?? `file-${Date.now()}`;
+    const safeName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const key = `traceability/equipment-${id}/${Date.now()}-${safeName}`;
     const uploadUrl = await getPresignedUploadUrl(key, contentType);
     res.status(200).json({ success: true, uploadUrl, key });
   } catch (err) {
@@ -112,13 +113,17 @@ export const getTraceabilityPresignUrl = async (req, res, next) => {
 export const getTraceabilityDownloadUrl = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const equipment = await Equipment.findById(id).select("traceabilityFileKey").lean();
-    if (!equipment?.traceabilityFileKey) {
-      const err = new Error("No traceability file attached to this equipment");
+    let key = req.query.key;
+    if (!key) {
+      const equipment = await Equipment.findById(id).select("traceabilityFileKey").lean();
+      key = equipment?.traceabilityFileKey;
+    }
+    if (!key) {
+      const err = new Error("No traceability file found");
       err.statusCode = 404;
       throw err;
     }
-    const downloadUrl = await getSignedDownloadUrl(equipment.traceabilityFileKey);
+    const downloadUrl = await getSignedDownloadUrl(key);
     res.status(200).json({ success: true, downloadUrl });
   } catch (err) {
     next(err);
