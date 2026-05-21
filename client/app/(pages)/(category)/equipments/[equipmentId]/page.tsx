@@ -10,6 +10,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,6 +135,7 @@ export default function EquipmentDetailPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewName, setPreviewName] = useState("");
+  const [excelRows, setExcelRows] = useState<any[][] | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
   const isAdmin = (user as any)?.role === "admin";
@@ -277,11 +279,20 @@ export default function EquipmentDetailPage() {
       if (isPdf) {
         setPreviewName(name);
         setPreviewUrl(url);
+        setExcelRows(null);
       } else {
-        window.open(url, "_blank");
+        // Fetch and parse Excel for in-page table preview
+        const fileRes = await fetch(url);
+        const buf = await fileRes.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+        setPreviewName(name);
+        setPreviewUrl(url);
+        setExcelRows(rows);
       }
     } catch {
-      toast.error("Failed to get file URL");
+      toast.error("Failed to load preview");
     }
   };
 
@@ -297,14 +308,14 @@ export default function EquipmentDetailPage() {
   const handleDeleteFile = (fileKey: string, isLegacy?: boolean) => {
     if (isLegacy) {
       update(
-        { id, payload: { ...eq, traceabilityFileKey: undefined } },
+        { id, payload: { ...eq, traceabilityFileKey: null } },
         {
           onSuccess: () => toast.success("File removed"),
           onError:   () => toast.error("Failed to remove file"),
         },
       );
     } else {
-      const remaining = (eq.traceabilityFiles ?? []).filter((f) => f.key !== fileKey);
+      const remaining = (draft?.traceabilityFiles ?? []).filter((f: any) => f.key !== fileKey);
       update(
         { id, payload: { ...eq, traceabilityFiles: remaining } },
         {
@@ -479,14 +490,12 @@ export default function EquipmentDetailPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover/file:opacity-100 transition-opacity">
-                    {isPdf && (
-                      <button
-                        onClick={() => handlePreview(file.key, file.name)}
-                        className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline px-2 py-0.5"
-                      >
-                        <Eye className="h-3.5 w-3.5" /> Preview
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handlePreview(file.key, file.name)}
+                      className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline px-2 py-0.5"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Preview
+                    </button>
                     <button
                       onClick={() => handleDownloadFile(file.key)}
                       className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 border border-slate-200 dark:border-zinc-700 rounded px-2 py-0.5"
@@ -673,20 +682,24 @@ export default function EquipmentDetailPage() {
         </div>
       </div>
 
-      {/* PDF Preview Modal */}
+      {/* File Preview Modal */}
       {previewUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
-          onClick={() => setPreviewUrl(null)}
+          onClick={() => { setPreviewUrl(null); setExcelRows(null); }}
         >
           <div
-            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden"
-            style={{ height: "85vh" }}
+            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden"
+            style={{ height: "90vh" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-zinc-800 shrink-0">
               <div className="flex items-center gap-2 min-w-0">
-                <FileText className="h-4 w-4 text-red-400 shrink-0" />
+                {excelRows ? (
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-500 shrink-0" />
+                ) : (
+                  <FileText className="h-4 w-4 text-red-400 shrink-0" />
+                )}
                 <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200 truncate">{previewName}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -697,14 +710,43 @@ export default function EquipmentDetailPage() {
                   <Download className="h-3.5 w-3.5" /> Download
                 </button>
                 <button
-                  onClick={() => setPreviewUrl(null)}
+                  onClick={() => { setPreviewUrl(null); setExcelRows(null); }}
                   className="text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
-            <iframe src={previewUrl} className="flex-1 w-full" title={previewName} />
+            {excelRows ? (
+              <div className="flex-1 overflow-auto">
+                <table className="w-full border-collapse text-[12px]">
+                  <thead className="sticky top-0 bg-slate-50 dark:bg-zinc-800 z-10">
+                    {excelRows[0] && (
+                      <tr>
+                        {(excelRows[0] as any[]).map((cell, ci) => (
+                          <th key={ci} className="px-3 py-2 text-left text-[11px] font-semibold text-slate-500 dark:text-zinc-400 border-b border-slate-200 dark:border-zinc-700 whitespace-nowrap">
+                            {String(cell)}
+                          </th>
+                        ))}
+                      </tr>
+                    )}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+                    {excelRows.slice(1).map((row, ri) => (
+                      <tr key={ri} className="hover:bg-slate-50/60 dark:hover:bg-zinc-800/40">
+                        {(row as any[]).map((cell, ci) => (
+                          <td key={ci} className="px-3 py-2 text-slate-700 dark:text-zinc-300 font-mono whitespace-nowrap">
+                            {String(cell ?? "")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <iframe src={previewUrl} className="flex-1 w-full" title={previewName} />
+            )}
           </div>
         </div>
       )}
