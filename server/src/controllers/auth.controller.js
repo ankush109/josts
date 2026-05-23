@@ -29,7 +29,8 @@ export async function register(req, res, next) {
  */
 export async function login(req, res, next) {
   try {
-    const result = await AuthService.loginUser(req.body);
+    const ip = req.ip ?? req.headers["x-forwarded-for"] ?? "";
+    const result = await AuthService.loginUser({ ...req.body, ip });
     res.json(result);
   } catch (err) {
     next(err);

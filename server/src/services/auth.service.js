@@ -8,6 +8,7 @@
 
 import bcrypt   from "bcryptjs";
 import User     from "../models/User.js";
+import LoginEvent from "../models/LoginEvent.js";
 import { signToken } from "../lib/jwt.js";
 
 /** bcrypt cost factor — 12 rounds gives ~300 ms on modern hardware. */
@@ -54,7 +55,7 @@ export async function registerUser({ email, password }) {
  * @returns {Promise<{ token: string, user: object }>} Access token + public user fields.
  * @throws {Error} With `statusCode: 401` on invalid credentials.
  */
-export async function loginUser({ email, password }) {
+export async function loginUser({ email, password, ip = "" }) {
   const user = await User.findOne({ email }).select("+password");
 
   // Constant-time check — compare even if user doesn't exist to prevent timing attacks
@@ -67,7 +68,17 @@ export async function loginUser({ email, password }) {
     throw err;
   }
 
+  if (user.isActive === false) {
+    const err = new Error("Account deactivated. Please contact support.");
+    err.statusCode = 403;
+    err.code = "ACCOUNT_DEACTIVATED";
+    throw err;
+  }
+
   const token = signToken({ userId: user._id, userRole: user.role });
+
+  // Fire-and-forget login event — never blocks the response.
+  LoginEvent.create({ userId: user._id, ip }).catch(() => {});
 
   return {
     token,

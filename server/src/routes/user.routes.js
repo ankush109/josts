@@ -8,7 +8,7 @@
  */
 
 import { Router }   from "express";
-import { authMiddleware } from "../middleware/auth.js";
+import { authMiddleware, adminMiddleware } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 import { updateProfileSchema, resetPasswordSchema } from "../schemas/user.schema.js";
 import * as UserController from "../controllers/user.controller.js";
@@ -18,5 +18,11 @@ const router = Router();
 router.get( "/profile",  authMiddleware,                                     UserController.getProfile);
 router.put( "/profile",  authMiddleware, validate(updateProfileSchema),      UserController.updateProfile);
 router.put( "/password", authMiddleware, validate(resetPasswordSchema),      UserController.resetPassword);
+
+// ── Admin user management ───────────────────────────────────────────────────
+router.get(   "/admin",                  authMiddleware, adminMiddleware, UserController.adminListUsers);
+router.post(  "/admin",                  authMiddleware, adminMiddleware, UserController.adminCreateUser);
+router.put(   "/admin/:userId/password", authMiddleware, adminMiddleware, UserController.adminResetPassword);
+router.patch( "/admin/:userId/active",   authMiddleware, adminMiddleware, UserController.adminSetUserActive);
 
 export default router;

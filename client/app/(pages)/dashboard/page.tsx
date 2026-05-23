@@ -10,6 +10,7 @@ import {
   type TopCustomer,
   type TopViewedReport,
   type AuditFeedEntry,
+  type WeeklyActivityPoint,
 } from "@/app/hooks/query/useGetDashboard";
 import {
   usePresenceHeartbeat,
@@ -227,15 +228,99 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
   );
 }
 
+function WeeklyActivityChart({ weeks }: { weeks: WeeklyActivityPoint[] }) {
+  const w = 800;
+  const h = 180;
+  const pad = { top: 12, right: 14, bottom: 30, left: 32 };
+  const innerW = w - pad.left - pad.right;
+  const innerH = h - pad.top - pad.bottom;
+
+  const max = Math.max(1, ...weeks.flatMap((p) => [p.accounts, p.logins]));
+  const slotW = innerW / Math.max(1, weeks.length);
+  const barW  = Math.max(3, (slotW * 0.4));
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-5">
+      <div className="flex items-baseline justify-between mb-2">
+        <span className="text-sm font-semibold text-foreground">User activity</span>
+        <span className="text-xs text-muted-foreground">last 12 weeks · accounts vs logins</span>
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" preserveAspectRatio="none">
+        {/* Grid lines + Y-axis labels */}
+        {[0, 0.25, 0.5, 0.75, 1].map((p) => {
+          const y = pad.top + innerH * (1 - p);
+          return (
+            <g key={p}>
+              <line x1={pad.left} x2={pad.left + innerW} y1={y} y2={y}
+                stroke="currentColor" className="text-zinc-200 dark:text-zinc-800" strokeWidth={0.5} />
+              <text x={pad.left - 4} y={y + 3} textAnchor="end"
+                className="text-[9px] fill-current text-zinc-400">
+                {Math.round(max * p)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Bars */}
+        {weeks.map((p, i) => {
+          const slotX = pad.left + i * slotW;
+          const acctH = (p.accounts / max) * innerH;
+          const lgnH  = (p.logins   / max) * innerH;
+          const acctX = slotX + slotW / 2 - barW - 1;
+          const lgnX  = slotX + slotW / 2 + 1;
+          const acctY = pad.top + innerH - acctH;
+          const lgnY  = pad.top + innerH - lgnH;
+          return (
+            <g key={p.weekStart}>
+              {p.accounts > 0 && (
+                <rect x={acctX} y={acctY} width={barW} height={acctH} fill="#8b5cf6" rx={1}>
+                  <title>{p.weekStart}: {p.accounts} accounts</title>
+                </rect>
+              )}
+              {p.logins > 0 && (
+                <rect x={lgnX} y={lgnY} width={barW} height={lgnH} fill="#10b981" rx={1}>
+                  <title>{p.weekStart}: {p.logins} logins ({p.uniqueLogins} unique)</title>
+                </rect>
+              )}
+            </g>
+          );
+        })}
+
+        {/* X-axis labels — every other week */}
+        {weeks.map((p, i) => {
+          if (i % 2 !== 0) return null;
+          const slotX = pad.left + i * slotW + slotW / 2;
+          return (
+            <text key={p.weekStart} x={slotX} y={h - 12} textAnchor="middle"
+              className="text-[9px] fill-current text-zinc-400">
+              {p.weekStart.slice(5)}
+            </text>
+          );
+        })}
+      </svg>
+      <div className="flex flex-wrap gap-3 mt-1">
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#8b5cf6" }} />
+          Accounts created
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "#10b981" }} />
+          Logins
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExpiringBucketsChart({
   buckets,
 }: {
   buckets: DashboardStats["equipment"]["expiringBuckets"];
 }) {
   const items = [
-    { label: "<7 days",    value: buckets.critical, color: "bg-red-500" },
-    { label: "7–30 days",  value: buckets.soon,     color: "bg-amber-500" },
-    { label: "30–90 days", value: buckets.upcoming, color: "bg-yellow-500" },
+    { label: "<7 days",    value: buckets?.critical, color: "bg-red-500" },
+    { label: "7–30 days",  value: buckets?.soon,     color: "bg-amber-500" },
+    { label: "30–90 days", value: buckets?.upcoming, color: "bg-yellow-500" },
   ];
   const max = Math.max(1, ...items.map((i) => i.value));
   return (
@@ -383,8 +468,8 @@ function EngineerWorkload({ engineers }: { engineers: DashboardStats["engineers"
 }
 
 function TopCustomersList({ customers }: { customers: TopCustomer[] }) {
-  if (customers.length === 0) return null;
-  const max = Math.max(...customers.map((c) => c.reportCount), 1);
+  if (customers?.length === 0) return null;
+  const max = Math.max(...customers?.map((c) => c.reportCount), 1);
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border overflow-hidden">
       <div className="px-5 py-4 border-b border-border"><span className="text-sm font-semibold text-foreground">Top Customers</span></div>
@@ -609,6 +694,38 @@ export default function DashboardPage() {
 
               <StatusBar byStatus={data.reports.byStatus} total={data.reports.total} />
 
+              {/* User & login stats row */}
+              {data.users && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <StatCard
+                    label="Total Users"
+                    value={data.users.total}
+                    delta={data.users.thisWeek - data.users.lastWeek}
+                    hint={`${data.users.thisWeek} new this week`}
+                  />
+                  <StatCard
+                    label="Logins this week"
+                    value={data.users.loginsThisWeek}
+                    delta={data.users.loginsThisWeek - data.users.loginsLastWeek}
+                  />
+                  <StatCard
+                    label="Total Logins"
+                    value={data.users.loginsTotal}
+                    hint="all-time"
+                  />
+                  <StatCard
+                    label="New This Week"
+                    value={data.users.thisWeek}
+                    hint={`${data.users.lastWeek} last week`}
+                  />
+                </div>
+              )}
+
+              {/* Weekly user activity chart */}
+              {data.weeklyActivity && data.weeklyActivity.length > 0 && (
+                <WeeklyActivityChart weeks={data.weeklyActivity} />
+              )}
+
               {/* Trend chart */}
               {data?.trend?.length > 0 && <TrendChart trend={data.trend} />}
 
@@ -636,18 +753,20 @@ export default function DashboardPage() {
 
               {/* Buckets + active users row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ExpiringBucketsChart buckets={data.equipment.expiringBuckets} />
+                <ExpiringBucketsChart
+                  buckets={data.equipment.expiringBuckets ?? { critical: 0, soon: 0, upcoming: 0 }}
+                />
                 <ActiveUsersPanel users={activeUsers} currentUserId={user?.id} />
               </div>
 
               {/* Customers + Most viewed */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <TopCustomersList customers={data.topCustomers} />
-                <TopViewedList items={data.topViewed} />
+                <TopCustomersList customers={data.topCustomers ?? []} />
+                <TopViewedList items={data.topViewed ?? []} />
               </div>
 
               {/* Activity feed full width */}
-              <AuditFeed entries={data.auditFeed} />
+              <AuditFeed entries={data.auditFeed ?? []} />
 
               <ExpiringSoonTable items={data.equipment.expiringSoon} />
 

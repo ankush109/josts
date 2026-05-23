@@ -51,3 +51,47 @@ export async function resetPassword(req, res, next) {
     next(err);
   }
 }
+
+// ── Admin user management ───────────────────────────────────────────────────
+
+export async function adminListUsers(req, res, next) {
+  try {
+    const users = await UserService.listUsers({
+      search: typeof req.query.search === "string" ? req.query.search : "",
+      status: typeof req.query.status === "string" ? req.query.status : "",
+    });
+    res.json({ users });
+  } catch (err) { next(err); }
+}
+
+export async function adminCreateUser(req, res, next) {
+  try {
+    const user = await UserService.adminCreateUser(req.body);
+    res.status(201).json({ user });
+  } catch (err) { next(err); }
+}
+
+export async function adminResetPassword(req, res, next) {
+  try {
+    const { newPassword } = req.body ?? {};
+    if (!newPassword || newPassword.length < 6) {
+      const err = new Error("New password must be at least 6 characters");
+      err.statusCode = 400;
+      throw err;
+    }
+    await UserService.adminResetPassword(req.params.userId, newPassword);
+    res.json({ message: "Password reset successfully" });
+  } catch (err) { next(err); }
+}
+
+export async function adminSetUserActive(req, res, next) {
+  try {
+    const { isActive } = req.body ?? {};
+    const user = await UserService.adminSetUserActive(
+      req.params.userId,
+      !!isActive,
+      req.user.userId,
+    );
+    res.json({ user });
+  } catch (err) { next(err); }
+}

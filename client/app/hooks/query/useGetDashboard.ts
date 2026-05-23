@@ -26,6 +26,22 @@ export interface TopViewedReport {
   createdBy:    { name: string };
 }
 
+export interface WeeklyActivityPoint {
+  weekStart:    string;
+  accounts:     number;
+  logins:       number;
+  uniqueLogins: number;
+}
+
+export interface UserStats {
+  total:          number;
+  thisWeek:       number;
+  lastWeek:       number;
+  loginsTotal:    number;
+  loginsThisWeek: number;
+  loginsLastWeek: number;
+}
+
 export interface AuditFeedEntry {
   _id:        string;
   action:     "created" | "updated" | "status_changed" | "deleted";
@@ -78,6 +94,8 @@ export interface DashboardStats {
   topViewed:     TopViewedReport[];
   auditFeed:     AuditFeedEntry[];
   avgVerifyDays: { value: number; sampleSize: number } | null;
+  users:         UserStats;
+  weeklyActivity: WeeklyActivityPoint[];
 }
 
 export const DASHBOARD_KEY = ["dashboard"] as const;

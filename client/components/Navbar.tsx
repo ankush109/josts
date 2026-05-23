@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, FileText, FilePlus, FlaskConical, Menu, X } from "lucide-react";
+import { LayoutDashboard, FileText, FilePlus, FlaskConical, Users, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserMenu } from "./UserMenu";
 import OfflineBanner from "@/app/components/OfflineBanner";
@@ -23,6 +23,7 @@ const NAV_LINKS = [
   { href: "/calibration", label: "Calibration Reports", icon: FileText,        adminOnly: false },
   { href: "/equipments",  label: "Standard Equipments", icon: FilePlus,        adminOnly: false },
   { href: "/parameters",  label: "Parameter Config",    icon: FlaskConical,    adminOnly: true },
+  { href: "/users",       label: "Users",               icon: Users,           adminOnly: true },
 ] as const;
 
 /**

@@ -87,10 +87,18 @@ export function LoginForm() {
       },
       onError: (err) => {
         setIsSubmitting(false);
+        const axErr = err as AxiosError<{ message: string; code?: string }>;
         const message =
-          (err as AxiosError<{ message: string }>)?.response?.data?.message ??
+          axErr?.response?.data?.message ??
           "An unexpected error occurred";
-        toast.error(message);
+        const isDeactivated =
+          axErr?.response?.status === 403 ||
+          axErr?.response?.data?.code === "ACCOUNT_DEACTIVATED";
+        if (isDeactivated) {
+          toast.error(message, { duration: 8000 });
+        } else {
+          toast.error(message);
+        }
       },
     });
   }

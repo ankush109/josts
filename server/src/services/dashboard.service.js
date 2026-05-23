@@ -2,8 +2,23 @@ import mongoose from "mongoose";
 import CalibrationReport from "../models/Calibration.js";
 import Equipment from "../models/Equipment.js";
 import AuditLog from "../models/AuditLog.js";
+import User from "../models/User.js";
+import LoginEvent from "../models/LoginEvent.js";
 
 const DAY_MS = 86400000;
+const WEEKS_BACK = 12;
+
+/**
+ * Start of the ISO-week (Monday 00:00 UTC) that contains `date`.
+ * Used to align $dateTrunc output with the dense client-side series.
+ */
+function startOfISOWeek(date) {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; // Sun=0 → 7
+  if (day !== 1) d.setUTCDate(d.getUTCDate() - (day - 1));
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
 
 export async function getDashboardStats(reqUser) {
   const isAdmin = reqUser.userRole === "admin";
@@ -14,6 +29,10 @@ export async function getDashboardStats(reqUser) {
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 1);
   const ninetyDaysFromNow = new Date(now.getTime() + 90 * DAY_MS);
   const trendStart = new Date(now.getTime() - 90 * DAY_MS);
+  // Window for weekly accounts/logins chart — N weeks back to start-of-current-week
+  const thisWeekStart = startOfISOWeek(now);
+  const lastWeekStart = new Date(thisWeekStart.getTime() - 7 * DAY_MS);
+  const weeklyStart   = new Date(thisWeekStart.getTime() - WEEKS_BACK * 7 * DAY_MS);
 
   const baseFilter = isAdmin
     ? { deletedAt: null }
@@ -34,6 +53,14 @@ export async function getDashboardStats(reqUser) {
     topViewedRaw,
     auditFeedRaw,
     avgVerifyRaw,
+    userTotal,
+    userThisWeek,
+    userLastWeek,
+    loginsThisWeek,
+    loginsLastWeek,
+    loginsTotal,
+    weeklyAccountsRaw,
+    weeklyLoginsRaw,
   ] = await Promise.all([
     CalibrationReport.countDocuments(baseFilter),
 
@@ -206,6 +233,50 @@ export async function getDashboardStats(reqUser) {
         },
       },
     ]),
+
+    // ── User & login counters (admin only; users see zeros) ──────────────────
+    isAdmin ? User.countDocuments({})                                          : Promise.resolve(0),
+    isAdmin ? User.countDocuments({ createdAt: { $gte: thisWeekStart } })      : Promise.resolve(0),
+    isAdmin ? User.countDocuments({ createdAt: { $gte: lastWeekStart, $lt: thisWeekStart } }) : Promise.resolve(0),
+    isAdmin ? LoginEvent.countDocuments({ createdAt: { $gte: thisWeekStart } }) : Promise.resolve(0),
+    isAdmin ? LoginEvent.countDocuments({ createdAt: { $gte: lastWeekStart, $lt: thisWeekStart } }) : Promise.resolve(0),
+    isAdmin ? LoginEvent.countDocuments({})                                    : Promise.resolve(0),
+
+    // ── Weekly accounts created — last N weeks ───────────────────────────────
+    isAdmin
+      ? User.aggregate([
+          { $match: { createdAt: { $gte: weeklyStart } } },
+          {
+            $group: {
+              _id: { $dateTrunc: { date: "$createdAt", unit: "week", startOfWeek: "monday" } },
+              count: { $sum: 1 },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ])
+      : Promise.resolve([]),
+
+    // ── Weekly logins — last N weeks ─────────────────────────────────────────
+    isAdmin
+      ? LoginEvent.aggregate([
+          { $match: { createdAt: { $gte: weeklyStart } } },
+          {
+            $group: {
+              _id:    { $dateTrunc: { date: "$createdAt", unit: "week", startOfWeek: "monday" } },
+              count:        { $sum: 1 },
+              uniqueUsers:  { $addToSet: "$userId" },
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              count: 1,
+              uniqueUsers: { $size: "$uniqueUsers" },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ])
+      : Promise.resolve([]),
   ]);
 
   const byStatus = { draft: 0, submitted: 0, verified: 0, rejected: 0 };
@@ -245,6 +316,31 @@ export async function getDashboardStats(reqUser) {
     trend.push(
       trendMap.get(key) ?? { day: key, draft: 0, submitted: 0, verified: 0, rejected: 0, total: 0 }
     );
+  }
+
+  // ── Build dense weekly series for accounts + logins (last WEEKS_BACK weeks)
+  const accountsByWeek = new Map();
+  for (const row of weeklyAccountsRaw) {
+    accountsByWeek.set(new Date(row._id).toISOString().slice(0, 10), row.count);
+  }
+  const loginsByWeek = new Map();
+  for (const row of weeklyLoginsRaw) {
+    loginsByWeek.set(
+      new Date(row._id).toISOString().slice(0, 10),
+      { count: row.count, uniqueUsers: row.uniqueUsers ?? 0 },
+    );
+  }
+  const weeklyActivity = [];
+  for (let i = WEEKS_BACK - 1; i >= 0; i--) {
+    const wkStart = new Date(thisWeekStart.getTime() - i * 7 * DAY_MS);
+    const key = wkStart.toISOString().slice(0, 10);
+    const loginRow = loginsByWeek.get(key);
+    weeklyActivity.push({
+      weekStart:    key,
+      accounts:     accountsByWeek.get(key) ?? 0,
+      logins:       loginRow?.count ?? 0,
+      uniqueLogins: loginRow?.uniqueUsers ?? 0,
+    });
   }
 
   return {
@@ -294,5 +390,14 @@ export async function getDashboardStats(reqUser) {
     avgVerifyDays: avgVerifyRaw[0]
       ? { value: Math.round(avgVerifyRaw[0].avgDays * 10) / 10, sampleSize: avgVerifyRaw[0].count }
       : null,
+    users: {
+      total:        userTotal,
+      thisWeek:     userThisWeek,
+      lastWeek:     userLastWeek,
+      loginsTotal,
+      loginsThisWeek,
+      loginsLastWeek,
+    },
+    weeklyActivity,
   };
 }

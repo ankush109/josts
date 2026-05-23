@@ -45,6 +45,14 @@ const userSchema = new mongoose.Schema(
       required: true,
       select:   false,
     },
+    /** When false, login is blocked and the user is shown a contact-support message. */
+    isActive: {
+      type:    Boolean,
+      default: true,
+    },
+    /** Admin who deactivated this account, if applicable. */
+    deactivatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    deactivatedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

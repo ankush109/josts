@@ -89,3 +89,121 @@ export async function resetPassword(userId, oldPassword, newPassword) {
   user.password = await bcrypt.hash(newPassword, SALT_ROUNDS);
   await user.save();
 }
+
+// ─── Admin-only operations ────────────────────────────────────────────────
+
+/**
+ * Lists all users with optional search/status filtering.
+ * Passwords are never returned (User schema has select:false on password).
+ */
+export async function listUsers({ search = "", status = "" } = {}) {
+  const q = {};
+  if (search) {
+    q.$or = [
+      { name:  { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+    ];
+  }
+  if (status === "active")   q.isActive = true;
+  if (status === "inactive") q.isActive = false;
+
+  const users = await User.find(q)
+    .select("-password")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return users.map((u) => ({
+    id:            u._id,
+    name:          u.name,
+    email:         u.email,
+    role:          u.role,
+    signatureName: u.signatureName ?? null,
+    location:      u.location      ?? null,
+    isActive:      u.isActive !== false,
+    createdAt:     u.createdAt,
+    deactivatedAt: u.deactivatedAt ?? null,
+  }));
+}
+
+/**
+ * Admin creates a new user. Bypasses self-registration and lets admins
+ * pick the role and an initial password.
+ */
+export async function adminCreateUser({ name, email, password, role = "user" }) {
+  const existing = await User.findOne({ email });
+  if (existing) {
+    const err = new Error("An account with this email already exists");
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+  const finalName = (name && name.trim()) || email.split("@")[0];
+  const user = await User.create({
+    name:     finalName,
+    email,
+    password: hashed,
+    role:     role === "admin" ? "admin" : "user",
+    isActive: true,
+  });
+
+  return {
+    id:       user._id,
+    name:     user.name,
+    email:    user.email,
+    role:     user.role,
+    isActive: user.isActive,
+    createdAt: user.createdAt,
+  };
+}
+
+/**
+ * Admin-only password reset. Skips the old-password check.
+ */
+export async function adminResetPassword(targetUserId, newPassword) {
+  const user = await User.findById(targetUserId).select("+password");
+  if (!user) {
+    const err = new Error("User not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  user.password = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+}
+
+/**
+ * Activate or deactivate a user account. A deactivated user cannot log in.
+ */
+export async function adminSetUserActive(targetUserId, isActive, adminId) {
+  const user = await User.findById(targetUserId);
+  if (!user) {
+    const err = new Error("User not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (!isActive && String(user._id) === String(adminId)) {
+    const err = new Error("Admins cannot deactivate themselves");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  user.isActive = !!isActive;
+  if (!isActive) {
+    user.deactivatedBy = adminId;
+    user.deactivatedAt = new Date();
+  } else {
+    user.deactivatedBy = null;
+    user.deactivatedAt = null;
+  }
+  await user.save();
+
+  return {
+    id:            user._id,
+    name:          user.name,
+    email:         user.email,
+    role:          user.role,
+    isActive:      user.isActive,
+    deactivatedAt: user.deactivatedAt,
+  };
+}

@@ -182,6 +182,12 @@ export const EP_SUPPORT_REPLY = (id: string) => `/support/${id}/reply` as const;
 /** GET /dashboard */
 export const EP_DASHBOARD = () => "/dashboard" as const;
 
+// ── Admin: user management ───────────────────────────────────────────────
+
+export const EP_ADMIN_USERS              = () => "/user/admin" as const;
+export const EP_ADMIN_USER_PASSWORD = (userId: string) => `/user/admin/${userId}/password` as const;
+export const EP_ADMIN_USER_ACTIVE   = (userId: string) => `/user/admin/${userId}/active` as const;
+
 // ── Presence ──────────────────────────────────────────────────────────────
 
 export const EP_PRESENCE_HEARTBEAT = () => "/presence/heartbeat" as const;
