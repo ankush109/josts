@@ -194,7 +194,7 @@ export default function EquipmentTable() {
       {/* Page heading */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-[22px] font-bold text-slate-900 dark:text-zinc-100 tracking-tight">Traceability Master Index</h1>
+          <h1 className="text-[22px] font-bold text-slate-900 dark:text-zinc-100 tracking-tight">Master Equipment Index</h1>
           <p className="text-[13px] text-slate-500 dark:text-zinc-400 mt-0.5">Manage and track all reference standard equipment</p>
         </div>
         <Button

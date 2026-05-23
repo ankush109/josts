@@ -7,14 +7,14 @@ import { z } from "zod";
 
 /**
  * Schema for POST /auth/register.
- * Enforces josts.com domain and a minimum password length.
+ * Enforces josts.com or josts.in domain and a minimum password length.
  */
 export const registerSchema = z.object({
   email: z
     .string()
     .email("Invalid email address")
-    .refine((e) => e.endsWith("@josts.com"), {
-      message: "Email must be a @josts.com address",
+    .refine((e) => e.endsWith("@josts.com") || e.endsWith("@josts.in"), {
+      message: "Email must be a @josts.com or @josts.in address",
     }),
   password: z
     .string()

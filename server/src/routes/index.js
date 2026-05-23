@@ -12,6 +12,7 @@ import calibrationRoutes from "./calibration.routes.js";
 import reportRoutes      from "./report.routes.js";
 import equipmentRoutes   from "./equipments.js"
 import instrumentRoutes  from "./instruments.routes.js";
+import parameterRoutes  from "./parameter.routes.js";
 import supportRoutes     from "./support.routes.js";
 import dashboardRoutes   from "./dashboard.routes.js";
 const router = Router();
@@ -27,6 +28,7 @@ router.use("/calibration-report", calibrationRoutes);
 router.use("/report",             reportRoutes);
 router.use("/equipments", equipmentRoutes)
 router.use("/instruments", instrumentRoutes);
+router.use("/parameters",  parameterRoutes);
 router.use("/support",    supportRoutes);
 router.use("/dashboard",  dashboardRoutes);
 

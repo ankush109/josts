@@ -148,6 +148,20 @@ export const EP_INSTRUMENT_ACTIVE = (id: string | number) =>
 /** GET /instruments/:id/history — audit log entries */
 export const EP_INSTRUMENT_HISTORY = (id: string | number) =>
   `/instruments/${id}/history` as const;
+
+// ── Parameters (Parameter Configuration) ──────────────────────────────────
+
+/** GET /parameters  |  POST /parameters */
+export const EP_PARAMETERS = () => `/parameters` as const;
+
+/** GET /parameters/:id  |  PUT /parameters/:id */
+export const EP_PARAMETER_BY_ID = (id: string | number) =>
+  `/parameters/${id}` as const;
+
+/** PATCH /parameters/:id/active — body `{ isActive: boolean }` */
+export const EP_PARAMETER_ACTIVE = (id: string | number) =>
+  `/parameters/${id}/active` as const;
+
 // ── Support / Help ─────────────────────────────────────────────────────────
 
 /** POST /support — submit a support message */
