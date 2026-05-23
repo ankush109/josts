@@ -13,6 +13,7 @@ import type { ComputedBudget } from "@/types/calibration";
 export interface ComputeInstrumentPayload {
   make: string;
   modelType: string;
+  refStandard?: { equipmentId: string | null };
   parameters: Array<{
     name: string;
     unit: string;
@@ -20,6 +21,7 @@ export interface ComputeInstrumentPayload {
       label: string;
       measurements: Array<{
         nomValue: number | null;
+        nomUnit?: string;
         readings: (number | null)[];
         corrected: string;
       }>;

@@ -288,7 +288,7 @@ export function buildPayload(
       slNo:          inst.meta.slNo,
       idNo:          inst.meta.idNo,
       othersDetails: inst.meta.othersDetails,
-      jobId:         inst.meta.jobId,
+      jobId:         inst.meta.jobId || undefined,
       calDate:       inst.meta.calDate || undefined,
       environmental: {
         supplyVoltage: inst.meta.supplyVoltage,

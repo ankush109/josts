@@ -75,6 +75,7 @@ import {
   buildPayload,
   mapApiToInstruments,
   mapApiToReportMeta,
+  parseNomInput,
 } from "./utils";
 import { useGetEquipmentParamSummary } from "@/app/hooks/query/useGetEquipmentParamSummary";
 import Wordmark from "@/components/Wordmark";
@@ -2213,16 +2214,23 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     const payload = {
       make:        inst.meta.make,
       modelType:   inst.meta.modelType,
+      refStandard: {
+        equipmentId: inst.meta.refEquipmentId || null,
+      },
       parameters: inst.params.map((p) => ({
         name:   p.name,
         unit:   p.unit,
         ranges: p.ranges.map((r) => ({
           label: r.label,
-          measurements: r.measurements.map((m) => ({
-            nomValue: m.nomValue === "" ? null : Number(m.nomValue),
-            readings: m.readings.map((v) => (v === "" ? null : Number(v))),
-            corrected: m.corrected,
-          })),
+          measurements: r.measurements.map((m) => {
+            const parsed = parseNomInput(m.nomValue);
+            return {
+              nomValue:  parsed ? parsed.value : (m.nomValue === "" ? null : Number(m.nomValue)),
+              nomUnit:   parsed?.unit || "",
+              readings:  m.readings.map((v) => (v === "" ? null : Number(v))),
+              corrected: m.corrected,
+            };
+          }),
         })),
       })),
     };
