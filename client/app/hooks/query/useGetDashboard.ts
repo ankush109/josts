@@ -2,6 +2,39 @@ import { useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/api-client";
 import { EP_DASHBOARD } from "@/lib/endpoints";
 
+export interface TrendPoint {
+  day:       string;
+  draft:     number;
+  submitted: number;
+  verified:  number;
+  rejected:  number;
+  total:     number;
+}
+
+export interface TopCustomer {
+  customerName: string;
+  reportCount:  number;
+  lastReportAt: string;
+}
+
+export interface TopViewedReport {
+  _id:          string;
+  customerName: string;
+  status:       string;
+  viewCount:    number;
+  lastViewedAt: string | null;
+  createdBy:    { name: string };
+}
+
+export interface AuditFeedEntry {
+  _id:        string;
+  action:     "created" | "updated" | "status_changed" | "deleted";
+  changes:    { field: string; from: string; to: string }[];
+  createdAt:  string;
+  performedBy: { name: string; email: string } | null;
+  reportId:    { _id: string; customerName: string; status: string } | null;
+}
+
 export interface DashboardStats {
   reports: {
     total: number;
@@ -24,6 +57,7 @@ export interface DashboardStats {
       nextDue: string;
       daysLeft: number;
     }[];
+    expiringBuckets: { critical: number; soon: number; upcoming: number };
   };
   engineers: {
     userId: string;
@@ -37,7 +71,13 @@ export interface DashboardStats {
     status: string;
     createdAt: string;
     createdBy: { name: string };
+    viewCount: number;
   }[];
+  trend:         TrendPoint[];
+  topCustomers:  TopCustomer[];
+  topViewed:     TopViewedReport[];
+  auditFeed:     AuditFeedEntry[];
+  avgVerifyDays: { value: number; sampleSize: number } | null;
 }
 
 export const DASHBOARD_KEY = ["dashboard"] as const;

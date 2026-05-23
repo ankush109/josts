@@ -15,6 +15,7 @@ import instrumentRoutes  from "./instruments.routes.js";
 import parameterRoutes  from "./parameter.routes.js";
 import supportRoutes     from "./support.routes.js";
 import dashboardRoutes   from "./dashboard.routes.js";
+import presenceRoutes    from "./presence.routes.js";
 const router = Router();
 
 /** Liveness probe — no auth required. */
@@ -31,5 +32,6 @@ router.use("/instruments", instrumentRoutes);
 router.use("/parameters",  parameterRoutes);
 router.use("/support",    supportRoutes);
 router.use("/dashboard",  dashboardRoutes);
+router.use("/presence",   presenceRoutes);
 
 export default router;

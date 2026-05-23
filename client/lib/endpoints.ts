@@ -182,6 +182,14 @@ export const EP_SUPPORT_REPLY = (id: string) => `/support/${id}/reply` as const;
 /** GET /dashboard */
 export const EP_DASHBOARD = () => "/dashboard" as const;
 
+// ── Presence ──────────────────────────────────────────────────────────────
+
+export const EP_PRESENCE_HEARTBEAT = () => "/presence/heartbeat" as const;
+export const EP_PRESENCE_ACTIVE    = () => "/presence/active" as const;
+export const EP_PRESENCE_LEAVE     = () => "/presence/leave" as const;
+export const EP_PRESENCE_REPORT_VIEWERS = (reportId: string) =>
+  `/presence/report/${reportId}/viewers` as const;
+
 // ── Legacy namespace export ────────────────────────────────────────────────
 // Keeps existing call-sites working while the codebase is migrated to the
 // named exports above.  Remove once all imports are updated.

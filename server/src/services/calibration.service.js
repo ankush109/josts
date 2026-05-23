@@ -437,7 +437,7 @@ export async function listReports(query, reqUser) {
  * @throws {Error} With `statusCode: 400` for an invalid ID format.
  * @throws {Error} With `statusCode: 404` if the report does not exist.
  */
-export async function getReportById(reportId) {
+export async function getReportById(reportId, viewerId = null) {
   if (!mongoose.Types.ObjectId.isValid(reportId)) {
     const err = new Error("Invalid report ID");
     err.statusCode = 400;
@@ -454,6 +454,30 @@ export async function getReportById(reportId) {
     const err = new Error("Report not found");
     err.statusCode = 404;
     throw err;
+  }
+
+  if (viewerId && mongoose.Types.ObjectId.isValid(viewerId)) {
+    // fire-and-forget: don't block the GET on counter writes
+    const viewerObjId = new mongoose.Types.ObjectId(viewerId);
+    const now = new Date();
+    CalibrationReport.updateOne(
+      { _id: reportId, "viewers.userId": viewerObjId },
+      {
+        $inc: { viewCount: 1, "viewers.$.count": 1 },
+        $set: { lastViewedAt: now, lastViewedBy: viewerObjId, "viewers.$.lastSeen": now },
+      },
+    ).then((res) => {
+      if (res.matchedCount === 0) {
+        return CalibrationReport.updateOne(
+          { _id: reportId },
+          {
+            $inc:  { viewCount: 1 },
+            $set:  { lastViewedAt: now, lastViewedBy: viewerObjId },
+            $push: { viewers: { userId: viewerObjId, count: 1, lastSeen: now } },
+          },
+        );
+      }
+    }).catch(() => { /* swallow — view tracking is best-effort */ });
   }
 
   return report;

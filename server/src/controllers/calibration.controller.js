@@ -68,7 +68,7 @@ export async function listReports(req, res, next) {
  */
 export async function getReport(req, res, next) {
   try {
-    const report = await CalibrationService.getReportById(req.params.reportId);
+    const report = await CalibrationService.getReportById(req.params.reportId, req.user?.userId);
     res.json(report);
   } catch (err) {
     next(err);

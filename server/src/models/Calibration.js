@@ -191,6 +191,25 @@ const calibrationReportSchema = new mongoose.Schema(
     filePaths:           { type: [String], default: [] },
     /** Soft-delete timestamp. Non-null means the report is deleted. */
     deletedAt:           { type: Date, default: null },
+    /** Total view count — incremented on every getReportById. */
+    viewCount:           { type: Number, default: 0 },
+    /** Last viewer + when. */
+    lastViewedAt:        { type: Date,   default: null },
+    lastViewedBy:        { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    /** Per-user view counts, capped to top-N (most recent). */
+    viewers: {
+      type: [
+        new mongoose.Schema(
+          {
+            userId:   { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+            count:    { type: Number, default: 1 },
+            lastSeen: { type: Date,   default: () => new Date() },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

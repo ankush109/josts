@@ -79,7 +79,9 @@ import {
   parseNomInput,
 } from "./utils";
 import { useGetEquipmentParamSummary } from "@/app/hooks/query/useGetEquipmentParamSummary";
+import { usePresenceHeartbeat } from "@/app/hooks/query/usePresence";
 import Wordmark from "@/components/Wordmark";
+import { ReportViewerStack } from "@/components/PresenceViewers";
 
 
 // ─── Report-level field helper ─────────────────────────────────────────────────
@@ -1865,6 +1867,15 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const isEditMode = Boolean(reportId);
   const isOffline  = !useOnlineStatus();
   const reportIdIsLocal = isLocalId(reportId);
+  const { user: authUser } = useAuth();
+
+  // Register presence — only for server-stored reports (not local drafts).
+  const presenceReportId = !reportIdIsLocal && reportId ? reportId : null;
+  usePresenceHeartbeat({
+    enabled:  !!authUser,
+    route:    presenceReportId ? `/calibration/${presenceReportId}` : "/calibration",
+    reportId: presenceReportId,
+  });
   const { refetch } = useGetCalibrationReports();
   const router = useRouter();
   const { mutate: generateCalibrationReport, isPending: isCreating } = useGenerateCalibrationReport();
@@ -2869,7 +2880,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               )}
             </div>
 
-            {/* Right: compact mode badge only (no buttons in title row) */}
+            {/* Right: presence avatars + mode badge */}
+            {presenceReportId && (
+              <ReportViewerStack reportId={presenceReportId} currentUserId={authUser?.id} />
+            )}
             {isEditMode && viewMode && (
               <span className="shrink-0 hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
                 <Eye className="h-2.5 w-2.5" />
