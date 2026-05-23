@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BarChart3, Wrench } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import UserManagement from "@/app/(pages)/(category)/users/UserManagement";
 import {
   useGetDashboard,
   type DashboardStats,
@@ -637,10 +639,43 @@ function ActiveUsersPanel({ users, currentUserId }: { users: PresenceUser[] | un
 
 // ─── page ─────────────────────────────────────────────────────────────────
 
+type SectionView = "analytics" | "actions";
+
+function SectionTabs({
+  value, onChange,
+}: {
+  value:    SectionView;
+  onChange: (v: SectionView) => void;
+}) {
+  const tabs: { key: SectionView; label: string; icon: typeof BarChart3 }[] = [
+    { key: "analytics", label: "Analytics", icon: BarChart3 },
+    { key: "actions",   label: "Actions",   icon: Wrench },
+  ];
+  return (
+    <div className="inline-flex rounded-lg border border-border bg-white dark:bg-zinc-900 p-0.5 text-sm">
+      {tabs.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
+            value === key
+              ? "bg-blue-600 text-white"
+              : "text-muted-foreground hover:bg-accent"
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, isLoading, isError } = useGetDashboard();
   const { user } = useAuth();
   const router = useRouter();
+  const [view, setView] = useState<SectionView>("analytics");
 
   // Heartbeat — keeps current user counted as active
   usePresenceHeartbeat({ enabled: !!user, route: "/dashboard" });
@@ -659,13 +694,20 @@ export default function DashboardPage() {
       <Navbar />
       <main className="min-h-screen bg-background pt-20 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {isAdmin ? "System-wide overview" : "Your activity overview"}
-            </p>
+          <div className="mb-6 flex items-end justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {isAdmin ? "System-wide overview" : "Your activity overview"}
+              </p>
+            </div>
+            <SectionTabs value={view} onChange={setView} />
           </div>
 
+          {view === "actions" ? (
+            <UserManagement />
+          ) : (
+          <>
           {isLoading && <LoadingSkeleton />}
 
           {isError && (
@@ -772,6 +814,8 @@ export default function DashboardPage() {
 
               <RecentReportsList reports={data.recentReports} />
             </div>
+          )}
+          </>
           )}
         </div>
       </main>

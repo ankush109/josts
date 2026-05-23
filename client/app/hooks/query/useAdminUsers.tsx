@@ -6,6 +6,7 @@ import {
   EP_ADMIN_USERS,
   EP_ADMIN_USER_PASSWORD,
   EP_ADMIN_USER_ACTIVE,
+  EP_ADMIN_USER_ROLE,
 } from "@/lib/endpoints";
 
 export interface AdminUser {
@@ -64,6 +65,20 @@ export function useAdminSetUserActive() {
       const res = await authClient.patch<{ user: AdminUser }>(
         EP_ADMIN_USER_ACTIVE(userId),
         { isActive },
+      );
+      return res.data.user;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ADMIN_USERS_KEY }); },
+  });
+}
+
+export function useAdminSetUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: "user" | "admin" }) => {
+      const res = await authClient.patch<{ user: AdminUser }>(
+        EP_ADMIN_USER_ROLE(userId),
+        { role },
       );
       return res.data.user;
     },

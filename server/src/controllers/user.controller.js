@@ -95,3 +95,15 @@ export async function adminSetUserActive(req, res, next) {
     res.json({ user });
   } catch (err) { next(err); }
 }
+
+export async function adminSetUserRole(req, res, next) {
+  try {
+    const { role } = req.body ?? {};
+    const user = await UserService.adminSetUserRole(
+      req.params.userId,
+      role,
+      req.user.userId,
+    );
+    res.json({ user });
+  } catch (err) { next(err); }
+}

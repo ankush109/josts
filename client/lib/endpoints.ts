@@ -187,6 +187,7 @@ export const EP_DASHBOARD = () => "/dashboard" as const;
 export const EP_ADMIN_USERS              = () => "/user/admin" as const;
 export const EP_ADMIN_USER_PASSWORD = (userId: string) => `/user/admin/${userId}/password` as const;
 export const EP_ADMIN_USER_ACTIVE   = (userId: string) => `/user/admin/${userId}/active` as const;
+export const EP_ADMIN_USER_ROLE     = (userId: string) => `/user/admin/${userId}/role`   as const;
 
 // ── Presence ──────────────────────────────────────────────────────────────
 

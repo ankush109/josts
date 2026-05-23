@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import {
-  Plus, Search, RefreshCw, Key, UserCheck, UserX, Mail, ShieldCheck,
+  Plus, Search, RefreshCw, Key, UserCheck, UserX, Mail, ShieldCheck, ArrowUpCircle, ArrowDownCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Input }  from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   useAdminCreateUser,
   useAdminResetPassword,
   useAdminSetUserActive,
+  useAdminSetUserRole,
   type AdminUser,
 } from "@/app/hooks/query/useAdminUsers";
 import { useAuth } from "@/app/provider/AuthProvider";
@@ -230,6 +231,7 @@ function UserRow({
   onReset: (u: AdminUser) => void;
 }) {
   const { mutate: setActive, isPending: toggling } = useAdminSetUserActive();
+  const { mutate: setRole,   isPending: roling   } = useAdminSetUserRole();
   const isSelf = user.id === selfId;
 
   const handleToggle = () => {
@@ -238,6 +240,17 @@ function UserRow({
       {
         onSuccess: () => toast.success(user.isActive ? "Account deactivated" : "Account reactivated"),
         onError: (e: any) => toast.error(e?.response?.data?.message ?? "Could not update"),
+      },
+    );
+  };
+
+  const handleRoleToggle = () => {
+    const next = user.role === "admin" ? "user" : "admin";
+    setRole(
+      { userId: user.id, role: next },
+      {
+        onSuccess: () => toast.success(next === "admin" ? "Promoted to admin" : "Demoted to user"),
+        onError: (e: any) => toast.error(e?.response?.data?.message ?? "Could not update role"),
       },
     );
   };
@@ -298,6 +311,20 @@ function UserRow({
             title="Reset password"
           >
             <Key className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={handleRoleToggle}
+            disabled={roling || isSelf}
+            className={`p-1.5 rounded transition-colors ${
+              isSelf
+                ? "text-slate-300 dark:text-zinc-700 cursor-not-allowed"
+                : user.role === "admin"
+                  ? "text-violet-500 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                  : "text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+            }`}
+            title={isSelf ? "Cannot demote yourself" : user.role === "admin" ? "Demote to user" : "Promote to admin"}
+          >
+            {user.role === "admin" ? <ArrowDownCircle className="h-3.5 w-3.5" /> : <ArrowUpCircle className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={handleToggle}

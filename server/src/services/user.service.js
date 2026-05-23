@@ -172,6 +172,42 @@ export async function adminResetPassword(targetUserId, newPassword) {
 }
 
 /**
+ * Promote/demote a user between "user" and "admin".
+ * Admins cannot demote themselves (would leave them locked out of admin pages).
+ */
+export async function adminSetUserRole(targetUserId, role, adminId) {
+  if (role !== "user" && role !== "admin") {
+    const err = new Error("Role must be 'user' or 'admin'");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const user = await User.findById(targetUserId);
+  if (!user) {
+    const err = new Error("User not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (String(user._id) === String(adminId) && role !== "admin") {
+    const err = new Error("Admins cannot demote themselves");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  user.role = role;
+  await user.save();
+
+  return {
+    id:       user._id,
+    name:     user.name,
+    email:    user.email,
+    role:     user.role,
+    isActive: user.isActive,
+  };
+}
+
+/**
  * Activate or deactivate a user account. A deactivated user cannot log in.
  */
 export async function adminSetUserActive(targetUserId, isActive, adminId) {

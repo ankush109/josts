@@ -24,5 +24,6 @@ router.get(   "/admin",                  authMiddleware, adminMiddleware, UserCo
 router.post(  "/admin",                  authMiddleware, adminMiddleware, UserController.adminCreateUser);
 router.put(   "/admin/:userId/password", authMiddleware, adminMiddleware, UserController.adminResetPassword);
 router.patch( "/admin/:userId/active",   authMiddleware, adminMiddleware, UserController.adminSetUserActive);
+router.patch( "/admin/:userId/role",     authMiddleware, adminMiddleware, UserController.adminSetUserRole);
 
 export default router;
