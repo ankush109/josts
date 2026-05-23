@@ -62,6 +62,7 @@ import {
   type InstrumentPreset,
 } from "./constants";
 import { useInstrumentPresets } from "@/app/hooks/query/useInstrumentPresets";
+import { useGetParameters, type Parameter as ParameterConfig } from "@/app/hooks/query/useGetParameters";
 import {
   uid,
   makeMeasurement,
@@ -1706,24 +1707,29 @@ const AddParamDialog: FC<{
   open: boolean;
   instrumentKey: string;
   presets: Record<string, InstrumentPreset>;
+  paramConfigs?: ParameterConfig[];
   equipmentParamNames?: string[];
   initialMode?: "pick" | "custom";
   onCancel: () => void;
-  onConfirm: (name: string, unit: string, loadExamples: boolean) => void;
-}> = ({ open, instrumentKey, presets, equipmentParamNames = [], initialMode = "pick", onCancel, onConfirm }) => {
-  const [mode,         setMode]         = useState<"pick" | "choose" | "custom">(initialMode);
-  const [pendingName,  setPendingName]  = useState("");
-  const [pendingUnit,  setPendingUnit]  = useState("");
-  const [name,         setName]         = useState("");
-  const [unit,         setUnit]         = useState("");
-  const nameRef = useRef<HTMLInputElement>(null);
+  onConfirm: (name: string, unit: string, loadExamples: boolean, configRanges?: string[]) => void;
+}> = ({ open, instrumentKey, presets, paramConfigs = [], equipmentParamNames = [], initialMode = "pick", onCancel, onConfirm }) => {
+  const [mode,              setMode]             = useState<"pick" | "choose" | "custom">(initialMode);
+  const [pendingName,       setPendingName]       = useState("");
+  const [pendingUnit,       setPendingUnit]       = useState("");
+  const [pendingConfigRanges, setPendingConfigRanges] = useState<string[] | undefined>(undefined);
+  const [name,              setName]              = useState("");
+  const [unit,              setUnit]              = useState("");
+  const nameRef    = useRef<HTMLInputElement>(null);
   const datalistId = useId();
+
+  const activeConfigs = paramConfigs.filter((p) => p.isActive);
 
   useEffect(() => {
     if (open) {
       setMode(initialMode);
     } else {
-      setMode("pick"); setName(""); setUnit(""); setPendingName(""); setPendingUnit("");
+      setMode("pick"); setName(""); setUnit("");
+      setPendingName(""); setPendingUnit(""); setPendingConfigRanges(undefined);
     }
   }, [open, initialMode]);
 
@@ -1733,9 +1739,10 @@ const AddParamDialog: FC<{
     if (e.key === "Enter" && name.trim()) onConfirm(name.trim(), unit.trim(), false);
   };
 
-  const selectPreset = (pName: string, pUnit: string) => {
+  const selectPreset = (pName: string, pUnit: string, cfgRanges?: string[]) => {
     setPendingName(pName);
     setPendingUnit(pUnit);
+    setPendingConfigRanges(cfgRanges);
     setMode("choose");
   };
 
@@ -1749,16 +1756,19 @@ const AddParamDialog: FC<{
         <div className="flex flex-col gap-2 mt-1">
           {mode === "pick" && (
             <>
-              {Object.entries(presets[instrumentKey]?.params ?? {}).map(([pName, labels]) => (
+              {activeConfigs.map((pc) => (
                 <button
-                  key={pName}
-                  onClick={() => selectPreset(pName, presets[instrumentKey]?.units[pName] ?? "")}
+                  key={pc._id}
+                  onClick={() => onConfirm(pc.parameterName, pc.unit, false, pc.ranges.map((r) => r.label))}
                   className="text-left px-3 py-2.5 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
                 >
-                  <div className="text-sm font-semibold">{pName}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{(labels as string[]).join(" · ")}</div>
+                  <div className="text-sm font-semibold">{pc.parameterName}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{pc.ranges.map((r) => r.label).join(" · ")}</div>
                 </button>
               ))}
+              {activeConfigs.length === 0 && (
+                <div className="text-xs text-muted-foreground px-1 py-2">No parameters configured. Add one via Parameter Config or use Custom below.</div>
+              )}
               <Button variant="outline" size="sm" onClick={() => setMode("custom")} className="w-full border-dashed justify-start mt-1">
                 + Custom parameter
               </Button>
@@ -1771,19 +1781,25 @@ const AddParamDialog: FC<{
                 <p className="text-sm font-semibold">{pendingName}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">How do you want to add this parameter?</p>
               </div>
+              {!pendingConfigRanges && (
+                <button
+                  onClick={() => onConfirm(pendingName, pendingUnit, true)}
+                  className="text-left px-3 py-3 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
+                >
+                  <div className="text-sm font-semibold">Load example values</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Pre-fills ranges with sample readings — useful for testing calculations</div>
+                </button>
+              )}
               <button
-                onClick={() => onConfirm(pendingName, pendingUnit, true)}
-                className="text-left px-3 py-3 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
-              >
-                <div className="text-sm font-semibold">Load example values</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Pre-fills ranges with sample readings — useful for testing calculations</div>
-              </button>
-              <button
-                onClick={() => onConfirm(pendingName, pendingUnit, false)}
+                onClick={() => onConfirm(pendingName, pendingUnit, false, pendingConfigRanges)}
                 className="text-left px-3 py-3 rounded-lg border border-border bg-muted/40 hover:bg-accent transition-colors"
               >
                 <div className="text-sm font-semibold">Manual entry</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Start with empty fields and enter your own readings</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {pendingConfigRanges
+                    ? `Adds ${pendingConfigRanges.length} pre-configured range${pendingConfigRanges.length !== 1 ? "s" : ""} with empty readings`
+                    : "Start with empty fields and enter your own readings"}
+                </div>
               </button>
               <Button variant="ghost" size="sm" onClick={() => setMode("pick")} className="w-full mt-1 text-muted-foreground">
                 ← Back
@@ -1867,6 +1883,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   // DUC instrument master presets (Fluke 8846A, SVERKER 780, …)
   const { presets: instrumentPresets, makeKeyMap } = useInstrumentPresets();
+  const { data: paramConfigData } = useGetParameters();
+  const paramConfigs = paramConfigData?.data ?? [];
   const { data: equipParamSummary } = useGetEquipmentParamSummary();
   const equipmentParamNames = useMemo(() => {
     const names = new Set<string>();
@@ -2400,9 +2418,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setActiveParamId(p.id);
   };
 
-  const handleAddParamConfirm = (name: string, unit: string, loadExamples: boolean) => {
+  const handleAddParamConfirm = (name: string, unit: string, loadExamples: boolean, configRanges?: string[]) => {
     if (panel?.type !== "addParam") return;
-    const p = makeParam(name, unit, panel.instrumentKey, loadExamples, instrumentPresets);
+    const p = makeParam(name, unit, panel.instrumentKey, loadExamples, instrumentPresets, configRanges);
     setInstruments((ins) =>
       ins.map((i) => i.id !== panel.instId ? i : { ...i, params: [...i.params, p] })
     );
@@ -3440,6 +3458,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         instrumentKey={panel?.type === "addParam" ? panel.instrumentKey : ""}
         initialMode={panel?.type === "addParam" ? panel.initialMode : undefined}
         presets={instrumentPresets}
+        paramConfigs={paramConfigs}
         equipmentParamNames={equipmentParamNames}
         onCancel={() => setPanel(null)}
         onConfirm={handleAddParamConfirm}

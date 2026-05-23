@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "seed:instruments": "node scripts/seedInstruments.js",
+    "seed:parameters": "node scripts/seedParameters.js",
     "import:equipments": "node scripts/importEquipments.js"
   },
   "dependencies": {

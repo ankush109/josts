@@ -97,6 +97,7 @@ export function makeParam(
   instrumentKey = "",
   loadExamples = false,
   presets: InstrumentPresetMap = {},
+  configRanges?: string[],
 ): Parameter {
   const preset = presets[instrumentKey];
   const predefinedLabels = preset?.params[name];
@@ -122,6 +123,21 @@ export function makeParam(
                 computed:  null,
               }))
             : [makeMeasurement(), makeMeasurement()],
+      })),
+    };
+  }
+
+  // Parameter Config parameter — use its range labels
+  if (configRanges && configRanges.length > 0) {
+    return {
+      id:   uid(),
+      name,
+      unit,
+      isPredefined: true,
+      ranges: configRanges.map((label) => ({
+        id: uid(),
+        label,
+        measurements: [makeMeasurement(), makeMeasurement()],
       })),
     };
   }

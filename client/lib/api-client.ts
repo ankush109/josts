@@ -57,10 +57,18 @@ authClient.interceptors.request.use(
 authClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = "/login";
+      const path = window.location.pathname;
+      const isPublic =
+        path === "/" ||
+        path.startsWith("/login") ||
+        path.startsWith("/register") ||
+        path.startsWith("/forgot-password");
+      if (!isPublic) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   },
