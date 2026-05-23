@@ -7,6 +7,7 @@ interface CreateArgs {
   parameterName: string;
   unit:          string;
   ranges?:       Parameter["ranges"];
+  samples?:      Parameter["samples"];
 }
 
 interface UpdateArgs {

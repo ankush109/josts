@@ -79,17 +79,32 @@ export function makeMeasurement(): Measurement {
 }
 
 /**
- * Creates a new parameter, optionally pre-populated from the instrument preset.
+ * One Parameter-Config sample point used for "Load example values".
+ * (Subset of `ParameterSampleMeasurement` from useGetParameters.)
+ */
+export interface ParamConfigSample {
+  nominal:  string;
+  readings: string[];
+}
+
+/**
+ * Creates a new parameter.
  *
- * When `name` matches a key in `presets[instrumentKey]`, the parameter
- * gets predefined ranges and units. When `loadExamples` is true, sample
- * readings are loaded from the preset as well.
+ * Behavior:
+ * - If `configRanges` is provided, those range labels are used and (when
+ *   `loadExamples` is true) `configSamples[rangeIndex]` becomes the
+ *   pre-filled measurements for that range.
+ * - Otherwise falls back to instrument-preset range labels (units only;
+ *   example samples are no longer sourced from instruments).
+ * - Falls through to a blank custom parameter when nothing matches.
  *
  * @param name           - Parameter display name (e.g. "DC Voltage")
  * @param unit           - Unit string override; falls back to preset unit
  * @param instrumentKey  - Key into `presets` (e.g. "Fluke 8846A")
- * @param loadExamples   - When true, pre-fills sample readings from the preset
+ * @param loadExamples   - Pre-fill sample readings (from `configSamples`)
  * @param presets        - Preset map (typically from `useInstrumentPresets`)
+ * @param configRanges   - Range labels from a global Parameter Config entry
+ * @param configSamples  - `samples[rangeIndex] = [{ nominal, readings }]`
  */
 export function makeParam(
   name = "",
@@ -98,43 +113,46 @@ export function makeParam(
   loadExamples = false,
   presets: InstrumentPresetMap = {},
   configRanges?: string[],
+  configSamples?: ParamConfigSample[][],
 ): Parameter {
-  const preset = presets[instrumentKey];
-  const predefinedLabels = preset?.params[name];
-
-  if (predefinedLabels) {
-    const samples = preset.samples[name];
-    return {
-      id:   uid(),
-      name,
-      unit: unit || preset.units[name] || "",
-      isPredefined: true,
-      ranges: predefinedLabels.map((label, ri) => ({
-        id: uid(),
-        label,
-        measurements:
-          loadExamples && (samples?.[ri] ?? []).length > 0
-            ? samples[ri].map(([nom, readings]) => ({
-                id:        uid(),
-                nomValue:  nom,
-                nomUnit:   "",
-                readings,
-                corrected: "",
-                computed:  null,
-              }))
-            : [makeMeasurement(), makeMeasurement()],
-      })),
-    };
-  }
-
-  // Parameter Config parameter — use its range labels
+  // Parameter Config parameter — use its range labels (+ samples if loading examples)
   if (configRanges && configRanges.length > 0) {
     return {
       id:   uid(),
       name,
       unit,
       isPredefined: true,
-      ranges: configRanges.map((label) => ({
+      ranges: configRanges.map((label, ri) => {
+        const rangeSamples = configSamples?.[ri] ?? [];
+        const useSamples = loadExamples && rangeSamples.length > 0;
+        return {
+          id: uid(),
+          label,
+          measurements: useSamples
+            ? rangeSamples.map((s) => ({
+                id:        uid(),
+                nomValue:  s.nominal,
+                nomUnit:   "",
+                readings:  [...s.readings],
+                corrected: "",
+                computed:  null,
+              }))
+            : [makeMeasurement(), makeMeasurement()],
+        };
+      }),
+    };
+  }
+
+  const preset = presets[instrumentKey];
+  const predefinedLabels = preset?.params[name];
+
+  if (predefinedLabels) {
+    return {
+      id:   uid(),
+      name,
+      unit: unit || preset.units[name] || "",
+      isPredefined: true,
+      ranges: predefinedLabels.map((label) => ({
         id: uid(),
         label,
         measurements: [makeMeasurement(), makeMeasurement()],

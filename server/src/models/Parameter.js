@@ -14,12 +14,21 @@ const rangeSpecSchema = new Schema(
   { _id: false }
 );
 
+const sampleMeasurementSchema = new Schema(
+  {
+    nominal:  { type: String, required: true },
+    readings: { type: [String], default: [] },
+  },
+  { _id: false }
+);
+
 const parameterSchema = new Schema(
   {
     parameterName: { type: String, required: true, unique: true, trim: true },
     unit:          { type: String, default: "", trim: true },
     isActive:      { type: Boolean, default: true },
     ranges:        { type: [rangeSpecSchema], default: [] },
+    samples:       { type: [[sampleMeasurementSchema]], default: [] },
     addedBy:       { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

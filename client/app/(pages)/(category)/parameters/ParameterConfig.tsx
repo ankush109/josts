@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import {
   Plus, Search, RefreshCw, ChevronDown, ChevronUp,
-  Pencil, Power, CircleSlash, Check, X, Trash2,
+  Pencil, Power, CircleSlash, Check, X, Trash2, FlaskConical,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { Input }  from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   useGetParameters,
   type Parameter,
   type ParameterRangeSpec,
+  type ParameterSampleMeasurement,
 } from "@/app/hooks/query/useGetParameters";
 import {
   useCreateParameter,
@@ -24,8 +25,14 @@ import {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+const READINGS_PER_SAMPLE = 5;
+
 function emptyRange(): ParameterRangeSpec {
   return { label: "", stdUncPct: 0, accPct: 0, accOffset: 0, leastCount: 0, scopePct: 0 };
+}
+
+function emptySamplePoint(): ParameterSampleMeasurement {
+  return { nominal: "", readings: Array(READINGS_PER_SAMPLE).fill("") };
 }
 
 type ActiveFilter = "all" | "active" | "inactive";
@@ -39,34 +46,155 @@ const RANGE_FIELDS: { key: keyof ParameterRangeSpec; label: string }[] = [
   { key: "scopePct",   label: "Scope %" },
 ];
 
-// ── RangeRow — one editable row in the ranges grid ───────────────────────────
+// ── SampleEditor — edits the sample points for a single range ────────────────
+
+function SampleEditor({
+  samples,
+  unit,
+  onChange,
+}: {
+  samples:  ParameterSampleMeasurement[];
+  unit:     string;
+  onChange: (next: ParameterSampleMeasurement[]) => void;
+}) {
+  const updateNominal = (i: number, value: string) => {
+    onChange(samples.map((s, idx) => (idx === i ? { ...s, nominal: value } : s)));
+  };
+  const updateReading = (i: number, j: number, value: string) => {
+    onChange(
+      samples.map((s, idx) =>
+        idx === i
+          ? { ...s, readings: s.readings.map((r, ridx) => (ridx === j ? value : r)) }
+          : s
+      )
+    );
+  };
+  const addPoint = () => onChange([...samples, emptySamplePoint()]);
+  const removePoint = (i: number) => onChange(samples.filter((_, idx) => idx !== i));
+
+  return (
+    <div className="border border-dashed border-slate-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-900/40 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-zinc-400">
+          Example readings
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addPoint}
+          className="h-6 text-[11px] px-2"
+        >
+          <Plus className="h-3 w-3 mr-1" /> Add point
+        </Button>
+      </div>
+
+      {samples.length === 0 && (
+        <p className="text-[11px] text-slate-400 dark:text-zinc-500">
+          No example points yet.
+        </p>
+      )}
+
+      {samples.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-[7rem_repeat(5,1fr)_auto] gap-1.5">
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+              Nominal {unit && <span className="font-mono normal-case">({unit})</span>}
+            </span>
+            {Array.from({ length: READINGS_PER_SAMPLE }).map((_, i) => (
+              <span key={i} className="text-[9px] font-semibold uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                R{i + 1}
+              </span>
+            ))}
+            <span />
+          </div>
+          {samples.map((sp, i) => (
+            <div key={i} className="grid grid-cols-[7rem_repeat(5,1fr)_auto] gap-1.5 items-center">
+              <Input
+                value={sp.nominal}
+                onChange={(e) => updateNominal(i, e.target.value)}
+                placeholder="100"
+                className="h-7 text-xs"
+              />
+              {Array.from({ length: READINGS_PER_SAMPLE }).map((_, j) => (
+                <Input
+                  key={j}
+                  value={sp.readings[j] ?? ""}
+                  onChange={(e) => updateReading(i, j, e.target.value)}
+                  placeholder="0"
+                  className="h-7 text-xs"
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => removePoint(i)}
+                className="p-1 text-red-400 hover:text-red-600 transition-colors"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── RangeRow — one editable row + optional sample editor ─────────────────────
 
 function RangeRow({
-  range, index, onChange, onRemove,
+  range, index, unit, samples, onChange, onRemove, onSamplesChange,
 }: {
   range:    ParameterRangeSpec;
   index:    number;
+  unit:     string;
+  samples:  ParameterSampleMeasurement[];
   onChange: (i: number, field: keyof ParameterRangeSpec, val: string) => void;
   onRemove: (i: number) => void;
+  onSamplesChange: (i: number, next: ParameterSampleMeasurement[]) => void;
 }) {
+  const [examplesOpen, setExamplesOpen] = useState(false);
   return (
-    <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 items-center">
-      {RANGE_FIELDS.map(({ key }) => (
-        <Input
-          key={key}
-          value={range[key] as string | number}
-          onChange={(e) => onChange(index, key, e.target.value)}
-          className="h-8 text-xs"
-          placeholder={key === "label" ? "e.g. 400mV/0.1" : "0"}
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2 items-center">
+        {RANGE_FIELDS.map(({ key }) => (
+          <Input
+            key={key}
+            value={range[key] as string | number}
+            onChange={(e) => onChange(index, key, e.target.value)}
+            className="h-8 text-xs"
+            placeholder={key === "label" ? "e.g. 400mV/0.1" : "0"}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={() => setExamplesOpen((p) => !p)}
+          className={`p-1 transition-colors ${
+            examplesOpen
+              ? "text-blue-500"
+              : samples.length > 0
+                ? "text-emerald-500 hover:text-emerald-700"
+                : "text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200"
+          }`}
+          title={examplesOpen ? "Hide examples" : `Examples (${samples.length})`}
+        >
+          <FlaskConical className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onRemove(index)}
+          className="p-1 text-red-400 hover:text-red-600 transition-colors"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {examplesOpen && (
+        <SampleEditor
+          samples={samples}
+          unit={unit}
+          onChange={(next) => onSamplesChange(index, next)}
         />
-      ))}
-      <button
-        type="button"
-        onClick={() => onRemove(index)}
-        className="p-1 text-red-400 hover:text-red-600 transition-colors"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      )}
     </div>
   );
 }
@@ -84,10 +212,18 @@ function EditPanel({
   onCancel: () => void;
   isSaving: boolean;
 }) {
-  const [name,   setName]   = useState(param.parameterName);
-  const [unit,   setUnit]   = useState(param.unit);
-  const [ranges, setRanges] = useState<ParameterRangeSpec[]>(() =>
+  const [name,    setName]    = useState(param.parameterName);
+  const [unit,    setUnit]    = useState(param.unit);
+  const [ranges,  setRanges]  = useState<ParameterRangeSpec[]>(() =>
     param.ranges.map((r) => ({ ...r }))
+  );
+  const [samples, setSamples] = useState<ParameterSampleMeasurement[][]>(() =>
+    param.ranges.map((_, i) =>
+      (param.samples?.[i] ?? []).map((s) => ({
+        nominal:  s.nominal,
+        readings: [...(s.readings ?? [])],
+      }))
+    )
   );
 
   const handleRangeChange = (i: number, field: keyof ParameterRangeSpec, val: string) => {
@@ -98,17 +234,23 @@ function EditPanel({
 
   const handleRemoveRange = (i: number) => {
     setRanges((prev) => prev.filter((_, idx) => idx !== i));
+    setSamples((prev) => prev.filter((_, idx) => idx !== i));
   };
 
   const handleAddRange = () => {
     setRanges((prev) => [...prev, emptyRange()]);
+    setSamples((prev) => [...prev, []]);
+  };
+
+  const handleSamplesChange = (i: number, next: ParameterSampleMeasurement[]) => {
+    setSamples((prev) => prev.map((s, idx) => (idx === i ? next : s)));
   };
 
   const handleSave = () => {
     if (!name.trim()) { toast.error("Parameter name is required"); return; }
     const invalids = ranges.filter((r) => !r.label.trim());
     if (invalids.length) { toast.error("All ranges must have a label"); return; }
-    onSave({ parameterName: name.trim(), unit: unit.trim(), ranges });
+    onSave({ parameterName: name.trim(), unit: unit.trim(), ranges, samples });
   };
 
   return (
@@ -142,12 +284,13 @@ function EditPanel({
       {/* Ranges grid */}
       <div className="space-y-2">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2">
+        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
           {RANGE_FIELDS.map(({ key, label }) => (
             <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
               {label}
             </span>
           ))}
+          <span />
           <span />
         </div>
 
@@ -162,8 +305,11 @@ function EditPanel({
             key={i}
             range={r}
             index={i}
+            unit={unit}
+            samples={samples[i] ?? []}
             onChange={handleRangeChange}
             onRemove={handleRemoveRange}
+            onSamplesChange={handleSamplesChange}
           />
         ))}
 
@@ -212,9 +358,10 @@ function AddParameterDialog({
   open:    boolean;
   onClose: () => void;
 }) {
-  const [name,   setName]   = useState("");
-  const [unit,   setUnit]   = useState("");
-  const [ranges, setRanges] = useState<ParameterRangeSpec[]>([emptyRange()]);
+  const [name,    setName]    = useState("");
+  const [unit,    setUnit]    = useState("");
+  const [ranges,  setRanges]  = useState<ParameterRangeSpec[]>([emptyRange()]);
+  const [samples, setSamples] = useState<ParameterSampleMeasurement[][]>([[]]);
   const { mutate: create, isPending } = useCreateParameter();
 
   const handleRangeChange = (i: number, field: keyof ParameterRangeSpec, val: string) => {
@@ -225,6 +372,16 @@ function AddParameterDialog({
 
   const handleRemoveRange = (i: number) => {
     setRanges((prev) => prev.filter((_, idx) => idx !== i));
+    setSamples((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const handleSamplesChange = (i: number, next: ParameterSampleMeasurement[]) => {
+    setSamples((prev) => prev.map((s, idx) => (idx === i ? next : s)));
+  };
+
+  const handleAddRange = () => {
+    setRanges((p) => [...p, emptyRange()]);
+    setSamples((p) => [...p, []]);
   };
 
   const handleSubmit = () => {
@@ -232,11 +389,11 @@ function AddParameterDialog({
     const invalids = ranges.filter((r) => !r.label.trim());
     if (invalids.length) { toast.error("All ranges must have a label"); return; }
     create(
-      { parameterName: name.trim(), unit: unit.trim(), ranges },
+      { parameterName: name.trim(), unit: unit.trim(), ranges, samples },
       {
         onSuccess: () => {
           toast.success("Parameter created");
-          setName(""); setUnit(""); setRanges([emptyRange()]);
+          setName(""); setUnit(""); setRanges([emptyRange()]); setSamples([[]]);
           onClose();
         },
         onError: (e: any) => toast.error(e?.response?.data?.message ?? "Create failed"),
@@ -278,12 +435,13 @@ function AddParameterDialog({
           </div>
 
           <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2">
+            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
               {RANGE_FIELDS.map(({ key, label }) => (
                 <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
                   {label}
                 </span>
               ))}
+              <span />
               <span />
             </div>
 
@@ -292,8 +450,11 @@ function AddParameterDialog({
                 key={i}
                 range={r}
                 index={i}
+                unit={unit}
+                samples={samples[i] ?? []}
                 onChange={handleRangeChange}
                 onRemove={handleRemoveRange}
+                onSamplesChange={handleSamplesChange}
               />
             ))}
 
@@ -301,7 +462,7 @@ function AddParameterDialog({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setRanges((p) => [...p, emptyRange()])}
+              onClick={handleAddRange}
               className="h-7 text-xs"
             >
               <Plus className="h-3 w-3 mr-1" /> Add Range
@@ -451,7 +612,7 @@ function ParameterRow({ param }: { param: Parameter }) {
                 isSaving={isSaving}
               />
             ) : (
-              <ReadonlyRanges ranges={param.ranges} />
+              <ReadonlyRanges ranges={param.ranges} samples={param.samples ?? []} />
             )}
           </td>
         </tr>
@@ -462,7 +623,13 @@ function ParameterRow({ param }: { param: Parameter }) {
 
 // ── ReadonlyRanges — view-only range table ────────────────────────────────────
 
-function ReadonlyRanges({ ranges }: { ranges: ParameterRangeSpec[] }) {
+function ReadonlyRanges({
+  ranges,
+  samples,
+}: {
+  ranges:  ParameterRangeSpec[];
+  samples: ParameterSampleMeasurement[][];
+}) {
   if (!ranges.length) {
     return (
       <div className="border border-slate-200 dark:border-zinc-700 rounded-lg bg-slate-50 dark:bg-zinc-800/40 p-4">
@@ -481,19 +648,35 @@ function ReadonlyRanges({ ranges }: { ranges: ParameterRangeSpec[] }) {
                 {label}
               </th>
             ))}
+            <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide text-[10px]">
+              Examples
+            </th>
           </tr>
         </thead>
         <tbody>
-          {ranges.map((r, i) => (
-            <tr key={i} className="border-b last:border-0 border-slate-200 dark:border-zinc-700">
-              <td className="px-3 py-2 font-medium text-slate-800 dark:text-zinc-200">{r.label}</td>
-              <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.stdUncPct}</td>
-              <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.accPct}</td>
-              <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.accOffset}</td>
-              <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.leastCount}</td>
-              <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.scopePct}</td>
-            </tr>
-          ))}
+          {ranges.map((r, i) => {
+            const exampleCount = samples[i]?.length ?? 0;
+            return (
+              <tr key={i} className="border-b last:border-0 border-slate-200 dark:border-zinc-700">
+                <td className="px-3 py-2 font-medium text-slate-800 dark:text-zinc-200">{r.label}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.stdUncPct}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.accPct}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.accOffset}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.leastCount}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.scopePct}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">
+                  {exampleCount > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <FlaskConical className="h-3 w-3" />
+                      {exampleCount}
+                    </span>
+                  ) : (
+                    <span className="text-slate-300 dark:text-zinc-600">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

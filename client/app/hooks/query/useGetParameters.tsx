@@ -11,12 +11,19 @@ export interface ParameterRangeSpec {
   scopePct:   number;
 }
 
+export interface ParameterSampleMeasurement {
+  nominal:  string;
+  readings: string[];
+}
+
 export interface Parameter {
   _id:           string;
   parameterName: string;
   unit:          string;
   isActive:      boolean;
   ranges:        ParameterRangeSpec[];
+  /** samples[rangeIndex] = sample points for that range */
+  samples:       ParameterSampleMeasurement[][];
   createdAt?:    string;
   updatedAt?:    string;
 }

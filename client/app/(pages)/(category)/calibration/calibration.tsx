@@ -1462,16 +1462,17 @@ const SbInstrument: FC<{
   readOnly?: boolean;
   presets: Record<string, InstrumentPreset>;
   instrumentKey: string;
+  paramConfigs: ParameterConfig[];
   onSelectInstrument: (id: string) => void;
   onSelectParam: (instId: string, paramId: string) => void;
   onRemoveInstrument: (id: string) => void;
   onRemoveParam: (instId: string, paramId: string) => void;
   onAddParam: (instId: string) => void;
   onAddParamDirect: (instId: string, name: string, unit: string, loadExamples: boolean) => void;
-}> = ({ inst, index, isActive, activeParamId, canAddParam, readOnly, presets, instrumentKey, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam, onAddParamDirect }) => {
-  const presetParams = presets[instrumentKey]?.params ?? {};
-  const presetUnits  = presets[instrumentKey]?.units ?? {};
-  const hasPresets = Object.keys(presetParams).length > 0;
+}> = ({ inst, index, isActive, activeParamId, canAddParam, readOnly, presets: _presets, instrumentKey: _instrumentKey, paramConfigs, onSelectInstrument, onSelectParam, onRemoveInstrument, onRemoveParam, onAddParam, onAddParamDirect }) => {
+  void _presets; void _instrumentKey;
+  const activeParamConfigs = paramConfigs.filter((p) => p.isActive);
+  const hasPresets = activeParamConfigs.length > 0;
   const label = inst.meta.nomenclature || inst.meta.make || "Unnamed instrument";
   const sub   = [inst.meta.make, inst.meta.modelType].filter(Boolean).join(" · ");
 
@@ -1603,10 +1604,28 @@ const SbInstrument: FC<{
                   {hasPresets && (
                     <>
                       <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground py-1">
-                        Presets
+                        Parameters
                       </DropdownMenuLabel>
-                      {Object.keys(presetParams).map((pName) => {
-                        const pUnit = presetUnits[pName] ?? "";
+                      {activeParamConfigs.map((pc) => {
+                        const pName = pc.parameterName;
+                        const pUnit = pc.unit ?? "";
+                        const hasSamples = (pc.samples ?? []).some((r) => (r?.length ?? 0) > 0);
+                        if (!hasSamples) {
+                          return (
+                            <DropdownMenuItem
+                              key={pName}
+                              onClick={() => onAddParamDirect(inst.id, pName, pUnit, false)}
+                              className="text-xs"
+                            >
+                              <span className="flex-1 truncate">{pName}</span>
+                              {pUnit && (
+                                <span className="text-[10px] font-mono text-muted-foreground min-w-[1.5rem] text-right">
+                                  {pUnit}
+                                </span>
+                              )}
+                            </DropdownMenuItem>
+                          );
+                        }
                         return (
                           <DropdownMenuSub key={pName}>
                             <DropdownMenuSubTrigger className="text-xs">
@@ -2410,7 +2429,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const handleAddParamDirect = (instId: string, name: string, unit: string, loadExamples: boolean) => {
     const inst = instruments.find((i) => i.id === instId);
     const instrumentKey = makeKeyMap[inst?.meta.make ?? ""] ?? "";
-    const p = makeParam(name, unit, instrumentKey, loadExamples, instrumentPresets);
+    const pc = paramConfigs.find((c) => c.parameterName === name);
+    const configRanges  = pc?.ranges.map((r) => r.label);
+    const configSamples = pc?.samples;
+    const p = makeParam(name, unit, instrumentKey, loadExamples, instrumentPresets, configRanges, configSamples);
     setInstruments((ins) =>
       ins.map((i) => i.id !== instId ? i : { ...i, params: [...i.params, p] })
     );
@@ -2420,7 +2442,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
   const handleAddParamConfirm = (name: string, unit: string, loadExamples: boolean, configRanges?: string[]) => {
     if (panel?.type !== "addParam") return;
-    const p = makeParam(name, unit, panel.instrumentKey, loadExamples, instrumentPresets, configRanges);
+    const pc = paramConfigs.find((c) => c.parameterName === name);
+    const configSamples = pc?.samples;
+    const p = makeParam(name, unit, panel.instrumentKey, loadExamples, instrumentPresets, configRanges, configSamples);
     setInstruments((ins) =>
       ins.map((i) => i.id !== panel.instId ? i : { ...i, params: [...i.params, p] })
     );
@@ -2725,6 +2749,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               readOnly={viewMode}
               presets={instrumentPresets}
               instrumentKey={makeKeyMap[inst.meta.make ?? ""] ?? ""}
+              paramConfigs={paramConfigs}
               onSelectInstrument={(id) => { setActiveInstId(id); setPanel(null); }}
               onSelectParam={(instId, paramId) => { setActiveInstId(instId); setActiveParamId(paramId); setPanel(null); }}
               onRemoveInstrument={removeInstrument}
@@ -3276,10 +3301,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           {/* Empty state — no params yet */}
           {!activeParam && (() => {
             const canAdd = !!(activeInst.meta.make && activeInst.meta.modelType);
-            const instKey = makeKeyMap[activeInst.meta.make ?? ""] ?? "";
-            const presetParams = instrumentPresets[instKey]?.params ?? {};
-            const presetUnits  = instrumentPresets[instKey]?.units ?? {};
-            const hasPresets   = Object.keys(presetParams).length > 0;
+            const activeParamConfigs = paramConfigs.filter((p) => p.isActive);
+            const hasPresets = activeParamConfigs.length > 0;
             return (
               <div className="bg-white dark:bg-zinc-900 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
                 <FlaskConical className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
@@ -3305,10 +3328,28 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                           {hasPresets && (
                             <>
                               <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground py-1">
-                                Presets
+                                Parameters
                               </DropdownMenuLabel>
-                              {Object.keys(presetParams).map((pName) => {
-                                const pUnit = presetUnits[pName] ?? "";
+                              {activeParamConfigs.map((pc) => {
+                                const pName = pc.parameterName;
+                                const pUnit = pc.unit ?? "";
+                                const hasSamples = (pc.samples ?? []).some((r) => (r?.length ?? 0) > 0);
+                                if (!hasSamples) {
+                                  return (
+                                    <DropdownMenuItem
+                                      key={pName}
+                                      onClick={() => handleAddParamDirect(activeInst.id, pName, pUnit, false)}
+                                      className="text-xs"
+                                    >
+                                      <span className="flex-1 truncate">{pName}</span>
+                                      {pUnit && (
+                                        <span className="text-[10px] font-mono text-muted-foreground min-w-[1.5rem] text-right">
+                                          {pUnit}
+                                        </span>
+                                      )}
+                                    </DropdownMenuItem>
+                                  );
+                                }
                                 return (
                                   <DropdownMenuSub key={pName}>
                                     <DropdownMenuSubTrigger className="text-xs">
