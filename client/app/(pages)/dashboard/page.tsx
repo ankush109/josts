@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Wrench } from "lucide-react";
+import { BarChart3, FileCode, Users as UsersIcon, Wrench } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import UserManagement from "@/app/(pages)/(category)/users/UserManagement";
+import TemplateManagement from "@/app/(pages)/(category)/templates/TemplateManagement";
 import {
   useGetDashboard,
   type DashboardStats,
@@ -699,6 +700,40 @@ function ActiveUsersPanel({ users, currentUserId }: { users: PresenceUser[] | un
   );
 }
 
+// ─── actions sub-view ──────────────────────────────────────────────────────
+
+type ActionsTab = "users" | "templates";
+
+function ActionsView() {
+  const [tab, setTab] = useState<ActionsTab>("users");
+  const tabs: { key: ActionsTab; label: string; icon: typeof UsersIcon }[] = [
+    { key: "users",     label: "Users",     icon: UsersIcon },
+    { key: "templates", label: "Templates", icon: FileCode },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-lg border border-border bg-white dark:bg-zinc-900 p-0.5 text-sm">
+        {tabs.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
+              tab === key
+                ? "bg-blue-600 text-white"
+                : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "users"     && <UserManagement />}
+      {tab === "templates" && <TemplateManagement />}
+    </div>
+  );
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────
 
 type SectionView = "analytics" | "actions";
@@ -767,7 +802,7 @@ export default function DashboardPage() {
           </div>
 
           {view === "actions" ? (
-            <UserManagement />
+            <ActionsView />
           ) : (
           <>
           {isLoading && <LoadingSkeleton />}

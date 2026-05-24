@@ -22,6 +22,18 @@ export function renderTemplate(templatePath, data) {
 }
 
 /**
+ * Renders an EJS template from a raw string. Used when the template body is
+ * loaded from MongoDB instead of disk.
+ *
+ * @param {string} body - EJS template source.
+ * @param {object} data - Variables passed into the template.
+ * @returns {string} Rendered HTML.
+ */
+export function renderTemplateString(body, data) {
+  return ejs.render(body, data, { async: false });
+}
+
+/**
  * Renders an HTML string to a PDF buffer using Puppeteer.
  * The browser is always closed — even if rendering throws.
  *

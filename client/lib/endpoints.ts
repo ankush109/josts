@@ -214,6 +214,35 @@ export const EP_PRESENCE_LEAVE     = () => "/presence/leave" as const;
 export const EP_PRESENCE_REPORT_VIEWERS = (reportId: string) =>
   `/presence/report/${reportId}/viewers` as const;
 
+// ── Admin: PDF templates (versioned EJS editor) ───────────────────────────
+
+/** GET /templates — list known templates with active-version metadata */
+export const EP_TEMPLATES = () => "/templates" as const;
+
+/** GET /templates/sample-data?reportId=… — preview data shape */
+export const EP_TEMPLATE_SAMPLE_DATA = (reportId: string) =>
+  `/templates/sample-data?reportId=${encodeURIComponent(reportId)}` as const;
+
+/** GET /templates/:key — one template + version list (no bodies) */
+export const EP_TEMPLATE_BY_KEY = (key: string) =>
+  `/templates/${encodeURIComponent(key)}` as const;
+
+/** GET /templates/:key/active — active version body */
+export const EP_TEMPLATE_ACTIVE = (key: string) =>
+  `/templates/${encodeURIComponent(key)}/active` as const;
+
+/** GET /templates/:key/versions/:versionId — one version (with body) */
+export const EP_TEMPLATE_VERSION = (key: string, versionId: string) =>
+  `/templates/${encodeURIComponent(key)}/versions/${versionId}` as const;
+
+/** POST /templates/:key/versions — create new version (any save) */
+export const EP_TEMPLATE_CREATE_VERSION = (key: string) =>
+  `/templates/${encodeURIComponent(key)}/versions` as const;
+
+/** POST /templates/:key/activate — body: { versionId } */
+export const EP_TEMPLATE_ACTIVATE = (key: string) =>
+  `/templates/${encodeURIComponent(key)}/activate` as const;
+
 // ── Legacy namespace export ────────────────────────────────────────────────
 // Keeps existing call-sites working while the codebase is migrated to the
 // named exports above.  Remove once all imports are updated.

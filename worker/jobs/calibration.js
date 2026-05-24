@@ -1,12 +1,35 @@
 import path from "path";
 import CalibrationReport from "../db/models/calibration.js";
-import { renderTemplate, renderHtmlToPdf } from "../lib/pdf.js";
+import { Template, TemplateVersion } from "../db/models/template.js";
+import { renderTemplate, renderTemplateString, renderHtmlToPdf } from "../lib/pdf.js";
 import { uploadPdfToS3 } from "../lib/s3.js";
 import { readImageAsBase64, formatDate, buildCalibrationS3Key } from "../lib/utils.js";
 import { CERT_DEFAULTS } from "../config.js";
 import logger from "../lib/logger.js";
 
 const log = logger("calibration");
+
+const TEMPLATE_KEY = "calibration-certificate";
+
+/**
+ * Loads the active calibration template body from MongoDB. Returns `null`
+ * when no template/version is set up — caller falls back to the on-disk file.
+ *
+ * @returns {Promise<string|null>}
+ */
+async function loadActiveTemplateBody() {
+  try {
+    const tpl = await Template.findOne({ key: TEMPLATE_KEY }).select("activeVersionId").lean();
+    if (!tpl?.activeVersionId) return null;
+    const version = await TemplateVersion.findById(tpl.activeVersionId).select("body versionNumber").lean();
+    if (!version) return null;
+    log.debug("loaded template from DB", { versionNumber: version.versionNumber });
+    return version.body;
+  } catch (err) {
+    log.warn("failed to load template from DB — falling back to file", { error: err.message });
+    return null;
+  }
+}
 
 // ─── Template data builders ───────────────────────────────────────────────────
 
@@ -146,14 +169,20 @@ export async function handleCalibrationJob(reportId) {
   }
 
   const templatePath = path.join(process.cwd(), "templates", "electrical-calibration.ejs");
+  const templateBody = await loadActiveTemplateBody();
   const instruments  = report.instruments?.length ? report.instruments : [{}];
   const filePaths    = [];
 
-  log.debug("starting instrument loop", { reportId, csrNo: report.csrNo, total: instruments.length });
+  log.debug("starting instrument loop", {
+    reportId, csrNo: report.csrNo, total: instruments.length,
+    source: templateBody ? "db" : "file",
+  });
 
   for (let i = 0; i < instruments.length; i++) {
     const data  = buildCalibrationTemplateData(report, i);
-    const html  = await renderTemplate(templatePath, data);
+    const html  = templateBody
+      ? renderTemplateString(templateBody, data)
+      : await renderTemplate(templatePath, data);
     const pdf   = await renderHtmlToPdf(html);
     const s3Key = buildCalibrationS3Key(report.csrNo, instruments[i], i, instruments.length);
 
