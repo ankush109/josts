@@ -17,11 +17,11 @@ const SALT_ROUNDS = 12;
 /**
  * Registers a new user account.
  *
- * Derives the display name from the email local-part (e.g. "john.doe@josts.com" → "john.doe").
+ * Derives the display name from the email local-part (e.g. "john.doe@josts.in" → "john.doe").
  * Hashes the password before storing.
  *
  * @param {object} params
- * @param {string} params.email    - Must end with @josts.com (enforced by Zod before this).
+ * @param {string} params.email    - Must end with @josts.in (enforced by Zod before this).
  * @param {string} params.password - Plain-text password; hashed here.
  * @returns {Promise<{ token: string }>} JWT access token for the new user.
  * @throws {Error} With `statusCode: 409` if the email is already registered.

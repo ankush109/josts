@@ -2,7 +2,7 @@
  * @file auth.routes.js
  * @description Routes for user registration and login.
  *
- * POST /auth/register  — create a new josts.com account
+ * POST /auth/register  — create a new josts.in account
  * POST /auth/login     — authenticate and receive a JWT
  */
 

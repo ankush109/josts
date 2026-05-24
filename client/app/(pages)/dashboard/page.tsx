@@ -97,20 +97,21 @@ function StatCard({
   hint?:  string;
 }) {
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-5 flex flex-col gap-2">
-      <span className="text-sm text-muted-foreground font-medium">{label}</span>
-      <div className="flex items-end gap-2">
-        <span className="text-3xl font-bold text-foreground">{value}</span>
+    <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-4 sm:p-5 flex flex-col gap-2 min-w-0">
+      <span className="text-xs sm:text-sm text-muted-foreground font-medium truncate">{label}</span>
+      <div className="flex items-end gap-2 flex-wrap min-w-0">
+        <span className="text-2xl sm:text-3xl font-bold text-foreground">{value}</span>
         {delta !== undefined && delta !== 0 && (
           <span
-            className={`text-xs font-semibold px-1.5 py-0.5 rounded mb-1 ${
+            className={`text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded mb-1 whitespace-nowrap ${
               delta > 0
                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
                 : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
             }`}
           >
             {delta > 0 ? "+" : ""}
-            {delta} vs last month
+            {delta}
+            <span className="hidden sm:inline"> vs last month</span>
           </span>
         )}
       </div>
@@ -870,18 +871,18 @@ export default function DashboardPage() {
 
               {/* Equipment + workload row */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-5 flex gap-6">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground font-medium">Total Equipment</span>
-                    <span className="text-2xl font-bold text-foreground">{data.equipment.total}</span>
+                <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-4 sm:p-5 grid grid-cols-3 gap-3 sm:gap-6">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">Total Equipment</span>
+                    <span className="text-xl sm:text-2xl font-bold text-foreground">{data.equipment.total}</span>
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground font-medium">Active</span>
-                    <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.equipment.active}</span>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">Active</span>
+                    <span className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.equipment.active}</span>
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground font-medium">Expiring Soon</span>
-                    <span className={`text-2xl font-bold ${data.equipment.expiringSoon.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">Expiring Soon</span>
+                    <span className={`text-xl sm:text-2xl font-bold ${data.equipment.expiringSoon.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
                       {data.equipment.expiringSoon.length}
                     </span>
                   </div>

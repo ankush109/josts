@@ -163,9 +163,10 @@ export async function activateVersion(key, versionId) {
 // ─── Preview data builder ────────────────────────────────────────────────────
 //
 // Mirrors `worker/jobs/calibration.js → buildCalibrationTemplateData` so a
-// preview rendered in the browser matches what the worker will produce. Images
-// are returned as empty strings — the preview shows layout/text edits, not the
-// logo/QR (those still ship with the worker container).
+// preview rendered in the browser matches what the worker will produce. The
+// worker embeds the logo/QR as base64 from its container fs; for the preview
+// we return root-relative URLs that the client's iframe (which injects a
+// <base href> pointing at the app origin) resolves to `client/public/`.
 
 const CERT_DEFAULTS = {
   ducRange:               "As Per Instrument Spec.",
@@ -249,9 +250,8 @@ export async function buildSampleData(reportId, instIndex = 0) {
   return {
     ...CERT_DEFAULTS,
 
-    // Images deliberately blank in preview — preview is for layout/text
-    logoUrl: "",
-    qrUrl:   "",
+    logoUrl: "/logo2.png",
+    qrUrl:   "/qr.png",
 
     certificateNo:        report.certNo || report.csrNo || "",
     certificateIssueDate: fmtDate(report.createdAt),

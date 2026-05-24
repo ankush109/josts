@@ -26,3 +26,22 @@ export const resetPasswordSchema = z.object({
     .min(8,  "New password must be at least 8 characters")
     .max(128, "Password too long"),
 });
+
+/**
+ * Schema for POST /user/admin — admin creates a new account.
+ * Mirrors register: same josts.in domain rule, but lets admin pick role + name.
+ */
+export const adminCreateUserSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  email: z
+    .string()
+    .email("Invalid email address")
+    .refine((e) => e.toLowerCase().endsWith("@josts.in"), {
+      message: "Email must be a @josts.in address",
+    }),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .max(128, "Password too long"),
+  role: z.enum(["user", "admin"]).optional(),
+});

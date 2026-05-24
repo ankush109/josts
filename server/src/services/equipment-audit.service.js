@@ -17,7 +17,7 @@ const TOP_FIELDS = [
 
 const PARAM_FIELDS = [
   "parameterName", "range", "subRange", "stdValue", "ducReading",
-  "unit", "errorPct", "uncertaintyPct", "remarks",
+  "unit", "errorPct", "uncertaintyPct", "accuracy", "remarks",
 ];
 
 const fmt = (v) => {

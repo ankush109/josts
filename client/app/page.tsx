@@ -14,7 +14,9 @@ import {
   MapPin,
   Mail,
   ChevronDown,
+  LayoutDashboard,
 } from "lucide-react";
+import { useAuth } from "@/app/provider/AuthProvider";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -130,6 +132,12 @@ function useLiveCount(base: number, interval = 4000) {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const { user }    = useAuth();
+  const isAuthed    = !!user;
+  const ctaHref     = isAuthed ? "/dashboard" : "/login";
+  const navLabel    = isAuthed ? "Dashboard"  : "Sign In";
+  const heroLabel   = isAuthed ? "Open Dashboard" : "Get Started";
+  const footerLabel = isAuthed ? "Go to Dashboard" : "Sign In to Portal";
   const typed       = useTypewriter(TYPEWRITER_WORDS);
   const scrolled    = useScrolled(60);
   const statsRef    = useInView();
@@ -219,10 +227,11 @@ export default function Home() {
               </span>
             </div>
             <Link
-              href="/login"
+              href={ctaHref}
               className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
             >
-              Sign In <ArrowRight className="h-4 w-4" />
+              {isAuthed && <LayoutDashboard className="h-4 w-4" />}
+              {navLabel} <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </header>
@@ -261,10 +270,10 @@ export default function Home() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
               <Link
-                href="/login"
+                href={ctaHref}
                 className="shimmer-btn group flex items-center gap-2 px-8 py-3.5 text-sm font-semibold text-white rounded-xl shadow-xl transition-all hover:scale-105 active:scale-100 w-full sm:w-auto justify-center"
               >
-                Get Started
+                {heroLabel}
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
               <a href="#features" className="flex items-center gap-2 px-6 py-3.5 text-sm font-medium text-blue-200/60 hover:text-white transition-colors w-full sm:w-auto justify-center">
@@ -491,10 +500,10 @@ export default function Home() {
               Sign in to the portal and start generating digital calibration records for your instruments today. Your team can be up and running in minutes — no setup required.
             </p>
             <Link
-              href="/login"
+              href={ctaHref}
               className="shimmer-btn inline-flex items-center gap-2 px-9 py-4 text-sm font-semibold text-white rounded-xl transition-all hover:scale-105 active:scale-100 shadow-2xl"
             >
-              Sign In to Portal <ArrowRight className="h-4 w-4" />
+              {footerLabel} <ArrowRight className="h-4 w-4" />
             </Link>
             <div className="flex flex-wrap items-center justify-center gap-4 pt-1">
               {["No setup required", "ISO-ready certificates", "Instant PDF download"].map((t) => (

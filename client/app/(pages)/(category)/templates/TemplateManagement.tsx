@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   ChevronDown,
@@ -64,6 +65,24 @@ function Popover({
   children:  React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const a = anchorRef.current?.getBoundingClientRect();
+      if (!a) return;
+      setPos({ top: a.bottom + 4, right: window.innerWidth - a.right });
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [open, anchorRef]);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -80,14 +99,16 @@ function Popover({
     };
   }, [open, onClose, anchorRef]);
 
-  if (!open) return null;
-  return (
+  if (!open || !pos || typeof window === "undefined") return null;
+  return createPortal(
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 z-50 w-[320px] max-h-[60vh] overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-900 shadow-lg"
+      style={{ position: "fixed", top: pos.top, right: pos.right }}
+      className="z-[100] w-[320px] max-h-[60vh] overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-900 shadow-lg"
     >
       {children}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -985,7 +1006,22 @@ export default function TemplateManagement() {
           </div>
 
           {/* spacer */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            {selectedVersionId && !isActiveSel && selectedVersion && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleActivate(selectedVersionId)}
+                disabled={activate.isPending || isDirty}
+                title={isDirty ? "Save or reset your edits first" : `Make v${selectedVersion.versionNumber} the active template`}
+                className="gap-1.5 border-emerald-200 dark:border-emerald-900/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              >
+                {activate.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <CheckCircle2 className="h-3.5 w-3.5" />}
+                Make v{selectedVersion.versionNumber} active
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"

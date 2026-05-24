@@ -283,35 +283,39 @@ function EditPanel({
 
       {/* Ranges grid */}
       <div className="space-y-2">
-        {/* Header */}
-        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
-          {RANGE_FIELDS.map(({ key, label }) => (
-            <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
-              {label}
-            </span>
-          ))}
-          <span />
-          <span />
+        <div className="overflow-x-auto -mx-1 px-1">
+          <div className="min-w-[640px] space-y-2">
+            {/* Header */}
+            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
+              {RANGE_FIELDS.map(({ key, label }) => (
+                <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
+                  {label}
+                </span>
+              ))}
+              <span />
+              <span />
+            </div>
+
+            {ranges.length === 0 && (
+              <p className="text-[13px] text-slate-400 dark:text-zinc-500 py-2">
+                No ranges configured. Add one below.
+              </p>
+            )}
+
+            {ranges.map((r, i) => (
+              <RangeRow
+                key={i}
+                range={r}
+                index={i}
+                unit={unit}
+                samples={samples[i] ?? []}
+                onChange={handleRangeChange}
+                onRemove={handleRemoveRange}
+                onSamplesChange={handleSamplesChange}
+              />
+            ))}
+          </div>
         </div>
-
-        {ranges.length === 0 && (
-          <p className="text-[13px] text-slate-400 dark:text-zinc-500 py-2">
-            No ranges configured. Add one below.
-          </p>
-        )}
-
-        {ranges.map((r, i) => (
-          <RangeRow
-            key={i}
-            range={r}
-            index={i}
-            unit={unit}
-            samples={samples[i] ?? []}
-            onChange={handleRangeChange}
-            onRemove={handleRemoveRange}
-            onSamplesChange={handleSamplesChange}
-          />
-        ))}
 
         <Button
           type="button"
@@ -435,28 +439,32 @@ function AddParameterDialog({
           </div>
 
           <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
-              {RANGE_FIELDS.map(({ key, label }) => (
-                <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
-                  {label}
-                </span>
-              ))}
-              <span />
-              <span />
-            </div>
+            <div className="overflow-x-auto -mx-1 px-1">
+              <div className="min-w-[640px] space-y-2">
+                <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
+                  {RANGE_FIELDS.map(({ key, label }) => (
+                    <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
+                      {label}
+                    </span>
+                  ))}
+                  <span />
+                  <span />
+                </div>
 
-            {ranges.map((r, i) => (
-              <RangeRow
-                key={i}
-                range={r}
-                index={i}
-                unit={unit}
-                samples={samples[i] ?? []}
-                onChange={handleRangeChange}
-                onRemove={handleRemoveRange}
-                onSamplesChange={handleSamplesChange}
-              />
-            ))}
+                {ranges.map((r, i) => (
+                  <RangeRow
+                    key={i}
+                    range={r}
+                    index={i}
+                    unit={unit}
+                    samples={samples[i] ?? []}
+                    onChange={handleRangeChange}
+                    onRemove={handleRemoveRange}
+                    onSamplesChange={handleSamplesChange}
+                  />
+                ))}
+              </div>
+            </div>
 
             <Button
               type="button"
@@ -530,26 +538,26 @@ function ParameterRow({ param }: { param: Parameter }) {
         }`}
       >
         {/* Name */}
-        <td className="px-4 py-3">
+        <td className="px-3 sm:px-4 py-3">
           <span className="text-sm font-medium text-slate-900 dark:text-zinc-100">
             {param.parameterName}
           </span>
         </td>
 
         {/* Unit */}
-        <td className="px-4 py-3">
+        <td className="px-3 sm:px-4 py-3">
           <span className="text-sm text-slate-600 dark:text-zinc-400">{param.unit || "—"}</span>
         </td>
 
         {/* Ranges count */}
-        <td className="px-4 py-3">
+        <td className="px-3 sm:px-4 py-3">
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-zinc-700 text-slate-700 dark:text-zinc-300">
             {param.ranges.length} range{param.ranges.length !== 1 ? "s" : ""}
           </span>
         </td>
 
         {/* Status */}
-        <td className="px-4 py-3">
+        <td className="px-3 sm:px-4 py-3">
           {param.isActive ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
@@ -562,7 +570,7 @@ function ParameterRow({ param }: { param: Parameter }) {
         </td>
 
         {/* Actions */}
-        <td className="px-4 py-3">
+        <td className="px-3 sm:px-4 py-3">
           <div className="flex items-center gap-1">
             <button
               onClick={() => !editing && setExpanded((p) => !p)}
@@ -603,7 +611,7 @@ function ParameterRow({ param }: { param: Parameter }) {
       {/* Expanded panel */}
       {expanded && (
         <tr>
-          <td colSpan={5} className="px-4 pb-4 pt-0">
+          <td colSpan={5} className="px-3 sm:px-4 pb-4 pt-0">
             {editing ? (
               <EditPanel
                 param={param}
@@ -639,8 +647,8 @@ function ReadonlyRanges({
   }
 
   return (
-    <div className="border border-slate-200 dark:border-zinc-700 rounded-lg bg-slate-50 dark:bg-zinc-800/40 overflow-hidden">
-      <table className="w-full text-xs">
+    <div className="border border-slate-200 dark:border-zinc-700 rounded-lg bg-slate-50 dark:bg-zinc-800/40 overflow-x-auto">
+      <table className="w-full min-w-[640px] text-xs">
         <thead>
           <tr className="border-b border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800">
             {RANGE_FIELDS.map(({ key, label }) => (
@@ -779,17 +787,17 @@ export default function ParameterConfig() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900">
+      <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto">
         {isLoading ? (
           <div className="py-20 text-center text-sm text-slate-400 dark:text-zinc-500">Loading…</div>
         ) : isError ? (
           <div className="py-20 text-center text-sm text-red-500">Failed to load parameters.</div>
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[520px]">
             <thead>
               <tr className="border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800/60">
                 {["Parameter Name", "Unit", "Ranges", "Status", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
+                  <th key={h} className="px-3 sm:px-4 py-3 text-left text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide whitespace-nowrap">
                     {h}
                   </th>
                 ))}

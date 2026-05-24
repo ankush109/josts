@@ -266,7 +266,7 @@ function StatCard({
     <button
       onClick={onClick}
       className={cn(
-        "flex-1 min-w-[120px] rounded-xl border p-4 text-left transition-all",
+        "min-w-0 rounded-xl border p-3 sm:p-4 text-left transition-all",
         active
           ? "bg-[#e8eef5] dark:bg-zinc-800/60 border-[#1e3a5f]/40 dark:border-[#4a7bb5]/40 shadow-sm ring-1 ring-[#1e3a5f]/20 dark:ring-[#4a7bb5]/20"
           : "border-slate-200 bg-white hover:border-[#1e3a5f]/20 hover:shadow-sm dark:bg-zinc-900 dark:border-zinc-700 dark:hover:border-zinc-500"
@@ -852,12 +852,12 @@ export default function CalibrationReportsTable() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-2">
-        <div>
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold" style={{ color: navy }}>Calibration Reports</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage and track all calibration report records</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
             size="sm"
@@ -888,7 +888,7 @@ export default function CalibrationReportsTable() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <StatCard label="Total Reports" value={counts.total} icon={<ClipboardList className="h-4 w-4 text-[#1e3a5f] dark:text-[#4a7bb5]" />} accent="bg-[#e8eef5] dark:bg-[#1e3a5f]/30" active={statusFilter === "all"} onClick={() => handleStatClick("all")} />
         <StatCard label="Drafts" value={counts.draft} icon={<FileText className="h-4 w-4 text-slate-500 dark:text-zinc-400" />} accent="bg-slate-100 dark:bg-zinc-700/60" active={statusFilter === "draft"} onClick={() => handleStatClick("draft")} />
         <StatCard label="Submitted" value={counts.submitted} icon={<Clock className="h-4 w-4 text-sky-600 dark:text-sky-400" />} accent="bg-sky-50 dark:bg-sky-950/50" active={statusFilter === "submitted"} onClick={() => handleStatClick("submitted")} />
@@ -1057,11 +1057,11 @@ export default function CalibrationReportsTable() {
       <Card className="shadow-sm border-slate-200 dark:border-zinc-700">
         <CardContent className="p-0">
           <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-slate-100 dark:border-zinc-700">
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input placeholder="Search by certificate no or customer…" value={searchQuery} onChange={(e) => onSearch(e.target.value)} className="pl-9 h-9 text-sm border-slate-200 focus-visible:ring-[#1e3a5f]/30" />
             </div>
-            <div className="flex gap-2 ml-auto items-center">
+            <div className="flex flex-wrap gap-2 sm:ml-auto items-center">
               <Select value={statusFilter} onValueChange={onStatusFilter}>
                 <SelectTrigger className="h-9 w-36 text-sm border-slate-200"><SelectValue placeholder="All statuses" /></SelectTrigger>
                 <SelectContent>

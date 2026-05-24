@@ -140,7 +140,7 @@ export function LoginForm() {
                         id="email"
                         type="email"
                         aria-invalid={fieldState.invalid}
-                        placeholder="you@example.com"
+                        placeholder="you@josts.in"
                         autoComplete="email"
                         className="pl-9 h-10"
                       />

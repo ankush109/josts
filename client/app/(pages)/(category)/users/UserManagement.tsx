@@ -46,6 +46,10 @@ function AddUserDialog({ open, onClose }: { open: boolean; onClose: () => void }
       toast.error("Email and password are required");
       return;
     }
+    if (!email.trim().toLowerCase().endsWith("@josts.in")) {
+      toast.error("Email must be a @josts.in address");
+      return;
+    }
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
@@ -82,7 +86,7 @@ function AddUserDialog({ open, onClose }: { open: boolean; onClose: () => void }
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@josts.com"
+              placeholder="name@josts.in"
               className="h-9"
             />
           </div>
@@ -433,13 +437,13 @@ export default function UserManagement() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-slate-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-900">
+      <div className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto">
         {isLoading ? (
           <div className="py-20 text-center text-sm text-slate-400 dark:text-zinc-500">Loading…</div>
         ) : isError ? (
           <div className="py-20 text-center text-sm text-red-500">Failed to load users.</div>
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-800/60">
                 {["User", "Role", "Status", "Created", "Actions"].map((h) => (

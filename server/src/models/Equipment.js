@@ -28,6 +28,7 @@ const equipmentSchema = new Schema(
         unit:           { type: String },  // "mV", "V", "µA", "A", "Ω", "kHz"
         errorPct:       { type: Number },
         uncertaintyPct: { type: Number },  // expanded uncertainty % from cert
+        accuracy:       { type: Number },  // manufacturer accuracy %
         remarks:        { type: String },
       },
     ],

@@ -2,7 +2,7 @@
  * @file User.js
  * @description Mongoose model for application users.
  *
- * All users must register with a @josts.com email. The `password` field
+ * All users must register with a @josts.in email. The `password` field
  * has `select: false` so it is never returned by default — callers must
  * explicitly opt in with `.select("+password")`.
  */

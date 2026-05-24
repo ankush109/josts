@@ -8,7 +8,7 @@
  *  - Right: email + password + confirm-password form
  *
  * On success, stores the JWT and redirects to /login.
- * Only @josts.com email addresses are accepted.
+ * Only @josts.in email addresses are accepted.
  */
 
 import { useState } from "react";
@@ -36,7 +36,7 @@ const registerSchema = z
     email: z
       .string()
       .email("Email domain is not valid")
-      .endsWith("@josts.com", "Must be a @josts.com address"),
+      .endsWith("@josts.in", "Must be a @josts.in address"),
     password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
   })
@@ -126,7 +126,7 @@ export function RegisterForm() {
                         id="email"
                         type="email"
                         aria-invalid={fieldState.invalid}
-                        placeholder="you@josts.com"
+                        placeholder="you@josts.in"
                         autoComplete="email"
                         className="pl-9 h-10"
                       />
