@@ -103,6 +103,10 @@ export const EP_VERIFY_REJECT_CALIBRATION = (reportId: string) =>
 export const EP_CALIBRATION_AUDIT_LOG = (reportId: string) =>
   `/calibration-report/${reportId}/history`;
 
+/** POST /calibration-report/:reportId/regenerate-pdf — synchronous PDF (re)generation */
+export const EP_REGENERATE_CALIBRATION_PDF = (reportId: string) =>
+  `/calibration-report/${reportId}/regenerate-pdf`;
+
 /** POST /calibration-report/compute */
 export const EP_COMPUTE_CALIBRATION = () =>
   `/calibration-report/compute` as const;

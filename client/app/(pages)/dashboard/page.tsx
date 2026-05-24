@@ -141,16 +141,48 @@ function LoadingSkeleton() {
 
 // ─── charts (pure SVG, no extra deps) ─────────────────────────────────────
 
+function niceCeil(max: number): number {
+  if (max <= 1) return 1;
+  const pow  = Math.pow(10, Math.floor(Math.log10(max)));
+  const norm = max / pow;
+  const nice = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return nice * pow;
+}
+
 function TrendChart({ trend }: { trend: TrendPoint[] }) {
+  // Aggregate daily → weekly so sparse data doesn't look like spikes
+  type Bucket = { weekStart: string; draft: number; submitted: number; verified: number; rejected: number; total: number };
+  const buckets: Bucket[] = [];
+  trend.forEach((p) => {
+    const d = new Date(p.day);
+    const day = d.getUTCDay();
+    const monday = new Date(d);
+    monday.setUTCDate(d.getUTCDate() - ((day + 6) % 7));
+    const key = monday.toISOString().slice(0, 10);
+    const last = buckets[buckets.length - 1];
+    if (last && last.weekStart === key) {
+      last.draft     += p.draft;
+      last.submitted += p.submitted;
+      last.verified  += p.verified;
+      last.rejected  += p.rejected;
+      last.total     += p.total;
+    } else {
+      buckets.push({ weekStart: key, draft: p.draft, submitted: p.submitted, verified: p.verified, rejected: p.rejected, total: p.total });
+    }
+  });
+
   const w = 800;
-  const h = 160;
-  const pad = { top: 10, right: 10, bottom: 18, left: 28 };
+  const h = 200;
+  const pad = { top: 16, right: 14, bottom: 32, left: 36 };
   const innerW = w - pad.left - pad.right;
   const innerH = h - pad.top - pad.bottom;
 
-  const max = Math.max(1, ...trend.map((p) => p.total));
-  const stepX = innerW / Math.max(1, trend.length - 1);
+  const rawMax = Math.max(1, ...buckets.map((p) => p.total));
+  const max    = niceCeil(rawMax);
+  const slotW  = innerW / Math.max(1, buckets.length);
+  const barW   = Math.max(4, slotW * 0.68);
 
+  const stackOrder = ["draft", "submitted", "verified", "rejected"] as const;
   const colors = {
     draft:     "#a1a1aa",
     submitted: "#3b82f6",
@@ -158,67 +190,78 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
     rejected:  "#ef4444",
   } as const;
 
-  // Stacked area: draft, submitted, verified, rejected
-  const stackOrder = ["draft", "submitted", "verified", "rejected"] as const;
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
 
-  const paths = stackOrder.map((key, idx) => {
-    const upper: { x: number; y: number }[] = [];
-    const lower: { x: number; y: number }[] = [];
-    trend.forEach((p, i) => {
-      let stackedBelow = 0;
-      for (let k = 0; k < idx; k++) stackedBelow += p[stackOrder[k]];
-      const stackedHere = stackedBelow + p[key];
-      const x = pad.left + i * stepX;
-      lower.push({ x, y: pad.top + innerH - (stackedBelow / max) * innerH });
-      upper.push({ x, y: pad.top + innerH - (stackedHere / max) * innerH });
-    });
-    const top  = upper.map((pt, i) => `${i === 0 ? "M" : "L"}${pt.x},${pt.y}`).join(" ");
-    const bot  = [...lower].reverse().map((pt) => `L${pt.x},${pt.y}`).join(" ");
-    return { d: `${top} ${bot} Z`, color: colors[key] };
-  });
-
-  // X-axis labels: ~4 evenly-spaced ticks
-  const labelIndices = [0, Math.floor(trend.length / 3), Math.floor((2 * trend.length) / 3), trend.length - 1];
+  const fmtLabel = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  };
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-5">
-      <div className="flex items-baseline justify-between mb-2">
+      <div className="flex items-baseline justify-between mb-3">
         <span className="text-sm font-semibold text-foreground">Reports trend</span>
-        <span className="text-xs text-muted-foreground">last 90 days · stacked by status</span>
+        <span className="text-xs text-muted-foreground">last {buckets.length} weeks · stacked by status</span>
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" preserveAspectRatio="none">
-        {/* Grid lines */}
-        {[0, 0.25, 0.5, 0.75, 1].map((p) => {
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+        {ticks.map((p) => {
           const y = pad.top + innerH * (1 - p);
           return (
             <g key={p}>
-              <line x1={pad.left} x2={pad.left + innerW} y1={y} y2={y} stroke="currentColor" className="text-zinc-200 dark:text-zinc-800" strokeWidth={0.5} />
-              <text x={pad.left - 4} y={y + 3} textAnchor="end" className="text-[9px] fill-current text-zinc-400">
+              <line x1={pad.left} x2={pad.left + innerW} y1={y} y2={y}
+                stroke="currentColor" className="text-zinc-200 dark:text-zinc-800" strokeWidth={0.5} />
+              <text x={pad.left - 6} y={y + 3} textAnchor="end"
+                className="text-[10px] fill-current text-zinc-400">
                 {Math.round(max * p)}
               </text>
             </g>
           );
         })}
 
-        {/* Stacked areas */}
-        {paths.map((p, i) => (
-          <path key={i} d={p.d} fill={p.color} fillOpacity={0.85} />
-        ))}
+        {buckets.map((b, i) => {
+          const slotX = pad.left + i * slotW;
+          const x     = slotX + (slotW - barW) / 2;
+          let stackedBelow = 0;
+          const segs = stackOrder.map((key) => {
+            const v = b[key];
+            const segH = (v / max) * innerH;
+            const y    = pad.top + innerH - ((stackedBelow + v) / max) * innerH;
+            stackedBelow += v;
+            return { key, v, y, segH };
+          });
+          const topY = pad.top + innerH - (b.total / max) * innerH;
+          return (
+            <g key={b.weekStart}>
+              {segs.map(({ key, v, y, segH }) =>
+                v > 0 ? (
+                  <rect key={key} x={x} y={y} width={barW} height={segH} fill={colors[key]} rx={1}>
+                    <title>{b.weekStart} · {key}: {v}</title>
+                  </rect>
+                ) : null
+              )}
+              {b.total > 0 && (
+                <text x={x + barW / 2} y={topY - 4} textAnchor="middle"
+                  className="text-[9px] font-medium fill-current text-zinc-500 dark:text-zinc-400">
+                  {b.total}
+                </text>
+              )}
+            </g>
+          );
+        })}
 
-        {/* X-axis labels */}
-        {labelIndices.map((idx) => (
-          <text
-            key={idx}
-            x={pad.left + idx * stepX}
-            y={h - 4}
-            textAnchor="middle"
-            className="text-[9px] fill-current text-zinc-400"
-          >
-            {trend[idx]?.day?.slice(5)}
-          </text>
-        ))}
+        {buckets.map((b, i) => {
+          const step = buckets.length <= 8 ? 1 : buckets.length <= 16 ? 2 : 3;
+          if (i % step !== 0 && i !== buckets.length - 1) return null;
+          const cx = pad.left + i * slotW + slotW / 2;
+          return (
+            <text key={b.weekStart} x={cx} y={h - 14} textAnchor="middle"
+              className="text-[9px] fill-current text-zinc-400">
+              {fmtLabel(b.weekStart)}
+            </text>
+          );
+        })}
       </svg>
-      <div className="flex flex-wrap gap-3 mt-2">
+      <div className="flex flex-wrap gap-3 mt-1">
         {stackOrder.map((key) => (
           <div key={key} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: colors[key] }} />
@@ -232,70 +275,89 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
 
 function WeeklyActivityChart({ weeks }: { weeks: WeeklyActivityPoint[] }) {
   const w = 800;
-  const h = 180;
-  const pad = { top: 12, right: 14, bottom: 30, left: 32 };
+  const h = 220;
+  const pad = { top: 16, right: 14, bottom: 36, left: 36 };
   const innerW = w - pad.left - pad.right;
   const innerH = h - pad.top - pad.bottom;
 
-  const max = Math.max(1, ...weeks.flatMap((p) => [p.accounts, p.logins]));
-  const slotW = innerW / Math.max(1, weeks.length);
-  const barW  = Math.max(3, (slotW * 0.4));
+  const rawMax = Math.max(1, ...weeks.flatMap((p) => [p.accounts, p.logins]));
+  const max    = niceCeil(rawMax);
+  const slotW  = innerW / Math.max(1, weeks.length);
+  const groupW = Math.min(slotW * 0.7, 44);
+  const barW   = Math.max(4, groupW / 2 - 2);
+
+  const fmtLabel = (iso: string) => {
+    const d = new Date(iso);
+    return `${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  };
+
+  const labelStep = weeks.length <= 8 ? 1 : weeks.length <= 16 ? 2 : 3;
 
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-5">
-      <div className="flex items-baseline justify-between mb-2">
+      <div className="flex items-baseline justify-between mb-3">
         <span className="text-sm font-semibold text-foreground">User activity</span>
-        <span className="text-xs text-muted-foreground">last 12 weeks · accounts vs logins</span>
+        <span className="text-xs text-muted-foreground">last {weeks.length} weeks · accounts vs logins</span>
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" preserveAspectRatio="none">
-        {/* Grid lines + Y-axis labels */}
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
         {[0, 0.25, 0.5, 0.75, 1].map((p) => {
           const y = pad.top + innerH * (1 - p);
           return (
             <g key={p}>
               <line x1={pad.left} x2={pad.left + innerW} y1={y} y2={y}
                 stroke="currentColor" className="text-zinc-200 dark:text-zinc-800" strokeWidth={0.5} />
-              <text x={pad.left - 4} y={y + 3} textAnchor="end"
-                className="text-[9px] fill-current text-zinc-400">
+              <text x={pad.left - 6} y={y + 3} textAnchor="end"
+                className="text-[10px] fill-current text-zinc-400">
                 {Math.round(max * p)}
               </text>
             </g>
           );
         })}
 
-        {/* Bars */}
         {weeks.map((p, i) => {
-          const slotX = pad.left + i * slotW;
-          const acctH = (p.accounts / max) * innerH;
-          const lgnH  = (p.logins   / max) * innerH;
-          const acctX = slotX + slotW / 2 - barW - 1;
-          const lgnX  = slotX + slotW / 2 + 1;
-          const acctY = pad.top + innerH - acctH;
-          const lgnY  = pad.top + innerH - lgnH;
+          const slotX  = pad.left + i * slotW;
+          const center = slotX + slotW / 2;
+          const acctH  = (p.accounts / max) * innerH;
+          const lgnH   = (p.logins   / max) * innerH;
+          const acctX  = center - barW - 1;
+          const lgnX   = center + 1;
+          const acctY  = pad.top + innerH - acctH;
+          const lgnY   = pad.top + innerH - lgnH;
           return (
             <g key={p.weekStart}>
               {p.accounts > 0 && (
-                <rect x={acctX} y={acctY} width={barW} height={acctH} fill="#8b5cf6" rx={1}>
-                  <title>{p.weekStart}: {p.accounts} accounts</title>
-                </rect>
+                <>
+                  <rect x={acctX} y={acctY} width={barW} height={acctH} fill="#8b5cf6" rx={1.5}>
+                    <title>{p.weekStart}: {p.accounts} accounts</title>
+                  </rect>
+                  <text x={acctX + barW / 2} y={acctY - 3} textAnchor="middle"
+                    className="text-[9px] font-medium fill-current text-violet-500">
+                    {p.accounts}
+                  </text>
+                </>
               )}
               {p.logins > 0 && (
-                <rect x={lgnX} y={lgnY} width={barW} height={lgnH} fill="#10b981" rx={1}>
-                  <title>{p.weekStart}: {p.logins} logins ({p.uniqueLogins} unique)</title>
-                </rect>
+                <>
+                  <rect x={lgnX} y={lgnY} width={barW} height={lgnH} fill="#10b981" rx={1.5}>
+                    <title>{p.weekStart}: {p.logins} logins ({p.uniqueLogins} unique)</title>
+                  </rect>
+                  <text x={lgnX + barW / 2} y={lgnY - 3} textAnchor="middle"
+                    className="text-[9px] font-medium fill-current text-emerald-500">
+                    {p.logins}
+                  </text>
+                </>
               )}
             </g>
           );
         })}
 
-        {/* X-axis labels — every other week */}
         {weeks.map((p, i) => {
-          if (i % 2 !== 0) return null;
-          const slotX = pad.left + i * slotW + slotW / 2;
+          if (i % labelStep !== 0 && i !== weeks.length - 1) return null;
+          const cx = pad.left + i * slotW + slotW / 2;
           return (
-            <text key={p.weekStart} x={slotX} y={h - 12} textAnchor="middle"
+            <text key={p.weekStart} x={cx} y={h - 14} textAnchor="middle"
               className="text-[9px] fill-current text-zinc-400">
-              {p.weekStart.slice(5)}
+              {fmtLabel(p.weekStart)}
             </text>
           );
         })}

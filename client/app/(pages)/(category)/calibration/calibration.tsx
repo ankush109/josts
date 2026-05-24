@@ -68,7 +68,6 @@ import {
   makeMeasurement,
   makeParam,
   makeInstrument,
-  isOutOfRange,
   isNumericInput,
   getParamStatus,
   getInstCompletion,
@@ -563,32 +562,26 @@ const MeasureTable: FC<{
               {param.ranges.flatMap((r) =>
                 r.measurements.map((m) => {
                   const val = m.readings[ri];
-                  const readingError = isOutOfRange(val, m.nomValue);
                   return (
-                  <td key={m.id} className={cn("border border-border p-0", readingError && "bg-destructive/5")}>
-                    <Tooltip open={readingError ? undefined : false}>
-                      <TooltipTrigger asChild>
-                        <input
-                          id={`reading-${m.id}-${ri}`}
-                          data-reading-input="true"
-                          value={val}
-                          readOnly={readOnly}
-                          onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
-                          onKeyDown={(e) => {
-                            if (readOnly) return;
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const all = Array.from(document.querySelectorAll<HTMLInputElement>("[data-reading-input]"));
-                              const idx = all.indexOf(e.currentTarget);
-                              if (idx >= 0 && idx < all.length - 1) all[idx + 1].focus();
-                            }
-                          }}
-                          placeholder="—"
-                          className={cn("w-full font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-2 placeholder:text-muted-foreground/20", readingError ? "text-destructive font-semibold" : "", readOnly && "cursor-default")}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Must be ≤ {m.nomValue}</TooltipContent>
-                    </Tooltip>
+                  <td key={m.id} className="border border-border p-0">
+                    <input
+                      id={`reading-${m.id}-${ri}`}
+                      data-reading-input="true"
+                      value={val}
+                      readOnly={readOnly}
+                      onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
+                      onKeyDown={(e) => {
+                        if (readOnly) return;
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          const all = Array.from(document.querySelectorAll<HTMLInputElement>("[data-reading-input]"));
+                          const idx = all.indexOf(e.currentTarget);
+                          if (idx >= 0 && idx < all.length - 1) all[idx + 1].focus();
+                        }
+                      }}
+                      placeholder="—"
+                      className={cn("w-full font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-2 placeholder:text-muted-foreground/20", readOnly && "cursor-default")}
+                    />
                   </td>
                   );
                 })
@@ -605,14 +598,11 @@ const MeasureTable: FC<{
             {param.ranges.flatMap((r) =>
               r.measurements.map((m) => {
                 const filled = m.readings.filter((v) => v !== "").length;
-                const hasErr = m.readings.some((v) => isOutOfRange(v, m.nomValue));
-                const allFilled = filled === 5 && !hasErr;
+                const allFilled = filled === 5;
                 return (
                   <td key={m.id} className="border border-border text-center py-1.5">
                     {filled === 0 ? (
                       <span className="text-[10px] text-muted-foreground/40">—</span>
-                    ) : hasErr ? (
-                      <Badge variant="destructive" className="text-[10px] gap-1 px-1.5 py-0"><X className="size-2.5" />Invalid</Badge>
                     ) : allFilled ? (
                       <Badge variant="uploaded" className="text-[10px] gap-1 px-1.5 py-0"><CheckCircle2 className="size-2.5" />OK</Badge>
                     ) : (
@@ -2042,21 +2032,22 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     setReportMeta((prev) => ({ ...prev, [key]: val }));
   }, []);
 
-  // Auto-set dateOfCalibration when onsite
+  // Auto-fill dateOfCalibration from ducReceivedDate when onsite — only if empty, user can override
   useEffect(() => {
-    if (reportMeta.calibrationLocation === "onsite" && reportMeta.ducReceivedDate) {
+    if (reportMeta.calibrationLocation === "onsite" && reportMeta.ducReceivedDate && !reportMeta.dateOfCalibration) {
       setReportMeta((prev) => ({ ...prev, dateOfCalibration: prev.ducReceivedDate }));
     }
-  }, [reportMeta.calibrationLocation, reportMeta.ducReceivedDate]);
+  }, [reportMeta.calibrationLocation, reportMeta.ducReceivedDate, reportMeta.dateOfCalibration]);
 
-  // Auto-compute calibrationDueDate = dateOfCalibration + 1 year
+  // Auto-fill calibrationDueDate = dateOfCalibration + 1 year (only when empty — user can override)
   useEffect(() => {
     if (!reportMeta.dateOfCalibration) return;
+    if (reportMeta.calibrationDueDate) return;
     const d = new Date(reportMeta.dateOfCalibration);
     if (isNaN(d.getTime())) return;
     d.setFullYear(d.getFullYear() + 1);
     setReportMeta((prev) => ({ ...prev, calibrationDueDate: d.toISOString().slice(0, 10) }));
-  }, [reportMeta.dateOfCalibration]);
+  }, [reportMeta.dateOfCalibration, reportMeta.calibrationDueDate]);
 
   useEffect(() => {
     if (!existingReport || hydrated) return;
@@ -2213,18 +2204,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       for (const p of inst.params) {
         if (!p.name.trim())
           errors.push({ message: `[${lbl}] A parameter has no name`, instId: inst.id, paramId: p.id, fieldId: `param-name-${p.id}` });
-        for (const r of p.ranges) {
-          for (const m of r.measurements) {
-            if (!m.nomValue) continue;
-            m.readings.forEach((v, ri) => {
-              if (isOutOfRange(v, m.nomValue))
-                errors.push({
-                  message: `Reading ${v} ≥ nom+1 (${Number(m.nomValue) + 1}) in "${r.label}" column ${ri + 1}`,
-                  instId: inst.id, paramId: p.id, fieldId: `reading-${m.id}-${ri}`,
-                });
-            });
-          }
-        }
       }
     }
     return errors;
@@ -3268,9 +3247,11 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                     </Select>
                   </div>
                   <RF id="report-dateOfCalibration" label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
-                    readOnly={viewMode || reportMeta.calibrationLocation === "onsite"}
-                    onChange={(!viewMode && reportMeta.calibrationLocation === "at_lab") ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
-                  <RF label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date" readOnly />
+                    readOnly={viewMode}
+                    onChange={!viewMode ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
+                  <RF id="report-calibrationDueDate" label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date"
+                    readOnly={viewMode}
+                    onChange={!viewMode ? (v) => updateReportMeta("calibrationDueDate", v) : undefined} />
                 </div>
               </div>
             )}

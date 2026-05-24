@@ -189,6 +189,9 @@ const calibrationReportSchema = new mongoose.Schema(
     signatures:          { type: signaturesSchema, default: () => ({}) },
     /** S3 keys for generated PDF pages. Populated by the worker. */
     filePaths:           { type: [String], default: [] },
+    /** Set by the worker when PDF generation fails. Cleared when a new job is queued. */
+    pdfFailedAt:         { type: Date,   default: null },
+    pdfError:            { type: String, default: "" },
     /** Soft-delete timestamp. Non-null means the report is deleted. */
     deletedAt:           { type: Date, default: null },
     /** Total view count — incremented on every getReportById. */

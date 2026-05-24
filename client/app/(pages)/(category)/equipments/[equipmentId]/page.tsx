@@ -128,6 +128,20 @@ export default function EquipmentDetailPage() {
 
   const eq: EquipmentDoc | undefined = res?.data;
   const [editMode, setEditMode] = useState(false);
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
+
+  const enterEdit = (focusId?: string) => {
+    if (!isAdmin || isOffline) return;
+    setEditMode(true);
+    if (focusId) setPendingFocus(focusId);
+  };
+
+  useEffect(() => {
+    if (pendingFocus == null) return;
+    const t = setTimeout(() => setPendingFocus(null), 0);
+    return () => clearTimeout(t);
+  }, [pendingFocus]);
+
   const isOffline = !useOnlineStatus();
   const [draft, setDraft] = useState<EquipmentDoc | null>(null);
   const [showAccuracy, setShowAccuracy] = useState(false);
@@ -176,6 +190,9 @@ export default function EquipmentDetailPage() {
       </div>
     </div>
   );
+
+  const canEdit = isAdmin && !isOffline;
+  const editClick = (focusId: string) => canEdit ? () => enterEdit(focusId) : undefined;
 
   const updateTop = <K extends keyof EquipmentDoc>(k: K, v: EquipmentDoc[K]) =>
     setDraft((d) => (d ? { ...d, [k]: v } : d));
@@ -414,18 +431,18 @@ export default function EquipmentDetailPage() {
         {/* Identity + Calibration */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <Card icon={<FlaskConical className="h-4 w-4 text-[#1e3a5f]" />} title="Equipment Identity">
-            <Field label="Equipment"   value={draft.equipmentName} edit={editMode} onChange={(v) => updateTop("equipmentName", v)} />
-            <Field label="Make"        value={draft.make}          edit={editMode} onChange={(v) => updateTop("make", v)} />
-            <Field label="Model"       value={draft.model}         edit={editMode} onChange={(v) => updateTop("model", v)} />
-            <Field label="Serial No."  value={draft.serialNo}      edit={editMode} onChange={(v) => updateTop("serialNo", v)} mono />
-            <Field label="ID No."      value={draft.idNo}          edit={editMode} onChange={(v) => updateTop("idNo", v)} mono />
-            <Field label="Nominal Ratio" value={draft.nominalRatio} edit={editMode} onChange={(v) => updateTop("nominalRatio", v)} />
+            <Field label="Equipment"   value={draft.equipmentName} edit={editMode} onChange={(v) => updateTop("equipmentName", v)} onEnterEdit={editClick("equipmentName")} focusId="equipmentName" pendingFocus={pendingFocus} />
+            <Field label="Make"        value={draft.make}          edit={editMode} onChange={(v) => updateTop("make", v)}          onEnterEdit={editClick("make")}          focusId="make"          pendingFocus={pendingFocus} />
+            <Field label="Model"       value={draft.model}         edit={editMode} onChange={(v) => updateTop("model", v)}         onEnterEdit={editClick("model")}         focusId="model"         pendingFocus={pendingFocus} />
+            <Field label="Serial No."  value={draft.serialNo}      edit={editMode} onChange={(v) => updateTop("serialNo", v)} mono onEnterEdit={editClick("serialNo")}      focusId="serialNo"      pendingFocus={pendingFocus} />
+            <Field label="ID No."      value={draft.idNo}          edit={editMode} onChange={(v) => updateTop("idNo", v)} mono     onEnterEdit={editClick("idNo")}          focusId="idNo"          pendingFocus={pendingFocus} />
+            <Field label="Nominal Ratio" value={draft.nominalRatio} edit={editMode} onChange={(v) => updateTop("nominalRatio", v)} onEnterEdit={editClick("nominalRatio")} focusId="nominalRatio" pendingFocus={pendingFocus} />
           </Card>
 
           <Card icon={<Award className="h-4 w-4 text-[#1e3a5f]" />} title="Calibration Details">
-            <Field label="Certificate No." value={draft.certificateNo} edit={editMode} onChange={(v) => updateTop("certificateNo", v)} mono />
-            <Field label="NABL Cert."      value={draft.nablCert}      edit={editMode} onChange={(v) => updateTop("nablCert", v)} mono />
-            <Field label="Cal. Lab"        value={draft.calLab}        edit={editMode} onChange={(v) => updateTop("calLab", v)} />
+            <Field label="Certificate No." value={draft.certificateNo} edit={editMode} onChange={(v) => updateTop("certificateNo", v)} mono onEnterEdit={editClick("certificateNo")} focusId="certificateNo" pendingFocus={pendingFocus} />
+            <Field label="NABL Cert."      value={draft.nablCert}      edit={editMode} onChange={(v) => updateTop("nablCert", v)} mono      onEnterEdit={editClick("nablCert")}      focusId="nablCert"      pendingFocus={pendingFocus} />
+            <Field label="Cal. Lab"        value={draft.calLab}        edit={editMode} onChange={(v) => updateTop("calLab", v)}            onEnterEdit={editClick("calLab")}        focusId="calLab"        pendingFocus={pendingFocus} />
             {editMode ? (
               <>
                 <DateField label="Cal. Date" value={draft.calDate} onChange={(v) => updateTop("calDate", v)} />
@@ -433,17 +450,33 @@ export default function EquipmentDetailPage() {
               </>
             ) : (
               <>
-                <InfoRow label="Cal. Date" value={
-                  <span className="flex items-center gap-1.5 text-[12px]">
-                    <Calendar className="h-3.5 w-3.5 text-slate-400" />{fmt(draft.calDate)}
-                  </span>
-                } />
-                <InfoRow label="Next Due" value={
-                  <span className={`flex items-center gap-1.5 font-semibold text-[12px] ${dueStatus === "overdue" ? "text-red-600" : dueStatus === "soon" ? "text-amber-600" : "text-slate-700"}`}>
-                    {dueStatus === "overdue" && <AlertCircle className="h-3.5 w-3.5" />}
-                    {fmt(draft.nextDue)}
-                  </span>
-                } />
+                <div
+                  role={canEdit ? "button" : undefined}
+                  tabIndex={canEdit ? 0 : undefined}
+                  onClick={canEdit ? () => enterEdit("calDate") : undefined}
+                  className={canEdit ? "rounded-md hover:bg-slate-50 dark:hover:bg-zinc-800/40 cursor-text transition-colors -mx-2 px-2" : undefined}
+                  title={canEdit ? "Click to edit" : undefined}
+                >
+                  <InfoRow label="Cal. Date" value={
+                    <span className="flex items-center gap-1.5 text-[12px]">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />{fmt(draft.calDate)}
+                    </span>
+                  } />
+                </div>
+                <div
+                  role={canEdit ? "button" : undefined}
+                  tabIndex={canEdit ? 0 : undefined}
+                  onClick={canEdit ? () => enterEdit("nextDue") : undefined}
+                  className={canEdit ? "rounded-md hover:bg-slate-50 dark:hover:bg-zinc-800/40 cursor-text transition-colors -mx-2 px-2" : undefined}
+                  title={canEdit ? "Click to edit" : undefined}
+                >
+                  <InfoRow label="Next Due" value={
+                    <span className={`flex items-center gap-1.5 font-semibold text-[12px] ${dueStatus === "overdue" ? "text-red-600" : dueStatus === "soon" ? "text-amber-600" : "text-slate-700"}`}>
+                      {dueStatus === "overdue" && <AlertCircle className="h-3.5 w-3.5" />}
+                      {fmt(draft.nextDue)}
+                    </span>
+                  } />
+                </div>
               </>
             )}
           </Card>
@@ -569,11 +602,21 @@ export default function EquipmentDetailPage() {
                 </thead>
                 <tbody>
                   {parameters.map((p, i) => (
-                    <tr key={i} className="border-b border-slate-100 dark:border-zinc-800 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 group/row">
+                    <tr
+                      key={i}
+                      className={`border-b border-slate-100 dark:border-zinc-800 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 group/row ${!editMode && canEdit ? "cursor-text" : ""}`}
+                      onClick={!editMode && canEdit ? () => enterEdit(`param-${i}-parameterName`) : undefined}
+                      title={!editMode && canEdit ? "Click to edit" : undefined}
+                    >
                       <td className="px-3 py-2 text-slate-300 dark:text-zinc-600 text-[11px] font-mono">{i + 1}</td>
                       <td className="px-3 py-2">
                         {editMode ? (
-                          <Input value={p.parameterName ?? ""} onChange={(e) => updateParam(i, { parameterName: e.target.value })} className="h-8 text-[12px]" />
+                          <Input
+                            value={p.parameterName ?? ""}
+                            onChange={(e) => updateParam(i, { parameterName: e.target.value })}
+                            autoFocus={pendingFocus === `param-${i}-parameterName`}
+                            className="h-8 text-[12px]"
+                          />
                         ) : (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900/60">
                             {p.parameterName || "—"}
@@ -581,7 +624,11 @@ export default function EquipmentDetailPage() {
                         )}
                       </td>
                       {paramCols.map((c) => (
-                        <td key={String(c.key)} className={`px-3 py-2 font-mono text-[12px] text-${c.align}`}>
+                        <td
+                          key={String(c.key)}
+                          className={`px-3 py-2 font-mono text-[12px] text-${c.align}`}
+                          onClick={!editMode && canEdit ? (e) => { e.stopPropagation(); enterEdit(`param-${i}-${String(c.key)}`); } : undefined}
+                        >
                           {editMode ? (
                             <Input
                               value={p[c.key] == null ? "" : String(p[c.key])}
@@ -595,6 +642,7 @@ export default function EquipmentDetailPage() {
                                   updateParam(i, { [c.key]: raw } as Partial<Parameter>);
                                 }
                               }}
+                              autoFocus={pendingFocus === `param-${i}-${String(c.key)}`}
                               className={`h-8 text-[12px] font-mono ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
                             />
                           ) : (
@@ -777,22 +825,38 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Field({ label, value, edit, onChange, mono }: {
+function Field({ label, value, edit, onChange, mono, onEnterEdit, focusId, pendingFocus }: {
   label: string; value: string | undefined; edit: boolean; onChange: (v: string) => void; mono?: boolean;
+  onEnterEdit?: () => void; focusId?: string; pendingFocus?: string | null;
 }) {
   if (edit) {
     return (
       <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 dark:border-zinc-800 last:border-0">
         <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-widest w-36 shrink-0">{label}</span>
-        <Input value={value ?? ""} onChange={(e) => onChange(e.target.value)} className={`h-8 text-[12px] ${mono ? "font-mono" : ""}`} />
+        <Input
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          autoFocus={!!focusId && pendingFocus === focusId}
+          className={`h-8 text-[12px] ${mono ? "font-mono" : ""}`}
+        />
       </div>
     );
   }
+  const interactive = !!onEnterEdit;
   return (
-    <InfoRow label={label} value={
-      mono ? <span className="font-mono text-[12px] bg-slate-100 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-0.5 rounded">{value || "—"}</span>
-           : <span>{value || "—"}</span>
-    } />
+    <div
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={onEnterEdit}
+      onKeyDown={(e) => { if (interactive && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onEnterEdit?.(); } }}
+      className={interactive ? "rounded-md hover:bg-slate-50 dark:hover:bg-zinc-800/40 cursor-text transition-colors -mx-2 px-2" : undefined}
+      title={interactive ? "Click to edit" : undefined}
+    >
+      <InfoRow label={label} value={
+        mono ? <span className="font-mono text-[12px] bg-slate-100 dark:bg-zinc-800 dark:text-zinc-200 px-2 py-0.5 rounded">{value || "—"}</span>
+             : <span>{value || "—"}</span>
+      } />
+    </div>
   );
 }
 

@@ -87,6 +87,8 @@ const calibrationReportSchema = new mongoose.Schema(
     },
     pdfReportId: { type: mongoose.Schema.Types.ObjectId, ref: "Report", default: null },
     filePaths:   { type: [String], default: [] },
+    pdfFailedAt: { type: Date,   default: null },
+    pdfError:    { type: String, default: "" },
   },
   { timestamps: true }
 );

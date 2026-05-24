@@ -43,6 +43,28 @@ async function dispatch(rawJob) {
     await handler(reportId);
   } catch (err) {
     log.error("job failed", { jobId, type, reportId, error: err.message, stack: err.stack });
+    await markJobFailed(type, reportId, err).catch((markErr) =>
+      log.error("failed to mark job as failed in DB", { jobId, reportId, error: markErr.message })
+    );
+  }
+}
+
+/**
+ * Persists a failure marker so the server's sync regenerate poll can
+ * detect failure (and the UI can show a Retry button).
+ *
+ * @param {string} type
+ * @param {string} reportId
+ * @param {Error} err
+ */
+async function markJobFailed(type, reportId, err) {
+  const message = (err?.message ?? "PDF generation failed").slice(0, 500);
+  if (type === "calibration") {
+    const { default: Calibration } = await import("./db/models/calibration.js");
+    await Calibration.updateOne(
+      { _id: reportId },
+      { $set: { pdfFailedAt: new Date(), pdfError: message } },
+    );
   }
 }
 

@@ -401,7 +401,7 @@ export async function listReports(query, reqUser) {
 
   const [reports, total] = await Promise.all([
     CalibrationReport.find(filter)
-      .select("certNo formatNo status createdBy signatures createdAt updatedAt instruments filePaths customerName")
+      .select("certNo formatNo status createdBy signatures createdAt updatedAt instruments filePaths pdfFailedAt pdfError customerName")
       .populate("createdBy",               "name email")
       .populate("signatures.calibratedBy", "name email signatureName")
       .populate("signatures.verifiedBy",   "name email signatureName")
@@ -422,6 +422,8 @@ export async function listReports(query, reqUser) {
     instrumentCount: r.instruments?.length ?? 0,
     instruments:     (r.instruments ?? []).map((i) => ({ make: i.make, modelType: i.modelType })),
     filePaths:       r.filePaths ?? [],
+    pdfFailedAt:     r.pdfFailedAt ?? null,
+    pdfError:        r.pdfError ?? "",
     customerName:    r.customerName ?? "",
     createdAt:       r.createdAt,
     updatedAt:       r.updatedAt,
@@ -648,4 +650,70 @@ export async function deleteReport(reportId) {
 
   report.deletedAt = new Date();
   await report.save();
+}
+
+/**
+ * Synchronously regenerates the PDF for a calibration report.
+ *
+ * Resets `filePaths`/`pdfFailedAt`, queues a worker job, then polls the doc
+ * until the worker either populates `filePaths` (success) or sets
+ * `pdfFailedAt` (failure). Returns when the PDF is ready.
+ *
+ * @param {string} reportId
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs=90000] - Max wait before throwing 504.
+ * @param {number} [opts.pollMs=500]      - Poll interval.
+ * @returns {Promise<{ filePaths: string[] }>}
+ * @throws {Error} 400 invalid id, 404 missing, 422 worker reported failure, 504 timeout
+ */
+export async function regeneratePdf(reportId, { timeoutMs = 90_000, pollMs = 500 } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(reportId)) {
+    const err = new Error("Invalid report ID");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const existing = await CalibrationReport.findOne({ _id: reportId, deletedAt: null }).select("status").lean();
+  if (!existing) {
+    const err = new Error("Report not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (existing.status === "draft") {
+    const err = new Error("Cannot generate PDF for a draft — submit the report first");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await CalibrationReport.updateOne(
+    { _id: reportId },
+    { $set: { filePaths: [], pdfFailedAt: null, pdfError: "" } },
+  );
+
+  await pushPdfJobToRedis({ reportId, action: "edit", type: "calibration" });
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, pollMs));
+    const doc = await CalibrationReport.findById(reportId)
+      .select("filePaths pdfFailedAt pdfError")
+      .lean();
+    if (!doc) {
+      const err = new Error("Report not found");
+      err.statusCode = 404;
+      throw err;
+    }
+    if (doc.pdfFailedAt) {
+      const err = new Error(doc.pdfError || "PDF generation failed");
+      err.statusCode = 422;
+      throw err;
+    }
+    if (doc.filePaths?.length > 0) {
+      return { filePaths: doc.filePaths };
+    }
+  }
+
+  const err = new Error("PDF generation timed out — try again");
+  err.statusCode = 504;
+  throw err;
 }

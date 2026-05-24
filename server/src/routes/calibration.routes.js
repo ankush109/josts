@@ -34,5 +34,6 @@ router.put(   "/:reportId",        authMiddleware,                              
 router.patch( "/:reportId/status", authMiddleware, adminMiddleware,        validate(verifyRejectSchema),        CalibrationController.verifyOrReject);
 router.delete("/:reportId",        authMiddleware,                                                              CalibrationController.deleteReport);
 router.get(   "/:reportId/history",authMiddleware,                                                              CalibrationController.getHistory);
+router.post(  "/:reportId/regenerate-pdf", authMiddleware,                                                      CalibrationController.regeneratePdf);
 
 export default router;

@@ -139,6 +139,22 @@ export async function deleteReport(req, res, next) {
   }
 }
 
+/**
+ * POST /calibration-report/:reportId/regenerate-pdf
+ * Synchronously regenerates the PDF — returns once the worker is done or
+ * with an error if it failed/timed out. No background fire-and-forget.
+ *
+ * @type {import("express").RequestHandler}
+ */
+export async function regeneratePdf(req, res, next) {
+  try {
+    const result = await CalibrationService.regeneratePdf(req.params.reportId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getHistory(req, res, next) {
   try {
     const logs = await getAuditLog(req.params.reportId);

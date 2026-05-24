@@ -240,7 +240,6 @@ export function getParamStatus(param: Parameter): ParamStatus {
   let hasAny = false;
   for (const m of all) {
     for (const reading of m.readings) {
-      if (isOutOfRange(reading, m.nomValue)) return "error";
       if (reading !== "") hasAny = true;
     }
   }

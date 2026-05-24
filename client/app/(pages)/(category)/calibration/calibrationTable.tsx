@@ -78,6 +78,7 @@ import {
   EP_DELETE_CALIBRATION_REPORT,
   EP_USER_PROFILE,
   EP_REPORT_URL,
+  EP_REGENERATE_CALIBRATION_PDF,
 } from "@/lib/endpoints";
 import { useAuth } from "@/app/provider/AuthProvider";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -108,6 +109,8 @@ interface ReportListItem {
     verifiedAt?: string;
   };
   filePaths: string[];
+  pdfFailedAt?: string | null;
+  pdfError?: string;
   customerName: string;
   createdAt: string;
   updatedAt: string;
@@ -325,6 +328,7 @@ export default function CalibrationReportsTable() {
   const [discardLocalId,      setDiscardLocalId]      = useState<string | null>(null);
   const [discardDialogOpen,   setDiscardDialogOpen]   = useState(false);
   const [retryingId,          setRetryingId]          = useState<string | null>(null);
+  const [regeneratingId,      setRegeneratingId]      = useState<string | null>(null);
 
   // Server-side reports (from the API)
   const serverItems = (data?.items ?? []) as unknown as ReportListItem[];
@@ -340,10 +344,12 @@ export default function CalibrationReportsTable() {
   function isPdfFailed(report: ReportListItem) {
     if (report.filePaths?.length) return false;
     if (report.status === "draft") return false;
+    if (report.pdfFailedAt) return true;
     return Date.now() - new Date(report.createdAt).getTime() > 24 * 60 * 60 * 1000;
   }
 
   function isPdfPending(report: ReportListItem) {
+    if (regeneratingId === report._id) return true;
     return report.status !== "draft" && !report.filePaths?.length && !isPdfFailed(report);
   }
 
@@ -448,6 +454,24 @@ export default function CalibrationReportsTable() {
       toast.error("Failed to download PDF");
     } finally {
       setDownloadingPdf(null);
+    }
+  }
+
+  async function handleRegeneratePdf(e: React.MouseEvent, reportId: string) {
+    e.stopPropagation();
+    if (regeneratingId) return;
+    setRegeneratingId(reportId);
+    const toastId = toast.loading("Generating PDF — this may take up to a minute…");
+    try {
+      await AUTH_API.post(EP_REGENERATE_CALIBRATION_PDF(reportId), null, { timeout: 120_000 });
+      toast.success("PDF generated", { id: toastId });
+      queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? "PDF generation failed";
+      toast.error(msg, { id: toastId });
+      queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+    } finally {
+      setRegeneratingId(null);
     }
   }
 
@@ -939,14 +963,27 @@ export default function CalibrationReportsTable() {
                         {report.status === "draft" ? (
                           <span className="text-xs text-slate-300 dark:text-zinc-600">—</span>
                         ) : isPdfFailed(report) ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="inline-flex items-center gap-1 text-xs text-red-400 font-medium cursor-default">
-                                <XCircle className="h-3.5 w-3.5" /> Failed
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>PDF generation failed</TooltipContent>
-                          </Tooltip>
+                          <div className="inline-flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex items-center gap-1 text-xs text-red-400 font-medium cursor-default">
+                                  <XCircle className="h-3.5 w-3.5" /> Failed
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>{report.pdfError || "PDF generation failed"}</TooltipContent>
+                            </Tooltip>
+                            <button
+                              onClick={(e) => handleRegeneratePdf(e, report._id)}
+                              disabled={regeneratingId === report._id}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-red-200 dark:border-red-900/40 text-[11px] font-medium text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                              title="Retry PDF generation"
+                            >
+                              {regeneratingId === report._id
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <RefreshCw className="h-3 w-3" />}
+                              Retry
+                            </button>
+                          </div>
                         ) : isPdfPending(report) ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -987,6 +1024,13 @@ export default function CalibrationReportsTable() {
                                     const label = inst ? toTitleCase(`${inst.make} ${inst.modelType}`.trim()) : `Instrument ${i + 1}`;
                                     return <DropdownMenuItem key={i} onClick={(e) => handleDownloadPdf(e, report, i)}><Download className="mr-2 h-3.5 w-3.5" />{label}</DropdownMenuItem>;
                                   })}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={(e) => handleRegeneratePdf(e, report._id)} disabled={regeneratingId === report._id}>
+                                    {regeneratingId === report._id
+                                      ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                      : <RefreshCw className="mr-2 h-3.5 w-3.5" />}
+                                    Regenerate all
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -1010,12 +1054,24 @@ export default function CalibrationReportsTable() {
                                   <button
                                     onClick={(e) => handleDownloadPdf(e, report)}
                                     disabled={downloadingPdf === report._id}
-                                    className="px-2.5 py-1.5 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-[#1e3a5f] dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                                    className="px-2.5 py-1.5 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-[#1e3a5f] dark:hover:text-blue-400 transition-colors border-r border-slate-200 dark:border-zinc-700 disabled:opacity-50"
                                   >
                                     {downloadingPdf === report._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                                   </button>
                                 </TooltipTrigger>
                                 <TooltipContent>Download PDF</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={(e) => handleRegeneratePdf(e, report._id)}
+                                    disabled={regeneratingId === report._id}
+                                    className="px-2.5 py-1.5 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800 hover:text-[#1e3a5f] dark:hover:text-blue-400 transition-colors disabled:opacity-50"
+                                  >
+                                    {regeneratingId === report._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Regenerate PDF</TooltipContent>
                               </Tooltip>
                             </div>
                           )
