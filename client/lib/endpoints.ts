@@ -107,6 +107,19 @@ export const EP_CALIBRATION_AUDIT_LOG = (reportId: string) =>
 export const EP_REGENERATE_CALIBRATION_PDF = (reportId: string) =>
   `/calibration-report/${reportId}/regenerate-pdf`;
 
+/** POST /calibration-report/:reportId/reopen — admin reverts to "submitted" */
+export const EP_REOPEN_CALIBRATION_REPORT = (reportId: string) =>
+  `/calibration-report/${reportId}/reopen`;
+
+/** PATCH /calibration-report/:reportId/signatures — admin reassigns signatories */
+export const EP_REASSIGN_SIGNATORIES = (reportId: string) =>
+  `/calibration-report/${reportId}/signatures`;
+
+/** POST /calibration-report/bulk/verify | bulk/reject | bulk/delete */
+export const EP_BULK_VERIFY_CALIBRATION = () => `/calibration-report/bulk/verify` as const;
+export const EP_BULK_REJECT_CALIBRATION = () => `/calibration-report/bulk/reject` as const;
+export const EP_BULK_DELETE_CALIBRATION = () => `/calibration-report/bulk/delete` as const;
+
 /** POST /calibration-report/compute */
 export const EP_COMPUTE_CALIBRATION = () =>
   `/calibration-report/compute` as const;

@@ -155,6 +155,75 @@ export async function regeneratePdf(req, res, next) {
   }
 }
 
+/**
+ * POST /calibration-report/:reportId/reopen
+ * Reverts a verified/rejected report to "submitted". Admin-only.
+ */
+export async function reopenReport(req, res, next) {
+  try {
+    const report = await CalibrationService.reopenReport(
+      req.params.reportId,
+      req.body.reason,
+      req.user.userId,
+    );
+    res.json(report);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /calibration-report/:reportId/signatures
+ * Reassigns calibratedBy / verifiedBy. Admin-only. Triggers PDF regen.
+ */
+export async function reassignSignatories(req, res, next) {
+  try {
+    const report = await CalibrationService.reassignSignatories(
+      req.params.reportId,
+      { calibratedBy: req.body.calibratedBy, verifiedBy: req.body.verifiedBy },
+      req.user.userId,
+    );
+    res.json(report);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /calibration-report/bulk/verify  | bulk/reject
+ * Admin-only bulk status transitions.
+ */
+export async function bulkVerify(req, res, next) {
+  try {
+    const result = await CalibrationService.bulkVerifyOrReject("verified", req.body.ids, req.user.userId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function bulkReject(req, res, next) {
+  try {
+    const result = await CalibrationService.bulkVerifyOrReject("rejected", req.body.ids, req.user.userId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /calibration-report/bulk/delete
+ * Soft-deletes every matched report. Admin-only.
+ */
+export async function bulkDelete(req, res, next) {
+  try {
+    const result = await CalibrationService.bulkDelete(req.body.ids, req.user.userId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getHistory(req, res, next) {
   try {
     const logs = await getAuditLog(req.params.reportId);

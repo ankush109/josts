@@ -64,6 +64,9 @@ import {
   History,
   PenLine,
   MoreHorizontal,
+  RotateCcw,
+  UserCog,
+  FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -83,7 +86,17 @@ import {
 import { useAuth } from "@/app/provider/AuthProvider";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  useReopenCalibrationReport,
+  useReassignSignatories,
+  useBulkVerify,
+  useBulkReject,
+  useBulkDelete,
+} from "@/app/hooks/mutation/(calibration)/useCalibrationAdminActions";
+import { useAdminUsers, type AdminUser } from "@/app/hooks/query/useAdminUsers";
 import type { AuditEntry, CalibrationReportStatus } from "@/types/calibration";
 import { useLocalDraftReports } from "@/app/hooks/useLocalDraftReports";
 import { useSyncQueue, retrySingleDraft } from "@/app/hooks/useSyncQueue";
@@ -330,6 +343,25 @@ export default function CalibrationReportsTable() {
   const [retryingId,          setRetryingId]          = useState<string | null>(null);
   const [regeneratingId,      setRegeneratingId]      = useState<string | null>(null);
 
+  // ── Admin: bulk selection + admin-action dialogs ──
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [reopenReport, setReopenReport]       = useState<ReportListItem | null>(null);
+  const [reopenReason, setReopenReason]       = useState("");
+  const [reassignReport, setReassignReport]   = useState<ReportListItem | null>(null);
+  const [reassignCalibBy, setReassignCalibBy] = useState<string>("");
+  const [reassignVerifBy, setReassignVerifBy] = useState<string>("");
+  const [bulkRegenerating, setBulkRegenerating] = useState(false);
+  const [bulkConfirm, setBulkConfirm]         = useState<null | "verify" | "reject" | "delete">(null);
+
+  const { mutateAsync: reopenMutate,    isPending: isReopening }   = useReopenCalibrationReport();
+  const { mutateAsync: reassignMutate,  isPending: isReassigning } = useReassignSignatories();
+  const { mutateAsync: bulkVerifyMutate, isPending: isBulkVerifying } = useBulkVerify();
+  const { mutateAsync: bulkRejectMutate, isPending: isBulkRejecting } = useBulkReject();
+  const { mutateAsync: bulkDeleteMutate, isPending: isBulkDeleting }  = useBulkDelete();
+  // Admin-only user list (used by the reassign signatories dialog). The hook
+  // hits /user/admin which is 403 for non-admins — only fetch when admin.
+  const { data: adminUsers } = useAdminUsers("", "active", { enabled: isAdmin });
+
   // Server-side reports (from the API)
   const serverItems = (data?.items ?? []) as unknown as ReportListItem[];
 
@@ -463,7 +495,7 @@ export default function CalibrationReportsTable() {
     setRegeneratingId(reportId);
     const toastId = toast.loading("Generating PDF — this may take up to a minute…");
     try {
-      await AUTH_API.post(EP_REGENERATE_CALIBRATION_PDF(reportId), null, { timeout: 120_000 });
+      await AUTH_API.post(EP_REGENERATE_CALIBRATION_PDF(reportId), undefined, { timeout: 120_000 });
       toast.success("PDF generated", { id: toastId });
       queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
     } catch (err: any) {
@@ -490,6 +522,189 @@ export default function CalibrationReportsTable() {
       }
     );
   }
+
+  // ── Bulk selection ────────────────────────────────────────────────────────
+  const selectableRows = currentRows.filter((r) => !r.__local);
+  const allOnPageSelected =
+    selectableRows.length > 0 && selectableRows.every((r) => selectedIds.has(r._id));
+  const someOnPageSelected =
+    !allOnPageSelected && selectableRows.some((r) => selectedIds.has(r._id));
+
+  function toggleRow(id: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+  function togglePage(checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const r of selectableRows) {
+        if (checked) next.add(r._id);
+        else next.delete(r._id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() { setSelectedIds(new Set()); }
+
+  async function handleBulkAction(action: "verify" | "reject" | "delete") {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const verbing = action === "verify" ? "Verifying" : action === "reject" ? "Rejecting" : "Deleting";
+    const toastId = toast.loading(`${verbing} ${ids.length} report${ids.length > 1 ? "s" : ""}…`);
+    try {
+      const mut =
+        action === "verify" ? bulkVerifyMutate :
+        action === "reject" ? bulkRejectMutate :
+        bulkDeleteMutate;
+      const res = await mut(ids);
+      const okN = res.ok.length;
+      const skipN = res.skipped.length;
+      const verb = action === "verify" ? "verified" : action === "reject" ? "rejected" : "deleted";
+      if (okN === 0) {
+        toast.error(`No reports ${verb} (${skipN} skipped)`, { id: toastId });
+      } else if (skipN > 0) {
+        toast.success(`${okN} ${verb}, ${skipN} skipped`, { id: toastId });
+      } else {
+        toast.success(`${okN} ${verb}`, { id: toastId });
+      }
+      clearSelection();
+      setBulkConfirm(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Bulk action failed", { id: toastId });
+    }
+  }
+
+  async function handleBulkRegenerateFailed() {
+    const targets = allItems.filter((r) => isPdfFailed(r));
+    if (targets.length === 0) {
+      toast.info("No failed PDFs to regenerate");
+      return;
+    }
+    setBulkRegenerating(true);
+    const toastId = toast.loading(`Regenerating ${targets.length} PDF${targets.length > 1 ? "s" : ""}…`);
+    let ok = 0;
+    let fail = 0;
+    // Concurrency cap of 3 to avoid hammering the worker.
+    const queue = [...targets];
+    async function worker() {
+      while (queue.length) {
+        const r = queue.shift();
+        if (!r) break;
+        try {
+          await AUTH_API.post(EP_REGENERATE_CALIBRATION_PDF(r._id), undefined, { timeout: 120_000 });
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    setBulkRegenerating(false);
+    queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
+    if (fail === 0) toast.success(`Regenerated ${ok} PDF${ok > 1 ? "s" : ""}`, { id: toastId });
+    else            toast.error(`${ok} succeeded, ${fail} failed`, { id: toastId });
+  }
+
+  function fmtDateCell(iso?: string | null) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? "" : d.toLocaleString("en-IN");
+  }
+
+  function handleExportCsv() {
+    const rows = processed;
+    if (rows.length === 0) {
+      toast.info("No reports to export");
+      return;
+    }
+    const headers = [
+      "Certificate No", "Format No", "Status", "Customer",
+      "Created By", "Calibrated By", "Verified By",
+      "Instruments", "Created At", "Last Updated",
+    ];
+    const escape = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const r of rows) {
+      lines.push([
+        r.certNo ?? "",
+        r.formatNo ?? "",
+        r.status,
+        r.customerName ?? "",
+        r.createdBy?.name ?? "",
+        r.signatures?.calibratedBy?.name ?? "",
+        r.signatures?.verifiedBy?.name ?? "",
+        r.instrumentCount ?? 0,
+        fmtDateCell(r.createdAt),
+        fmtDateCell(r.updatedAt),
+      ].map(escape).join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `calibration-reports-${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} report${rows.length > 1 ? "s" : ""}`);
+  }
+
+  async function handleReopenConfirm() {
+    if (!reopenReport || reopenReason.trim().length < 3) return;
+    try {
+      await reopenMutate({ reportId: reopenReport._id, reason: reopenReason.trim() });
+      toast.success("Report reopened");
+      setReopenReport(null);
+      setReopenReason("");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Failed to reopen");
+    }
+  }
+
+  async function handleReassignConfirm() {
+    if (!reassignReport) return;
+    const payload: { reportId: string; calibratedBy?: string | null; verifiedBy?: string | null } = {
+      reportId: reassignReport._id,
+    };
+    const currentCalib = (reassignReport.signatures?.calibratedBy as { _id?: string } | undefined)?._id ?? "";
+    const currentVerif = (reassignReport.signatures?.verifiedBy   as { _id?: string } | undefined)?._id ?? "";
+    if (reassignCalibBy !== currentCalib) payload.calibratedBy = reassignCalibBy || null;
+    if (reassignVerifBy !== currentVerif) payload.verifiedBy   = reassignVerifBy || null;
+    if (payload.calibratedBy === undefined && payload.verifiedBy === undefined) {
+      toast.info("No changes");
+      return;
+    }
+    try {
+      await reassignMutate(payload);
+      toast.success("Signatories updated — PDF regenerating");
+      setReassignReport(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? "Failed to reassign");
+    }
+  }
+
+  function openReassignDialog(report: ReportListItem) {
+    setReassignReport(report);
+    const calib = (report.signatures?.calibratedBy as { _id?: string } | undefined)?._id ?? "";
+    const verif = (report.signatures?.verifiedBy   as { _id?: string } | undefined)?._id ?? "";
+    setReassignCalibBy(calib);
+    setReassignVerifBy(verif);
+  }
+
+  const failedPdfCount = useMemo(
+    () => allItems.filter((r) => isPdfFailed(r)).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allItems],
+  );
 
   if (isLoading) {
     return (
@@ -532,7 +747,7 @@ export default function CalibrationReportsTable() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 dark:border-zinc-700 bg-[#e8eef5] dark:bg-zinc-800/60">
-                {[180, 100, 130, 90, 120, 110, 100, 100, 70, 60].map((w, i) => (
+                {[180, 100, 130, 90, 120, 110, 100, 100, 100, 70, 60].map((w, i) => (
                   <th key={i} className="px-3 py-3 text-left">
                     <div className="h-3 rounded animate-pulse" style={{ width: w, backgroundColor: NAVY_MEDIUM }} />
                   </th>
@@ -579,7 +794,14 @@ export default function CalibrationReportsTable() {
                   <td className="px-3 py-3.5">
                     <div className="h-3 w-12 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
                   </td>
-                  {/* Date */}
+                  {/* Created */}
+                  <td className="px-3 py-3.5">
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-24 rounded bg-slate-200 dark:bg-zinc-700 animate-pulse" />
+                      <div className="h-2.5 w-14 rounded bg-slate-100 dark:bg-zinc-800 animate-pulse" />
+                    </div>
+                  </td>
+                  {/* Last Updated */}
                   <td className="px-3 py-3.5">
                     <div className="space-y-1.5">
                       <div className="h-3 w-24 rounded bg-slate-200 dark:bg-zinc-700 animate-pulse" />
@@ -630,16 +852,40 @@ export default function CalibrationReportsTable() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold" style={{ color: navy }}>Calibration Reports</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage and track all calibration report records</p>
         </div>
-        {!isAdmin && (
-          <Button onClick={() => router.push("/calibration/create")} className="h-9 gap-2 text-white" style={{ backgroundColor: navy }}>
-            <Plus className="h-4 w-4" /> New Report
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCsv}
+            className="h-9 gap-1.5 text-sm border-slate-200"
+          >
+            <FileDown className="h-3.5 w-3.5" /> Export CSV
           </Button>
-        )}
+          {isAdmin && failedPdfCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBulkRegenerateFailed}
+              disabled={bulkRegenerating}
+              className="h-9 gap-1.5 text-sm border-amber-300 text-amber-800 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/40"
+            >
+              {bulkRegenerating
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <RefreshCw className="h-3.5 w-3.5" />}
+              Regenerate failed ({failedPdfCount})
+            </Button>
+          )}
+          {!isAdmin && (
+            <Button onClick={() => router.push("/calibration/create")} className="h-9 gap-2 text-white" style={{ backgroundColor: navy }}>
+              <Plus className="h-4 w-4" /> New Report
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -839,18 +1085,71 @@ export default function CalibrationReportsTable() {
             </div>
           </div>
 
+          {isAdmin && selectedIds.size > 0 && (
+            <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-slate-100 dark:border-zinc-700 bg-[#e8eef5]/60 dark:bg-zinc-800/40">
+              <p className="text-sm font-medium" style={{ color: navy }}>
+                {selectedIds.size} selected
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBulkConfirm("verify")}
+                  disabled={isBulkVerifying || isBulkRejecting || isBulkDeleting}
+                  className="h-8 gap-1.5 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" /> Verify
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBulkConfirm("reject")}
+                  disabled={isBulkVerifying || isBulkRejecting || isBulkDeleting}
+                  className="h-8 gap-1.5 text-xs border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+                >
+                  <ShieldX className="h-3.5 w-3.5" /> Reject
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBulkConfirm("delete")}
+                  disabled={isBulkVerifying || isBulkRejecting || isBulkDeleting}
+                  className="h-8 gap-1.5 text-xs border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </Button>
+                <Button size="sm" variant="ghost" onClick={clearSelection} className="h-8 text-xs">
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent bg-[#e8eef5] dark:bg-zinc-800/60">
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide pl-5 text-[#1e3a5f] dark:text-[#4a7bb5]">Certificate No</TableHead>
+                  {isAdmin && (
+                    <TableHead className="w-10 pl-5">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all rows on this page"
+                        className="h-4 w-4 cursor-pointer accent-[#1e3a5f]"
+                        checked={allOnPageSelected}
+                        ref={(el) => { if (el) el.indeterminate = someOnPageSelected; }}
+                        onChange={(e) => togglePage(e.target.checked)}
+                      />
+                    </TableHead>
+                  )}
+                  <TableHead className={cn("text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]", !isAdmin && "pl-5")}>Certificate No</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Status</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Created By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Instruments</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Customer</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Calibrated By</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Verified By</TableHead>
-                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Date</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Created</TableHead>
+                  <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-[#1e3a5f] dark:text-[#4a7bb5]">Last Updated</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-center text-[#1e3a5f] dark:text-[#4a7bb5]">PDF</TableHead>
                   <TableHead className="text-[11px] font-semibold uppercase tracking-wide text-right pr-4 text-[#1e3a5f] dark:text-[#4a7bb5]">Actions</TableHead>
                 </TableRow>
@@ -859,7 +1158,7 @@ export default function CalibrationReportsTable() {
               <TableBody>
                 {currentRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="py-20 text-center">
+                    <TableCell colSpan={isAdmin ? 12 : 11} className="py-20 text-center">
                       <div className="flex flex-col items-center gap-3 text-slate-400">
                         <div className="h-12 w-12 rounded-full flex items-center justify-center" style={{ backgroundColor: navyLight }}>
                           <FileText className="h-6 w-6" style={{ color: navy }} />
@@ -880,8 +1179,22 @@ export default function CalibrationReportsTable() {
                   </TableRow>
                 ) : (
                   currentRows.map((report) => (
-                    <TableRow key={report._id} className="hover:bg-accent/40 transition-colors cursor-pointer group border-l-2 border-l-transparent hover:border-l-primary/30" onClick={() => router.push(`/calibration/${report._id}`)}>
-                      <TableCell className="pl-5">
+                    <TableRow key={report._id} className={cn(
+                      "hover:bg-accent/40 transition-colors cursor-pointer group border-l-2 hover:border-l-primary/30",
+                      selectedIds.has(report._id) ? "border-l-[#1e3a5f] bg-[#e8eef5]/30 dark:bg-zinc-800/30" : "border-l-transparent",
+                    )} onClick={() => router.push(`/calibration/${report._id}`)}>
+                      {isAdmin && (
+                        <TableCell className="pl-5 w-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            aria-label={`Select report ${report.certNo || report._id}`}
+                            className="h-4 w-4 cursor-pointer accent-[#1e3a5f]"
+                            checked={selectedIds.has(report._id)}
+                            onChange={(e) => toggleRow(report._id, e.target.checked)}
+                          />
+                        </TableCell>
+                      )}
+                      <TableCell className={cn(!isAdmin && "pl-5")}>
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors" style={{ backgroundColor: navyLight }}>
                             <FlaskConical className="h-3.5 w-3.5" style={{ color: navy }} />
@@ -956,6 +1269,16 @@ export default function CalibrationReportsTable() {
                           </span>
                           <span className="text-xs text-slate-400 dark:text-zinc-500">
                             {new Date(report.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-medium text-slate-700 dark:text-zinc-200">
+                            {new Date(report.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          </span>
+                          <span className="text-xs text-slate-400 dark:text-zinc-500">
+                            {new Date(report.updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
                           </span>
                         </div>
                       </TableCell>
@@ -1117,6 +1440,22 @@ export default function CalibrationReportsTable() {
                                   </DropdownMenuItem>
                                 </>
                               )}
+                              {/* Admin: Reopen — only for verified / rejected */}
+                              {isAdmin && (report.status === "verified" || report.status === "rejected") && (
+                                <DropdownMenuItem
+                                  onClick={(e) => { e.stopPropagation(); setReopenReport(report); setReopenReason(""); }}
+                                >
+                                  <RotateCcw className="mr-2 h-3.5 w-3.5 text-slate-500" />
+                                  Reopen report
+                                </DropdownMenuItem>
+                              )}
+                              {/* Admin: Reassign signatories — any non-draft */}
+                              {isAdmin && report.status !== "draft" && (
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openReassignDialog(report); }}>
+                                  <UserCog className="mr-2 h-3.5 w-3.5 text-slate-500" />
+                                  Reassign signatories
+                                </DropdownMenuItem>
+                              )}
                               {/* Delete — all roles */}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -1138,7 +1477,7 @@ export default function CalibrationReportsTable() {
               {processed.length > 0 && (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={10} className="text-xs text-slate-400 py-2.5 pl-5">
+                    <TableCell colSpan={isAdmin ? 12 : 11} className="text-xs text-slate-400 py-2.5 pl-5">
                       Showing {startIndex + 1}–{Math.min(startIndex + itemsPerPage, processed.length)} of {processed.length} report{processed.length !== 1 ? "s" : ""}
                     </TableCell>
                   </TableRow>
@@ -1328,6 +1667,131 @@ export default function CalibrationReportsTable() {
           </div>
         </div>
       )}
+
+      {/* ── Reopen dialog ───────────────────────────────────────────────── */}
+      <Dialog open={!!reopenReport} onOpenChange={(o) => { if (!o) { setReopenReport(null); setReopenReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold" style={{ color: navy }}>
+              Reopen report
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-slate-500 dark:text-zinc-400">
+              This will revert the status from <span className="font-medium">{reopenReport?.status}</span> to <span className="font-medium">submitted</span> and clear the verification signature. A reason is required and will be saved to the audit log.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="reopen-reason" className="text-xs font-medium">Reason</Label>
+              <Textarea
+                id="reopen-reason"
+                value={reopenReason}
+                onChange={(e) => setReopenReason(e.target.value)}
+                placeholder="Why are you reopening this report?"
+                rows={3}
+                disabled={isReopening}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setReopenReport(null); setReopenReason(""); }} disabled={isReopening}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReopenConfirm}
+              disabled={isReopening || reopenReason.trim().length < 3}
+              className="text-white"
+              style={{ backgroundColor: navy }}
+            >
+              {isReopening ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reopen"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reassign signatories dialog ─────────────────────────────────── */}
+      <Dialog open={!!reassignReport} onOpenChange={(o) => { if (!o) setReassignReport(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold" style={{ color: navy }}>
+              Reassign signatories
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <p className="text-sm text-slate-500 dark:text-zinc-400">
+              Change who calibrated and/or verified this report. Saving regenerates the PDF so the new names appear on the certificate.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Calibrated by</Label>
+              <Select value={reassignCalibBy || "__none__"} onValueChange={(v) => setReassignCalibBy(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Select a user" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {(adminUsers ?? []).map((u: AdminUser) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}{u.signatureName ? ` (${u.signatureName})` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Verified by</Label>
+              <Select value={reassignVerifBy || "__none__"} onValueChange={(v) => setReassignVerifBy(v === "__none__" ? "" : v)}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Select a user" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {(adminUsers ?? []).map((u: AdminUser) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}{u.signatureName ? ` (${u.signatureName})` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setReassignReport(null)} disabled={isReassigning}>
+              Cancel
+            </Button>
+            <Button onClick={handleReassignConfirm} disabled={isReassigning} className="text-white" style={{ backgroundColor: navy }}>
+              {isReassigning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk action confirm ─────────────────────────────────────────── */}
+      <AlertDialog open={!!bulkConfirm} onOpenChange={(o) => { if (!o) setBulkConfirm(null); }}>
+        <AlertDialogContent className="max-w-sm p-5">
+          <AlertDialogHeader className="mb-3">
+            <AlertDialogTitle className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              {bulkConfirm === "verify" && `Verify ${selectedIds.size} report${selectedIds.size > 1 ? "s" : ""}?`}
+              {bulkConfirm === "reject" && `Reject ${selectedIds.size} report${selectedIds.size > 1 ? "s" : ""}?`}
+              {bulkConfirm === "delete" && `Delete ${selectedIds.size} report${selectedIds.size > 1 ? "s" : ""}?`}
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogDescription className="text-sm text-zinc-500 dark:text-zinc-400">
+            {bulkConfirm === "verify" && "Drafts and already-verified reports will be skipped."}
+            {bulkConfirm === "reject" && "Drafts and already-rejected reports will be skipped."}
+            {bulkConfirm === "delete" && "This soft-deletes the selected reports. They will no longer appear in the list."}
+          </AlertDialogDescription>
+          <AlertDialogFooter className="mt-4 gap-2">
+            <AlertDialogCancel disabled={isBulkVerifying || isBulkRejecting || isBulkDeleting} className="flex-1 h-9 text-sm">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkConfirm && handleBulkAction(bulkConfirm)}
+              disabled={isBulkVerifying || isBulkRejecting || isBulkDeleting}
+              className={cn(
+                "flex-1 h-9 text-sm",
+                bulkConfirm === "verify" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700",
+              )}
+            >
+              {(isBulkVerifying || isBulkRejecting || isBulkDeleting)
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : bulkConfirm === "verify" ? "Verify"
+                : bulkConfirm === "reject" ? "Reject"
+                : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -12,7 +12,7 @@ const changeSchema = new mongoose.Schema(
 const auditLogSchema = new mongoose.Schema(
   {
     reportId:    { type: mongoose.Schema.Types.ObjectId, ref: "CalibrationReport", required: true, index: true },
-    action:      { type: String, enum: ["created", "updated", "status_changed", "deleted"], required: true },
+    action:      { type: String, enum: ["created", "updated", "status_changed", "deleted", "reopened", "signatories_changed"], required: true },
     performedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     changes:     { type: [changeSchema], default: [] },
   },

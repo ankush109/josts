@@ -21,17 +21,25 @@ import {
   createCalibrationSchema,
   computePreviewSchema,
   verifyRejectSchema,
+  reopenSchema,
+  reassignSignatoriesSchema,
+  bulkIdsSchema,
 } from "../schemas/calibration.schema.js";
 import * as CalibrationController from "../controllers/calibration.controller.js";
 
 const router = Router();
 
 router.post(  "/compute",          authMiddleware,                         validate(computePreviewSchema),      CalibrationController.computePreview);
+router.post(  "/bulk/verify",      authMiddleware, adminMiddleware,        validate(bulkIdsSchema),             CalibrationController.bulkVerify);
+router.post(  "/bulk/reject",      authMiddleware, adminMiddleware,        validate(bulkIdsSchema),             CalibrationController.bulkReject);
+router.post(  "/bulk/delete",      authMiddleware, adminMiddleware,        validate(bulkIdsSchema),             CalibrationController.bulkDelete);
 router.post(  "/",                 authMiddleware,                         validate(createCalibrationSchema),   CalibrationController.createReport);
 router.get(   "/",                 authMiddleware,                                                              CalibrationController.listReports);
 router.get(   "/:reportId",        authMiddleware,                                                              CalibrationController.getReport);
 router.put(   "/:reportId",        authMiddleware,                                                              CalibrationController.updateReport);
 router.patch( "/:reportId/status", authMiddleware, adminMiddleware,        validate(verifyRejectSchema),        CalibrationController.verifyOrReject);
+router.patch( "/:reportId/signatures", authMiddleware, adminMiddleware,    validate(reassignSignatoriesSchema), CalibrationController.reassignSignatories);
+router.post(  "/:reportId/reopen", authMiddleware, adminMiddleware,        validate(reopenSchema),              CalibrationController.reopenReport);
 router.delete("/:reportId",        authMiddleware,                                                              CalibrationController.deleteReport);
 router.get(   "/:reportId/history",authMiddleware,                                                              CalibrationController.getHistory);
 router.post(  "/:reportId/regenerate-pdf", authMiddleware,                                                      CalibrationController.regeneratePdf);

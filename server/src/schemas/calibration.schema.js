@@ -40,3 +40,23 @@ export const computePreviewSchema = z.object({
 export const verifyRejectSchema = z.object({
   status: z.enum(["verified", "rejected"]),
 });
+
+const objectId = z.string().regex(/^[a-f0-9]{24}$/i, "Invalid ID");
+
+export const reopenSchema = z.object({
+  reason: z.string().trim().min(3, "Reason is required").max(500),
+});
+
+export const reassignSignatoriesSchema = z
+  .object({
+    calibratedBy: objectId.nullable().optional(),
+    verifiedBy:   objectId.nullable().optional(),
+  })
+  .refine(
+    (v) => v.calibratedBy !== undefined || v.verifiedBy !== undefined,
+    { message: "At least one signatory must be specified" },
+  );
+
+export const bulkIdsSchema = z.object({
+  ids: z.array(objectId).min(1, "At least one report ID is required").max(500),
+});

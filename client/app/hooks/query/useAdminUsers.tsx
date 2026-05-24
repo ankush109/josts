@@ -23,7 +23,11 @@ export interface AdminUser {
 
 export const ADMIN_USERS_KEY = ["admin", "users"] as const;
 
-export function useAdminUsers(search = "", status: "all" | "active" | "inactive" = "all") {
+export function useAdminUsers(
+  search = "",
+  status: "all" | "active" | "inactive" = "all",
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: [...ADMIN_USERS_KEY, search, status],
     queryFn: async () => {
@@ -36,6 +40,7 @@ export function useAdminUsers(search = "", status: "all" | "active" | "inactive"
       return res.data.users;
     },
     staleTime: 30_000,
+    enabled: options.enabled ?? true,
   });
 }
 

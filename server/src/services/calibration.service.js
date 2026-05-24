@@ -653,6 +653,254 @@ export async function deleteReport(reportId) {
 }
 
 /**
+ * Reopens a verified/rejected report by reverting its status to "submitted".
+ * Clears `signatures.verifiedBy/At` since verification is being undone.
+ * Logs an audit row with the supplied reason.
+ *
+ * @param {string} reportId
+ * @param {string} reason   - Required, included in the audit row.
+ * @param {string} adminId
+ * @returns {Promise<object>} Updated populated lean document.
+ */
+export async function reopenReport(reportId, reason, adminId) {
+  if (!mongoose.Types.ObjectId.isValid(reportId)) {
+    const err = new Error("Invalid report ID");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const existing = await CalibrationReport.findOne({ _id: reportId, deletedAt: null }).select("status").lean();
+  if (!existing) {
+    const err = new Error("Report not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!["verified", "rejected"].includes(existing.status)) {
+    const err = new Error(`Cannot reopen a report in "${existing.status}" status`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const report = await CalibrationReport.findByIdAndUpdate(
+    reportId,
+    {
+      $set: { status: "submitted" },
+      $unset: { "signatures.verifiedBy": "", "signatures.verifiedAt": "" },
+    },
+    { new: true, runValidators: true },
+  )
+    .populate("createdBy",               "name email signatureName")
+    .populate("signatures.calibratedBy", "name email signatureName")
+    .populate("signatures.verifiedBy",   "name email signatureName")
+    .lean();
+
+  await logAudit({
+    reportId,
+    action: "reopened",
+    performedBy: adminId,
+    changes: [
+      { field: "Status", from: existing.status, to: "submitted" },
+      { field: "Reason", from: "—",             to: reason },
+    ],
+  });
+
+  return report;
+}
+
+/**
+ * Reassigns calibratedBy and/or verifiedBy on a report. Either or both may
+ * be supplied; `null` clears the field. Auto-regenerates the PDF when the
+ * report is not a draft so the new names show on the certificate.
+ *
+ * @param {string} reportId
+ * @param {{calibratedBy?: string|null, verifiedBy?: string|null}} updates
+ * @param {string} adminId
+ * @returns {Promise<object>} Updated populated lean document.
+ */
+export async function reassignSignatories(reportId, updates, adminId) {
+  if (!mongoose.Types.ObjectId.isValid(reportId)) {
+    const err = new Error("Invalid report ID");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const existing = await CalibrationReport.findOne({ _id: reportId, deletedAt: null })
+    .populate("signatures.calibratedBy", "name")
+    .populate("signatures.verifiedBy",   "name")
+    .lean();
+  if (!existing) {
+    const err = new Error("Report not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const ids = [updates.calibratedBy, updates.verifiedBy].filter((v) => v);
+  if (ids.length > 0) {
+    const found = await User.find({ _id: { $in: ids } }).select("_id").lean();
+    if (found.length !== ids.length) {
+      const err = new Error("One or more user IDs are invalid");
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  const set = {};
+  const unset = {};
+  const changes = [];
+  if (updates.calibratedBy !== undefined) {
+    if (updates.calibratedBy === null) {
+      unset["signatures.calibratedBy"] = "";
+      unset["signatures.calibratedAt"] = "";
+    } else {
+      set["signatures.calibratedBy"] = updates.calibratedBy;
+      set["signatures.calibratedAt"] = new Date();
+    }
+    changes.push({
+      field: "Calibrated By",
+      from:  existing.signatures?.calibratedBy?.name ?? "—",
+      to:    updates.calibratedBy === null ? "—" : updates.calibratedBy,
+    });
+  }
+  if (updates.verifiedBy !== undefined) {
+    if (updates.verifiedBy === null) {
+      unset["signatures.verifiedBy"] = "";
+      unset["signatures.verifiedAt"] = "";
+    } else {
+      set["signatures.verifiedBy"] = updates.verifiedBy;
+      set["signatures.verifiedAt"] = new Date();
+    }
+    changes.push({
+      field: "Verified By",
+      from:  existing.signatures?.verifiedBy?.name ?? "—",
+      to:    updates.verifiedBy === null ? "—" : updates.verifiedBy,
+    });
+  }
+
+  const update = {};
+  if (Object.keys(set).length)   update.$set   = set;
+  if (Object.keys(unset).length) update.$unset = unset;
+
+  const report = await CalibrationReport.findByIdAndUpdate(reportId, update, {
+    new: true,
+    runValidators: true,
+  })
+    .populate("createdBy",               "name email signatureName")
+    .populate("signatures.calibratedBy", "name email signatureName")
+    .populate("signatures.verifiedBy",   "name email signatureName")
+    .lean();
+
+  // Resolve from→to names for the audit log
+  const userIds = changes
+    .map((c) => c.to)
+    .filter((v) => typeof v === "string" && /^[a-f0-9]{24}$/i.test(v));
+  if (userIds.length) {
+    const users = await User.find({ _id: { $in: userIds } }).select("name").lean();
+    const nameById = new Map(users.map((u) => [String(u._id), u.name]));
+    for (const c of changes) {
+      if (typeof c.to === "string" && nameById.has(c.to)) c.to = nameById.get(c.to);
+    }
+  }
+
+  await logAudit({
+    reportId,
+    action: "signatories_changed",
+    performedBy: adminId,
+    changes,
+  });
+
+  // Trigger PDF regen for non-drafts so the new names render on the certificate
+  if (existing.status !== "draft") {
+    await CalibrationReport.updateOne(
+      { _id: reportId },
+      { $set: { filePaths: [], pdfFailedAt: null, pdfError: "" } },
+    );
+    await pushPdfJobToRedis({ reportId, action: "edit", type: "calibration" }).catch((err) => {
+      logger.warn("Failed to queue PDF regen after signatory reassign", { reportId, err: err.message });
+    });
+  }
+
+  return report;
+}
+
+/**
+ * Bulk verify or reject. Skips reports already in the target status.
+ *
+ * @param {"verified"|"rejected"} status
+ * @param {string[]} ids
+ * @param {string} adminId
+ * @returns {Promise<{ ok: string[], skipped: string[] }>}
+ */
+export async function bulkVerifyOrReject(status, ids, adminId) {
+  const validIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const docs = await CalibrationReport.find({
+    _id: { $in: validIds },
+    deletedAt: null,
+  }).select("_id status").lean();
+
+  const ok = [];
+  const skipped = [];
+  const now = new Date();
+
+  for (const d of docs) {
+    if (d.status === status || d.status === "draft") {
+      skipped.push(String(d._id));
+      continue;
+    }
+    const update = { $set: { status } };
+    if (status === "verified") {
+      update.$set["signatures.verifiedBy"] = adminId;
+      update.$set["signatures.verifiedAt"] = now;
+    }
+    await CalibrationReport.updateOne({ _id: d._id }, update);
+    await logAudit({
+      reportId:    d._id,
+      action:      "status_changed",
+      performedBy: adminId,
+      changes:     [{ field: "Status", from: d.status, to: status }],
+    });
+    ok.push(String(d._id));
+  }
+
+  // Reports that were filtered out before this loop (deleted / wrong id) are also skipped
+  for (const id of ids) {
+    if (!ok.includes(id) && !skipped.includes(id)) skipped.push(id);
+  }
+
+  return { ok, skipped };
+}
+
+/**
+ * Bulk soft-delete. Sets `deletedAt` on every matched non-deleted report.
+ *
+ * @param {string[]} ids
+ * @param {string} adminId
+ * @returns {Promise<{ ok: string[], skipped: string[] }>}
+ */
+export async function bulkDelete(ids, adminId) {
+  const validIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const docs = await CalibrationReport.find({
+    _id: { $in: validIds },
+    deletedAt: null,
+  }).select("_id").lean();
+
+  const ok = [];
+  const now = new Date();
+  for (const d of docs) {
+    await CalibrationReport.updateOne({ _id: d._id }, { $set: { deletedAt: now } });
+    await logAudit({
+      reportId:    d._id,
+      action:      "deleted",
+      performedBy: adminId,
+      changes:     [{ field: "Deleted", from: "—", to: "Yes" }],
+    });
+    ok.push(String(d._id));
+  }
+
+  const skipped = ids.filter((id) => !ok.includes(id));
+  return { ok, skipped };
+}
+
+/**
  * Synchronously regenerates the PDF for a calibration report.
  *
  * Resets `filePaths`/`pdfFailedAt`, queues a worker job, then polls the doc
