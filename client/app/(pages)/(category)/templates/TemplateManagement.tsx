@@ -543,6 +543,15 @@ function PreviewPane({
     if (renderToken > 0) run();
   }, [renderToken, run]);
 
+  // Auto-render: debounce changes to the draft or the picked sample report so
+  // the preview updates as the admin types, without re-rendering on every
+  // keystroke. Skipped when no report is selected (run() would just toast).
+  useEffect(() => {
+    if (!reportId) return;
+    const t = setTimeout(() => { run(); }, 500);
+    return () => clearTimeout(t);
+  }, [draftBody, reportId, run]);
+
   // A4 at 96dpi → 794 × 1123 px per page. Render iframe at A4 width and grow
   // its height to fit *all* pages stacked, then scale-to-fit container width.
   const A4_W = 794;

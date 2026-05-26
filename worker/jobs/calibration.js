@@ -23,7 +23,7 @@ async function loadActiveTemplateBody() {
     if (!tpl?.activeVersionId) return null;
     const version = await TemplateVersion.findById(tpl.activeVersionId).select("body versionNumber").lean();
     if (!version) return null;
-    log.debug("loaded template from DB", { versionNumber: version.versionNumber });
+    log.info("loaded template from DB", { versionNumber: version.versionNumber, versionId: String(tpl.activeVersionId) });
     return version.body;
   } catch (err) {
     log.warn("failed to load template from DB — falling back to file", { error: err.message });
@@ -173,7 +173,7 @@ export async function handleCalibrationJob(reportId) {
   const instruments  = report.instruments?.length ? report.instruments : [{}];
   const filePaths    = [];
 
-  log.debug("starting instrument loop", {
+  log.info("starting instrument loop", {
     reportId, csrNo: report.csrNo, total: instruments.length,
     source: templateBody ? "db" : "file",
   });
