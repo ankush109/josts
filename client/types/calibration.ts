@@ -23,6 +23,8 @@ export interface ReportMeta {
   calibrationLocation: "onsite" | "at_lab";
   dateOfCalibration: string;
   calibrationDueDate: string;
+  /** Calibration interval in months. Default 12. When != 12 the rendered PDF replaces the due date with "As Per Client Requirement". */
+  calibrationInterval: number;
 }
 
 // ── Instrument metadata ────────────────────────────────────────────────────
@@ -40,6 +42,10 @@ export interface InstrumentMeta {
   supplyVoltage: string;
   temperature: string;
   humidity: string;
+  voltageArea: "high" | "low" | "";
+  ducRange: string;
+  calibrationProcedure: string;
+  calibrationMethod: "Direct Method" | "Comparison Method";
   refStandard: string;
   refMake: string;
   refModel: string;

@@ -58,6 +58,7 @@ export const BLANK_REPORT_META: ReportMeta = {
   calibrationLocation: "at_lab",
   dateOfCalibration:   "",
   calibrationDueDate:  "",
+  calibrationInterval: 12,
 };
 
 /** Default empty instrument metadata used when adding a new instrument. */
@@ -70,9 +71,13 @@ export const BLANK_INSTRUMENT_META: InstrumentMeta = {
   modelType:      "",
   slNo:           "",
   othersDetails:  "NA",
-  supplyVoltage:  "",
-  temperature:    "",
-  humidity:       "",
+  supplyVoltage:         "",
+  temperature:           "",
+  humidity:              "",
+  voltageArea:           "",
+  ducRange:              "As Per Instrument Spec.",
+  calibrationProcedure:  "",
+  calibrationMethod:     "Direct Method",
   refStandard:    "",
   refMake:        "",
   refModel:       "",

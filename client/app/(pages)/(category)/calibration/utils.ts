@@ -314,6 +314,7 @@ export function buildPayload(
     calibrationLocation: rm.calibrationLocation,
     dateOfCalibration:   rm.dateOfCalibration   || undefined,
     calibrationDueDate:  rm.calibrationDueDate  || undefined,
+    calibrationInterval: rm.calibrationInterval ?? 12,
     instruments: instruments.map((inst) => ({
       nomenclature:  inst.meta.nomenclature,
       make:          inst.meta.make,
@@ -327,7 +328,11 @@ export function buildPayload(
         supplyVoltage: inst.meta.supplyVoltage,
         temperature:   inst.meta.temperature,
         humidity:      inst.meta.humidity,
+        voltageArea:   inst.meta.voltageArea || undefined,
       },
+      ducRange:             inst.meta.ducRange             || undefined,
+      calibrationProcedure: inst.meta.calibrationProcedure || undefined,
+      calibrationMethod:    inst.meta.calibrationMethod,
       refStandard: {
         name:         inst.meta.refStandard,
         make:         inst.meta.refMake,
@@ -382,9 +387,13 @@ export function mapApiToInstruments(
       modelType:       inst.modelType ?? "",
       slNo:            inst.slNo ?? "",
       othersDetails:   inst.othersDetails ?? "NA",
-      supplyVoltage:   inst.environmental?.supplyVoltage ?? "",
-      temperature:     inst.environmental?.temperature ?? "",
-      humidity:        inst.environmental?.humidity ?? "",
+      supplyVoltage:        inst.environmental?.supplyVoltage ?? "",
+      temperature:          inst.environmental?.temperature ?? "",
+      humidity:             inst.environmental?.humidity ?? "",
+      voltageArea:          (inst.environmental?.voltageArea as "high" | "low" | "") ?? "",
+      ducRange:             inst.ducRange             ?? "As Per Instrument Spec.",
+      calibrationProcedure: inst.calibrationProcedure ?? "",
+      calibrationMethod:    (inst.calibrationMethod as "Direct Method" | "Comparison Method") ?? "Direct Method",
       refStandard:     inst.refStandard?.name ?? "",
       refMake:         inst.refStandard?.make ?? "",
       refModel:        inst.refStandard?.modelType ?? "",
@@ -448,5 +457,9 @@ export function mapApiToReportMeta(r: Record<string, unknown>): ReportMeta {
     calibrationDueDate: r.calibrationDueDate
       ? (r.calibrationDueDate as string).slice(0, 10)
       : "",
+    calibrationInterval:
+      typeof r.calibrationInterval === "number" && r.calibrationInterval > 0
+        ? (r.calibrationInterval as number)
+        : 12,
   };
 }

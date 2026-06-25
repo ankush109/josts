@@ -83,11 +83,26 @@ function buildReferenceStandards(ref = {}) {
   return [{
     name:               ref.name,
     makeModel:          [ref.make, ref.modelType].filter(Boolean).join(" / "),
-    validUpto:          formatDate(ref.calDueDate),
+    validUpto:          formatDate(validUptoFromDueDate(ref.calDueDate)),
     traceabilityCertNo: ref.traceability ?? "",
     idNo:               "",
     srNo:               ref.srNo ?? "",
   }];
+}
+
+/**
+ * Per client spec: the final report's "Valid Up To" is one day before the
+ * reference standard's calibration due date.
+ *
+ * @param {Date|string|null|undefined} due
+ * @returns {Date|null}
+ */
+function validUptoFromDueDate(due) {
+  if (!due) return null;
+  const d = new Date(due);
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() - 1);
+  return d;
 }
 
 /**
@@ -132,6 +147,11 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
     // Environmental conditions recorded during calibration
     duringCalibrationTemp:     inst.environmental?.temperature ?? "",
     duringCalibrationHumidity: inst.environmental?.humidity    ?? "",
+
+    // DUC section — editable fields
+    ducRange:             inst.ducRange             || "As Per Instrument Spec.",
+    calibrationProcedure: inst.calibrationProcedure || "",
+    methodOfCalibration:  inst.calibrationMethod    || "Direct Method",
 
     // Standards & measurement results
     referenceStandards: buildReferenceStandards(ref),

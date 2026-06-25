@@ -689,7 +689,32 @@ export default function EquipmentDetailPage() {
               <History className="h-4 w-4 text-[#1e3a5f] dark:text-blue-400" />
             </div>
             <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">History</span>
-            <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-auto">{history?.length ?? 0} entries</span>
+            <span className="text-[11px] text-slate-400 dark:text-zinc-500">{history?.length ?? 0} entries</span>
+            <Button
+              variant="outline" size="sm"
+              className="ml-auto h-7 gap-1 text-xs border-slate-200"
+              disabled={!history?.length}
+              onClick={() => {
+                if (!history?.length) return;
+                const rows: Record<string, string>[] = [];
+                history.forEach((e) => {
+                  const name = e.performedBy?.name ?? e.performedBy?.email ?? "system";
+                  const ts   = new Date(e.createdAt).toLocaleString("en-IN");
+                  if (e.changes.length) {
+                    e.changes.forEach((c) => rows.push({ "Action": e.action, "Performed By": name, "Timestamp": ts, "Field": c.field, "From": c.from, "To": c.to }));
+                  } else {
+                    rows.push({ "Action": e.action, "Performed By": name, "Timestamp": ts, "Field": "", "From": "", "To": "" });
+                  }
+                });
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "History");
+                XLSX.writeFile(wb, `equipment-history-${id}-${new Date().toISOString().slice(0,10)}.xlsx`);
+              }}
+            >
+              <FileSpreadsheet className="h-3 w-3" />
+              Export Excel
+            </Button>
           </div>
           <div className="divide-y divide-slate-100 dark:divide-zinc-800 max-h-96 overflow-y-auto">
             {(!history || history.length === 0) && (

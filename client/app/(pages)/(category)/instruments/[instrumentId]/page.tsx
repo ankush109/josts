@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, FlaskConical, RefreshCw, Plus, Trash2, Save, History, Power } from "lucide-react";
+import { ArrowLeft, FlaskConical, RefreshCw, Plus, Trash2, Save, History, Power, FileDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -297,7 +297,33 @@ export default function InstrumentDetailPage() {
         <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/50">
           <History className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
           <span className="text-sm font-semibold text-slate-800 dark:text-zinc-200">History</span>
-          <span className="text-[11px] text-slate-400 dark:text-zinc-500 ml-auto">{history?.length ?? 0} entries</span>
+          <span className="text-[11px] text-slate-400 dark:text-zinc-500">{history?.length ?? 0} entries</span>
+          <Button
+            variant="outline" size="sm"
+            className="ml-auto h-7 gap-1 text-xs border-slate-200"
+            disabled={!history?.length}
+            onClick={async () => {
+              if (!history?.length) return;
+              const XLSX = await import("xlsx");
+              const rows: Record<string, string>[] = [];
+              history.forEach((e) => {
+                const name = e.performedBy?.name ?? e.performedBy?.email ?? "system";
+                const ts   = new Date(e.createdAt).toLocaleString("en-IN");
+                if (e.changes.length) {
+                  e.changes.forEach((c) => rows.push({ "Action": e.action, "Performed By": name, "Timestamp": ts, "Field": c.field, "From": c.from, "To": c.to }));
+                } else {
+                  rows.push({ "Action": e.action, "Performed By": name, "Timestamp": ts, "Field": "", "From": "", "To": "" });
+                }
+              });
+              const ws = XLSX.utils.json_to_sheet(rows);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, "History");
+              XLSX.writeFile(wb, `instrument-history-${instrumentId}-${new Date().toISOString().slice(0,10)}.xlsx`);
+            }}
+          >
+            <FileDown className="h-3 w-3" />
+            Export Excel
+          </Button>
         </div>
         <div className="divide-y divide-slate-100 dark:divide-zinc-800 max-h-96 overflow-y-auto">
           {(!history || history.length === 0) && (

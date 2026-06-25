@@ -124,6 +124,7 @@ const environmentalSchema = new mongoose.Schema(
     supplyVoltage: { type: String, trim: true, default: "" },
     temperature:   { type: String, trim: true, default: "" },
     humidity:      { type: String, trim: true, default: "" },
+    voltageArea:   { type: String, enum: ["high", "low", ""], default: "" },
   },
   { _id: false }
 );
@@ -141,8 +142,11 @@ const instrumentSchema = new mongoose.Schema(
     othersDetails: { type: String, trim: true, default: "NA" },
     jobId:         { type: String, trim: true, default: "" },
     calDate:       { type: Date },
-    environmental: { type: environmentalSchema, default: () => ({}) },
-    refStandard:   { type: refStandardSchema,   default: () => ({}) },
+    environmental:        { type: environmentalSchema, default: () => ({}) },
+    ducRange:             { type: String, trim: true, default: "As Per Instrument Spec." },
+    calibrationProcedure: { type: String, trim: true, default: "" },
+    calibrationMethod:    { type: String, enum: ["Direct Method", "Comparison Method"], default: "Direct Method" },
+    refStandard:          { type: refStandardSchema, default: () => ({}) },
     parameters:    { type: [parameterSchema],   default: [] },
   },
   { _id: true }
@@ -185,6 +189,8 @@ const calibrationReportSchema = new mongoose.Schema(
     calibrationLocation: { type: String, enum: ["onsite", "at_lab"], default: "at_lab" },
     dateOfCalibration:   { type: Date, default: null },
     calibrationDueDate:  { type: Date, default: null },
+    /** Calibration interval in months. Default 12. When != 12 the PDF renders "As Per Client Requirement" instead of the due date. */
+    calibrationInterval: { type: Number, default: 12 },
     instruments:         { type: [instrumentSchema], default: [] },
     signatures:          { type: signaturesSchema, default: () => ({}) },
     /** S3 keys for generated PDF pages. Populated by the worker. */

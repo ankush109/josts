@@ -114,7 +114,7 @@ interface ReportListItem {
   status: ReportStatus;
   createdBy: { _id: string; name: string; email: string };
   instrumentCount: number;
-  instruments: { make: string; modelType: string }[];
+  instruments: { make: string; modelType: string; nomenclature?: string }[];
   signatures: {
     calibratedBy?: { name: string; email: string };
     verifiedBy?: { name: string; email: string };
@@ -405,7 +405,12 @@ export default function CalibrationReportsTable() {
       list = list.filter((r) =>
         r.certNo?.toLowerCase().includes(q) ||
         r.customerName?.toLowerCase().includes(q) ||
-        r.createdBy?.name?.toLowerCase().includes(q)
+        r.createdBy?.name?.toLowerCase().includes(q) ||
+        (r.instruments ?? []).some((i) =>
+          (i.nomenclature ?? "").toLowerCase().includes(q) ||
+          (i.make ?? "").toLowerCase().includes(q) ||
+          (i.modelType ?? "").toLowerCase().includes(q),
+        )
       );
     }
     if (statusFilter !== "all") {
@@ -656,6 +661,59 @@ export default function CalibrationReportsTable() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success(`Exported ${rows.length} report${rows.length > 1 ? "s" : ""}`);
+  }
+
+  async function handleExportXlsx() {
+    const rows = processed;
+    if (rows.length === 0) {
+      toast.info("No reports to export");
+      return;
+    }
+    const XLSX = await import("xlsx");
+    const data = rows.map((r) => ({
+      "Certificate No":     r.certNo ?? "",
+      "Format No":          r.formatNo ?? "",
+      "Status":             r.status,
+      "Customer":           r.customerName ?? "",
+      "DUCs":               (r.instruments ?? []).map((i) => i.nomenclature || `${i.make ?? ""} ${i.modelType ?? ""}`.trim()).filter(Boolean).join("; "),
+      "Instrument Count":   r.instrumentCount ?? 0,
+      "Created By":         r.createdBy?.name ?? "",
+      "Calibrated By":      r.signatures?.calibratedBy?.name ?? "",
+      "Verified By":        r.signatures?.verifiedBy?.name ?? "",
+      "Calibrated At":      fmtDateCell(r.signatures?.calibratedAt),
+      "Verified At":        fmtDateCell(r.signatures?.verifiedAt),
+      "Created At":         fmtDateCell(r.createdAt),
+      "Last Updated":       fmtDateCell(r.updatedAt),
+      "PDF Available":      (r.filePaths?.length ?? 0) > 0 ? "Yes" : "No",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Calibration Reports");
+    const ts = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `calibration-reports-${ts}.xlsx`);
+    toast.success(`Exported ${rows.length} report${rows.length > 1 ? "s" : ""}`);
+  }
+
+  async function handleExportAuditXlsx() {
+    if (!auditLog?.length) return;
+    const XLSX = await import("xlsx");
+    const rows: Record<string, string>[] = [];
+    auditLog.forEach((entry) => {
+      const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
+      const ts   = new Date(entry.createdAt).toLocaleString("en-IN");
+      if (entry.changes?.length) {
+        entry.changes.forEach((c) => {
+          rows.push({ "Action": entry.action, "Performed By": name, "Timestamp": ts, "Field": c.field, "From": c.from, "To": c.to });
+        });
+      } else {
+        rows.push({ "Action": entry.action, "Performed By": name, "Timestamp": ts, "Field": "", "From": "", "To": "" });
+      }
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Audit Log");
+    XLSX.writeFile(wb, `audit-log-${auditReportId}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast.success("Audit log exported");
   }
 
   async function handleReopenConfirm() {
@@ -1059,7 +1117,7 @@ export default function CalibrationReportsTable() {
           <div className="flex flex-col sm:flex-row gap-3 p-4 border-b border-slate-100 dark:border-zinc-700">
             <div className="relative flex-1 sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input placeholder="Search by certificate no or customer…" value={searchQuery} onChange={(e) => onSearch(e.target.value)} className="pl-9 h-9 text-sm border-slate-200 focus-visible:ring-[#1e3a5f]/30" />
+              <Input placeholder="Search by certificate no, customer, or DUC name…" value={searchQuery} onChange={(e) => onSearch(e.target.value)} className="pl-9 h-9 text-sm border-slate-200 focus-visible:ring-[#1e3a5f]/30" />
             </div>
             <div className="flex flex-wrap gap-2 sm:ml-auto items-center">
               <Select value={statusFilter} onValueChange={onStatusFilter}>
@@ -1075,6 +1133,10 @@ export default function CalibrationReportsTable() {
               <Button variant="outline" size="sm" onClick={onSort} className="h-9 gap-1.5 text-sm border-slate-200">
                 {sortOrder === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
                 {sortOrder === "asc" ? "Oldest" : "Newest"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExportXlsx} disabled={processed.length === 0} className="h-9 gap-1.5 text-sm border-slate-200">
+                <FileDown className="h-3.5 w-3.5" />
+                Export Excel
               </Button>
               <Select value={String(itemsPerPage)} onValueChange={onItemsPerPage}>
                 <SelectTrigger className="h-9 w-28 text-sm border-slate-200"><SelectValue /></SelectTrigger>
@@ -1416,6 +1478,10 @@ export default function CalibrationReportsTable() {
                                 <Pencil className="mr-2 h-3.5 w-3.5 text-slate-500" />
                                 Edit report
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); router.push(`/calibration/create?cloneFrom=${report._id}`); }}>
+                                <FileText className="mr-2 h-3.5 w-3.5 text-slate-500" />
+                                Copy to new report
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setAuditReportId(report._id); }}>
                                 <History className="mr-2 h-3.5 w-3.5 text-slate-500" />
                                 View history
@@ -1603,6 +1669,16 @@ export default function CalibrationReportsTable() {
                   {auditLog!.length}
                 </span>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-7 gap-1 text-xs border-slate-200"
+                disabled={!auditLog?.length}
+                onClick={handleExportAuditXlsx}
+              >
+                <FileDown className="h-3 w-3" />
+                Export Excel
+              </Button>
             </DialogTitle>
           </DialogHeader>
 

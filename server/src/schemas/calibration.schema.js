@@ -23,6 +23,7 @@ export const createCalibrationSchema = z.object({
   calibrationLocation: z.enum(["onsite", "at_lab"]).optional(),
   dateOfCalibration:   z.string().optional(),
   calibrationDueDate:  z.string().optional(),
+  calibrationInterval: z.number().int().positive().optional(),
   instruments:         z.array(z.any()).optional(),
   signatures:          z.record(z.string(), z.any()).optional(),
 });

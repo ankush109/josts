@@ -420,7 +420,7 @@ export async function listReports(query, reqUser) {
     createdBy:       r.createdBy,
     signatures:      r.signatures,
     instrumentCount: r.instruments?.length ?? 0,
-    instruments:     (r.instruments ?? []).map((i) => ({ make: i.make, modelType: i.modelType })),
+    instruments:     (r.instruments ?? []).map((i) => ({ make: i.make, modelType: i.modelType, nomenclature: i.nomenclature })),
     filePaths:       r.filePaths ?? [],
     pdfFailedAt:     r.pdfFailedAt ?? null,
     pdfError:        r.pdfError ?? "",

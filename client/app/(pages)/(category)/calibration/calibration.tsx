@@ -17,7 +17,7 @@ import { EP_REPORT_URL } from "@/lib/endpoints";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/app/provider/AuthProvider";
 import toast from "react-hot-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   isLocalId,
   createLocalDraft,
@@ -26,7 +26,7 @@ import {
 } from "@/app/lib/offline-drafts";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine, GitBranch, List } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine, GitBranch, List, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -364,7 +364,6 @@ const MetaGrid: FC<{
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-      <Field label="Cal Date"            k="calDate"       {...sharedProps} type="date" />
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
       <Field label="ID No"               k="idNo"          {...sharedProps} />
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
@@ -372,11 +371,48 @@ const MetaGrid: FC<{
       <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} readOnly={readOnly} allowCustom meta={meta} onChange={onChange} />
       <Field label="Sl. No"              k="slNo"          {...sharedProps} />
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
+      <Field label="Report Range"        k="ducRange"      {...sharedProps} span2 />
+      <Field label="Calibration Procedure" k="calibrationProcedure" {...sharedProps} span2 />
+      <div className="flex flex-col gap-1 col-span-2">
+        <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Method</Label>
+        <Select
+          value={meta.calibrationMethod || "Direct Method"}
+          disabled={readOnly}
+          onValueChange={(v) => onChange("calibrationMethod", v as "Direct Method" | "Comparison Method")}
+        >
+          <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Direct Method">Direct Method</SelectItem>
+            <SelectItem value="Comparison Method">Comparison Method</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <CollapsibleSection label="Environmental Conditions" open={envOpen} onToggle={() => setEnvOpen((v) => !v)}>
         <Field label="Supply Voltage (V)" k="supplyVoltage" {...sharedProps} />
         <Field label="Temperature (°C)"   k="temperature"   {...sharedProps} />
-        <Field label="Humidity (%RH)"     k="humidity"      {...sharedProps} />
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Voltage Area</Label>
+          <Select
+            value={meta.voltageArea || "low"}
+            disabled={readOnly}
+            onValueChange={(v) => onChange("voltageArea", v as "high" | "low")}
+          >
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low Voltage Area</SelectItem>
+              <SelectItem value="high">High Voltage Area</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Field label="Humidity (%RH)" k="humidity" {...sharedProps} />
+          <p className="text-[10px] text-zinc-400">
+            {meta.voltageArea === "high"
+              ? "Required: > 60 %RH (High Voltage Area)"
+              : "Required: ≤ 60 %RH (Low Voltage Area)"}
+          </p>
+        </div>
       </CollapsibleSection>
 
       <CollapsibleSection label="Reference Standard Used" open={refOpen} onToggle={() => setRefOpen((v) => !v)}>
@@ -869,7 +905,29 @@ const HistoryPopover: FC<{ log: AuditEntry[] | undefined; loading: boolean; onVi
 };
 
 // Full history panel — renders in main content area
-const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; onBack: () => void }> = ({ log, loading, onBack }) => (
+const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; onBack: () => void; reportId?: string }> = ({ log, loading, onBack, reportId }) => {
+  async function exportXlsx() {
+    if (!log?.length) return;
+    const XLSX = await import("xlsx");
+    const rows: Record<string, string>[] = [];
+    log.forEach((entry) => {
+      const name = entry.performedBy?.signatureName || entry.performedBy?.name || entry.performedBy?.email || "Unknown";
+      const ts   = new Date(entry.createdAt).toLocaleString("en-IN");
+      if (entry.changes?.length) {
+        entry.changes.forEach((c) => {
+          rows.push({ "Action": entry.action, "Performed By": name, "Timestamp": ts, "Field": c.field, "From": c.from, "To": c.to });
+        });
+      } else {
+        rows.push({ "Action": entry.action, "Performed By": name, "Timestamp": ts, "Field": "", "From": "", "To": "" });
+      }
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Audit Log");
+    XLSX.writeFile(wb, `audit-log-${reportId ?? "report"}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  return (
   <div className="flex-1 flex flex-col bg-white dark:bg-zinc-900">
     <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-200 dark:border-zinc-800 px-6 py-3 flex items-center gap-3">
       <button onClick={onBack} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all">
@@ -880,6 +938,14 @@ const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; on
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Audit History</span>
         {log && <span className="text-[11px] text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded-full">{log.length}</span>}
       </div>
+      <button
+        onClick={exportXlsx}
+        disabled={!log?.length}
+        className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+      >
+        <FileDown className="h-3.5 w-3.5" />
+        Export Excel
+      </button>
     </div>
     <div className="flex-1 overflow-y-auto px-6 py-5 max-w-2xl">
       {loading ? (
@@ -900,7 +966,8 @@ const HistoryFullPanel: FC<{ log: AuditEntry[] | undefined; loading: boolean; on
       )}
     </div>
   </div>
-);
+  );
+};
 
 // ─── Tour tooltip ─────────────────────────────────────────────────────────────
 
@@ -1901,6 +1968,12 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const existingReport: any = reportIdIsLocal ? localReport : serverReport;
   const isLoadingReport     = reportIdIsLocal ? localReportLoading : isLoadingServerReport;
 
+  // Copy-to-new-report: when `?cloneFrom=<id>` is in the URL and we are NOT in
+  // edit mode, fetch that source report so we can prefill the form as a new draft.
+  const searchParams = useSearchParams();
+  const cloneFromId = !isEditMode ? (searchParams?.get("cloneFrom") || "") : "";
+  const { data: cloneSourceReport } = useGetCalibrationReportById(cloneFromId || "");
+
   // DUC instrument master presets (Fluke 8846A, SVERKER 780, …)
   const { presets: instrumentPresets, makeKeyMap } = useInstrumentPresets();
   const { data: paramConfigData } = useGetParameters();
@@ -2039,15 +2112,16 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     }
   }, [reportMeta.calibrationLocation, reportMeta.ducReceivedDate, reportMeta.dateOfCalibration]);
 
-  // Auto-fill calibrationDueDate = dateOfCalibration + 1 year (only when empty — user can override)
+  // Auto-fill calibrationDueDate = dateOfCalibration + interval months (only when empty — user can override)
   useEffect(() => {
     if (!reportMeta.dateOfCalibration) return;
     if (reportMeta.calibrationDueDate) return;
     const d = new Date(reportMeta.dateOfCalibration);
     if (isNaN(d.getTime())) return;
-    d.setFullYear(d.getFullYear() + 1);
+    const months = reportMeta.calibrationInterval || 12;
+    d.setMonth(d.getMonth() + months);
     setReportMeta((prev) => ({ ...prev, calibrationDueDate: d.toISOString().slice(0, 10) }));
-  }, [reportMeta.dateOfCalibration, reportMeta.calibrationDueDate]);
+  }, [reportMeta.dateOfCalibration, reportMeta.calibrationDueDate, reportMeta.calibrationInterval]);
 
   useEffect(() => {
     if (!existingReport || hydrated) return;
@@ -2064,6 +2138,33 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     originalSnapshot.current = { instruments: mapped, reportMeta: meta };
     setSnapshotVersion((v) => v + 1);
   }, [existingReport, hydrated, instrumentPresets]);
+
+  // Clone hydration — runs once when the source report arrives. Drops fields
+  // that must be regenerated for the new report (cert no, dates, status).
+  useEffect(() => {
+    if (!cloneFromId || !cloneSourceReport || hydrated) return;
+    const mapped = mapApiToInstruments(cloneSourceReport as Record<string, unknown>, instrumentPresets);
+    if (!mapped.length) return;
+    const reassigned = mapped.map((inst) => ({ ...inst, id: uid(), params: inst.params.map((p) => ({ ...p, id: uid(), ranges: p.ranges.map((r) => ({ ...r, id: uid(), measurements: r.measurements.map((m) => ({ ...m, id: uid() })) })) })) }));
+    const first = reassigned[0];
+    setInstruments(reassigned);
+    setActiveInstId(first.id);
+    if (first.params[0]) setActiveParamId(first.params[0].id);
+    const sourceMeta = mapApiToReportMeta(cloneSourceReport as Record<string, unknown>);
+    const meta: ReportMeta = {
+      ...sourceMeta,
+      certNo:            "",
+      ducReceivedDate:   "",
+      dateOfCalibration: "",
+      calibrationDueDate: "",
+    };
+    setReportMeta(meta);
+    setHydrated(true);
+    cleanSnapshot.current    = { instruments: reassigned, reportMeta: meta };
+    originalSnapshot.current = { instruments: reassigned, reportMeta: meta };
+    setSnapshotVersion((v) => v + 1);
+    toast.success("Copied from existing report — review and submit as a new draft");
+  }, [cloneFromId, cloneSourceReport, hydrated, instrumentPresets]);
 
   // For new reports: set snapshot once on first mount
   useEffect(() => {
@@ -2185,8 +2286,17 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         errors.push({ message: `[${lbl}] Supply Voltage is required`, instId: inst.id, fieldId: "field-supplyVoltage" });
       if (!inst.meta.temperature.trim())
         errors.push({ message: `[${lbl}] Temperature is required`, instId: inst.id, fieldId: "field-temperature" });
-      if (!inst.meta.humidity.trim())
+      if (!inst.meta.humidity.trim()) {
         errors.push({ message: `[${lbl}] Humidity is required`, instId: inst.id, fieldId: "field-humidity" });
+      } else {
+        const humVal = parseFloat(inst.meta.humidity);
+        if (!isNaN(humVal)) {
+          if (inst.meta.voltageArea === "high" && humVal <= 60)
+            errors.push({ message: `[${lbl}] Humidity must be > 60 %RH for High Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
+          else if (inst.meta.voltageArea !== "high" && humVal > 60)
+            errors.push({ message: `[${lbl}] Humidity must be ≤ 60 %RH for Low Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
+        }
+      }
       if (!inst.meta.refStandard.trim())
         errors.push({ message: `[${lbl}] Ref. Standard name is required`, instId: inst.id, fieldId: "field-refStandard" });
       if (!inst.meta.refMake.trim())
@@ -2776,6 +2886,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             log={auditLog}
             loading={auditLoading}
             onBack={() => setShowHistoryPanel(false)}
+            reportId={reportId}
           />
         )}
 
@@ -3252,6 +3363,42 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   <RF id="report-calibrationDueDate" label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date"
                     readOnly={viewMode}
                     onChange={!viewMode ? (v) => updateReportMeta("calibrationDueDate", v) : undefined} />
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Interval</Label>
+                    <Select
+                      value={String(reportMeta.calibrationInterval || 12)}
+                      disabled={viewMode}
+                      onValueChange={(v) => {
+                        const months = Number(v) || 12;
+                        setReportMeta((prev) => {
+                          const next = { ...prev, calibrationInterval: months };
+                          if (prev.dateOfCalibration) {
+                            const d = new Date(prev.dateOfCalibration);
+                            if (!isNaN(d.getTime())) {
+                              d.setMonth(d.getMonth() + months);
+                              next.calibrationDueDate = d.toISOString().slice(0, 10);
+                            }
+                          }
+                          return next;
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="3">3 months</SelectItem>
+                        <SelectItem value="6">6 months</SelectItem>
+                        <SelectItem value="12">12 months (default)</SelectItem>
+                        <SelectItem value="18">18 months</SelectItem>
+                        <SelectItem value="24">24 months</SelectItem>
+                        <SelectItem value="36">36 months</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {reportMeta.calibrationInterval !== 12 && (
+                      <Badge variant="outline" className="mt-0.5 w-fit border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                        As Per Client Requirement
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
