@@ -42,11 +42,12 @@ async function loadActiveTemplateBody() {
  */
 function buildMeasurementRow(measurement, unit) {
   const fmt = (val) => (val != null ? Number(val).toFixed(4) : "");
+  const ducUnit = (measurement.readingUnits ?? []).find((u) => u) || unit;
   return {
     standardValue:       measurement.nomValue ?? "",
     standardUnit:        unit,
     ducValue:            fmt(measurement.computed?.meanValue),
-    ducUnit:             unit,
+    ducUnit,
     errorValue:          fmt(measurement.computed?.error),
     errorUnit:           unit,
     expandedUncertainty: fmt(measurement.computed?.percentUc),
@@ -144,12 +145,26 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
     ducReceivedDate:    formatDate(report.ducReceivedDate),
     dateOfCalibration:  formatDate(report.dateOfCalibration || inst.calDate),
     calibrationDueDate: formatDate(report.calibrationDueDate),
-    calibrationDueDateDisplay: (report.calibrationInterval && report.calibrationInterval !== 12)
-      ? "As Per Client Requirement"
-      : formatDate(report.calibrationDueDate),
-    validUpto: (report.calibrationInterval && report.calibrationInterval !== 12)
-      ? "As Per Client Requirement"
-      : formatDate(validUptoFromDueDate(report.calibrationDueDate)),
+    calibrationDueDateDisplay: (() => {
+      const cal = new Date(report.dateOfCalibration || inst.calDate);
+      const due = new Date(report.calibrationDueDate);
+      if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
+        const threshold = new Date(cal);
+        threshold.setMonth(threshold.getMonth() + 12);
+        if (due > threshold) return "As Per Client Requirement";
+      }
+      return formatDate(report.calibrationDueDate);
+    })(),
+    validUpto: (() => {
+      const cal = new Date(report.dateOfCalibration || inst.calDate);
+      const due = new Date(report.calibrationDueDate);
+      if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
+        const threshold = new Date(cal);
+        threshold.setMonth(threshold.getMonth() + 12);
+        if (due > threshold) return "As Per Client Requirement";
+      }
+      return formatDate(validUptoFromDueDate(report.calibrationDueDate));
+    })(),
 
     // Customer
     customerReferenceNo: report.customerRefNo   ?? "",

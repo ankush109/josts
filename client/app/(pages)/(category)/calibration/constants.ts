@@ -93,7 +93,7 @@ export const BLANK_INSTRUMENT_META: InstrumentMeta = {
 
 /** All scaled SI variants for each measurable quantity, ordered small → large. */
 export const SI_UNIT_FAMILIES: Record<string, string[]> = {
-  V:    ["µV", "mV", "V", "kV"],
+  V:    ["µV", "mV", "V", "kV", "MV"],
   A:    ["pA", "nA", "µA", "mA", "A", "kA"],
   Ω:    ["mΩ", "Ω", "kΩ", "MΩ"],
   Hz:   ["Hz", "kHz", "MHz"],
@@ -105,7 +105,7 @@ export const SI_UNIT_FAMILIES: Record<string, string[]> = {
 
 /** Maps any unit variant back to its family key in SI_UNIT_FAMILIES. */
 export const UNIT_TO_FAMILY_KEY: Record<string, string> = {
-  "µV": "V",  "mV": "V",  "V": "V",  "kV": "V",
+  "µV": "V",  "mV": "V",  "V": "V",  "kV": "V",  "MV": "V",
   "pA": "A",  "nA": "A",  "µA": "A", "mA": "A", "A": "A", "kA": "A",
   "mΩ": "Ω",  "Ω": "Ω",  "kΩ": "Ω", "MΩ": "Ω",
   "Hz": "Hz", "kHz": "Hz","MHz": "Hz",

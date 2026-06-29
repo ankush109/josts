@@ -382,7 +382,11 @@ export function buildPayload(
             return {
               nomValue:     parsed ? parsed.value : (m.nomValue === "" ? null : Number(m.nomValue)),
               nomUnit:      parsed?.unit || "",
-              readings:     m.readings.map((v) => (v === "" ? null : Number(v))),
+              readings:     m.readings.map((v) => {
+                if (v === "") return null;
+                const p = parseNomInput(v);
+                return p ? p.value : Number(v);
+              }),
               readingUnits: m.readingUnits ?? Array(5).fill(""),
               corrected:   m.corrected,
             };

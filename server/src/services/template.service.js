@@ -189,13 +189,30 @@ function fmtDate(value) {
   });
 }
 
+function validUptoFromDueDate(due) {
+  if (!due) return null;
+  const d = new Date(due);
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function buildDucIdentifier(inst) {
+  const parts = [];
+  if (inst.idNoInReport && inst.idNo) parts.push(`ID: ${inst.idNo}`);
+  if (inst.slNoInReport && inst.slNo) parts.push(`SN: ${inst.slNo}`);
+  if (parts.length) return parts.join(" / ");
+  return inst.slNo ?? "";
+}
+
 function buildMeasurementRow(m, unit) {
   const f = (v) => (v != null ? Number(v).toFixed(4) : "");
+  const ducUnit = (m.readingUnits ?? []).find((u) => u) || unit;
   return {
     standardValue:       m.nomValue ?? "",
     standardUnit:        unit,
     ducValue:            f(m.computed?.meanValue),
-    ducUnit:             unit,
+    ducUnit,
     errorValue:          f(m.computed?.error),
     errorUnit:           unit,
     expandedUncertainty: f(m.computed?.percentUc),
@@ -217,7 +234,7 @@ function buildReferenceStandards(ref = {}) {
   return [{
     name:               ref.name,
     makeModel:          [ref.make, ref.modelType].filter(Boolean).join(" / "),
-    validUpto:          fmtDate(ref.calDueDate),
+    validUpto:          fmtDate(validUptoFromDueDate(ref.calDueDate)),
     traceabilityCertNo: ref.traceability ?? "",
     idNo:               "",
     srNo:               ref.srNo ?? "",
@@ -259,19 +276,43 @@ export async function buildSampleData(reportId, instIndex = 0) {
     ducReceivedDate:    fmtDate(report.ducReceivedDate),
     dateOfCalibration:  fmtDate(report.dateOfCalibration || inst.calDate),
     calibrationDueDate: fmtDate(report.calibrationDueDate),
+    calibrationDueDateDisplay: (() => {
+      const cal = new Date(report.dateOfCalibration || inst.calDate);
+      const due = new Date(report.calibrationDueDate);
+      if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
+        const threshold = new Date(cal);
+        threshold.setMonth(threshold.getMonth() + 12);
+        if (due > threshold) return "As Per Client Requirement";
+      }
+      return fmtDate(report.calibrationDueDate);
+    })(),
+    validUpto: (() => {
+      const cal = new Date(report.dateOfCalibration || inst.calDate);
+      const due = new Date(report.calibrationDueDate);
+      if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
+        const threshold = new Date(cal);
+        threshold.setMonth(threshold.getMonth() + 12);
+        if (due > threshold) return "As Per Client Requirement";
+      }
+      return fmtDate(validUptoFromDueDate(report.calibrationDueDate));
+    })(),
 
     customerReferenceNo: report.customerRefNo   ?? "",
     customerName:        report.customerName    ?? "",
     customerAddress:     report.customerAddress ?? "",
 
     ducName:               inst.nomenclature ?? "",
-    ducSerialNo:           inst.slNo         ?? "",
+    ducSerialNo:           buildDucIdentifier(inst),
     ducMake:               inst.make         ?? "",
     ducModel:              inst.modelType    ?? "",
     locationOfCalibration: report.calibrationLocation === "onsite" ? "At Site" : "At Lab",
 
     duringCalibrationTemp:     inst.environmental?.temperature ?? "",
     duringCalibrationHumidity: inst.environmental?.humidity    ?? "",
+
+    ducRange:             inst.ducRange             || "As Per Instrument Spec.",
+    calibrationProcedure: inst.calibrationProcedure || "",
+    methodOfCalibration:  inst.calibrationMethod    || "Direct Method",
 
     referenceStandards: buildReferenceStandards(ref),
     calibrationResults: buildCalibrationResults(inst.parameters),

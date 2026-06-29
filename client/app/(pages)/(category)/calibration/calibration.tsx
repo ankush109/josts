@@ -70,7 +70,6 @@ import {
   makeMeasurement,
   makeParam,
   makeInstrument,
-  isNumericInput,
   getParamStatus,
   getInstCompletion,
   calcMean,
@@ -427,17 +426,15 @@ const MetaGrid: FC<{
           >
             <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Low Voltage Area</SelectItem>
-              <SelectItem value="high">High Voltage Area</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="high">High</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="flex flex-col gap-1">
           <Field label="Humidity (%RH)" k="humidity" {...sharedProps} />
           <p className="text-[10px] text-zinc-400">
-            {meta.voltageArea === "high"
-              ? "Required: > 60 %RH (High Voltage Area)"
-              : "Required: ≤ 60 %RH (Low Voltage Area)"}
+            {meta.voltageArea === "high" ? "Required: > 60 %RH" : "Required: ≤ 60 %RH"}
           </p>
         </div>
       </CollapsibleSection>
@@ -478,13 +475,23 @@ const MeasureTable: FC<{
   onUpdateParam: (updated: Parameter) => void;
 }> = ({ param, readOnly, onUpdateParam }) => {
   const [activeSuggest, setActiveSuggest] = useState<{ rid: string; mid: string; items: string[] } | null>(null);
-  const [unitPickerOpen, setUnitPickerOpen] = useState<{ rid: string; mid: string; ri: number } | null>(null);
+  const [unitFocus, setUnitFocus] = useState<{ rid: string; mid: string; ri: number } | null>(null);
 
   const unitFamily = (unit: string): string[] =>
     SI_UNIT_FAMILIES[UNIT_TO_FAMILY_KEY[unit] ?? unit] ?? (unit ? [unit] : []);
 
+  const ALL_KNOWN_UNITS = new Set(Object.values(SI_UNIT_FAMILIES).flat());
+
+  const isKnownUnit = (u: string) => !u || ALL_KNOWN_UNITS.has(u);
+
+  const unitSuggestions = (typed: string): string[] => {
+    const family = unitFamily(param.unit);
+    if (!typed) return family;
+    return family.filter((u) => u.toLowerCase().startsWith(typed.toLowerCase()));
+  };
+
   const getReadingUnit = (m: Measurement, ri: number): string =>
-    m.readingUnits?.[ri] || parseNomInput(m.nomValue)?.unit || param.unit || "";
+    m.readingUnits?.[ri] || "";
 
   const updateRangeLabel = (rid: string, label: string) =>
     onUpdateParam({ ...param, ranges: param.ranges.map((r) => r.id === rid ? { ...r, label } : r) });
@@ -684,13 +691,17 @@ const MeasureTable: FC<{
                   const val = m.readings[ri];
                   return (
                   <td key={m.id} className="border border-border p-0">
-                    <div className="flex items-center">
+                    <div className="flex items-center justify-center gap-0">
                       <input
                         id={`reading-${m.id}-${ri}`}
                         data-reading-input="true"
                         value={val}
                         readOnly={readOnly}
-                        onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
+                        onChange={(e) => {
+                          if (readOnly) return;
+                          const v = e.target.value;
+                          if (v === "" || /^-?\d*\.?\d*$/.test(v)) updateReading(r.id, m.id, ri, v);
+                        }}
                         onKeyDown={(e) => {
                           if (readOnly) return;
                           if (e.key === "Enter") {
@@ -701,43 +712,41 @@ const MeasureTable: FC<{
                           }
                         }}
                         placeholder="—"
-                        className={cn("flex-1 min-w-0 font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-1 placeholder:text-muted-foreground/20", readOnly && "cursor-default")}
+                        className={cn("w-10 font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 placeholder:text-muted-foreground/20", readOnly && "cursor-default")}
                       />
                       <div className="relative shrink-0">
-                        <button
-                          type="button"
+                        <input
+                          type="text"
+                          value={getReadingUnit(m, ri)}
                           disabled={readOnly}
-                          onClick={() => setUnitPickerOpen(
-                            unitPickerOpen?.mid === m.id && unitPickerOpen?.ri === ri
-                              ? null
-                              : { rid: r.id, mid: m.id, ri }
-                          )}
-                          onBlur={() => setTimeout(() => setUnitPickerOpen(null), 150)}
+                          onChange={(e) => updateReadingUnit(r.id, m.id, ri, e.target.value)}
+                          onFocus={() => !readOnly && setUnitFocus({ rid: r.id, mid: m.id, ri })}
+                          onBlur={() => setTimeout(() => setUnitFocus(null), 150)}
+                          placeholder="unit"
                           className={cn(
-                            "text-[9px] font-mono px-1 py-0.5 rounded-sm min-w-[1.75rem] text-center leading-none",
-                            readOnly
-                              ? "text-zinc-400 cursor-default"
-                              : "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 cursor-pointer border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                            "w-8 text-[10px] font-mono text-center bg-transparent border-b outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-600 transition-colors",
+                            readOnly ? "cursor-default border-transparent" :
+                            !getReadingUnit(m, ri) ? "border-zinc-200 dark:border-zinc-700 text-zinc-400" :
+                            isKnownUnit(getReadingUnit(m, ri)) ? "border-blue-300 text-blue-600 dark:text-blue-400" :
+                            "border-red-300 text-red-500"
                           )}
-                        >
-                          {getReadingUnit(m, ri) || "—"}
-                        </button>
-                        {unitPickerOpen?.mid === m.id && unitPickerOpen?.ri === ri && (
-                          <div className="absolute top-full right-0 z-50 mt-0.5 flex flex-wrap gap-1 bg-white dark:bg-zinc-900 border border-border rounded-md shadow-lg p-1.5 min-w-[4rem]">
-                            {unitFamily(getReadingUnit(m, ri) || param.unit).map((u) => (
+                        />
+                        {unitFocus?.mid === m.id && unitFocus?.ri === ri && unitSuggestions(getReadingUnit(m, ri)).length > 0 && (
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 z-50 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-md shadow-lg overflow-hidden min-w-[3.5rem]">
+                            {unitSuggestions(getReadingUnit(m, ri)).map((u) => (
                               <button
                                 key={u}
                                 type="button"
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   updateReadingUnit(r.id, m.id, ri, u);
-                                  setUnitPickerOpen(null);
+                                  setUnitFocus(null);
                                 }}
                                 className={cn(
-                                  "px-1.5 py-0.5 text-[10px] font-mono rounded border cursor-pointer",
+                                  "w-full px-2 py-1 text-[10px] font-mono text-left transition-colors",
                                   getReadingUnit(m, ri) === u
-                                    ? "bg-blue-600 text-white border-blue-600"
-                                    : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                                    ? "bg-blue-600 text-white"
+                                    : "hover:bg-blue-50 dark:hover:bg-blue-950 text-zinc-700 dark:text-zinc-300"
                                 )}
                               >
                                 {u}
@@ -2141,6 +2150,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const cleanSnapshot    = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
   const originalSnapshot = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
+  const cloneApplied     = useRef(false);
   const [snapshotVersion, setSnapshotVersion] = useState(0);
   const [exitDialog,    setExitDialog]    = useState(false);
   const [revertDialog,  setRevertDialog]  = useState(false);
@@ -2241,16 +2251,15 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     }
   }, [reportMeta.calibrationLocation, reportMeta.ducReceivedDate, reportMeta.dateOfCalibration]);
 
-  // Auto-fill calibrationDueDate = dateOfCalibration + interval months (only when empty — user can override)
+  // Auto-fill calibrationDueDate = dateOfCalibration + 12 months (only when empty — user can override)
   useEffect(() => {
     if (!reportMeta.dateOfCalibration) return;
     if (reportMeta.calibrationDueDate) return;
     const d = new Date(reportMeta.dateOfCalibration);
     if (isNaN(d.getTime())) return;
-    const months = reportMeta.calibrationInterval || 12;
-    d.setMonth(d.getMonth() + months);
+    d.setMonth(d.getMonth() + 12);
     setReportMeta((prev) => ({ ...prev, calibrationDueDate: d.toISOString().slice(0, 10) }));
-  }, [reportMeta.dateOfCalibration, reportMeta.calibrationDueDate, reportMeta.calibrationInterval]);
+  }, [reportMeta.dateOfCalibration, reportMeta.calibrationDueDate]);
 
   useEffect(() => {
     if (!existingReport || hydrated) return;
@@ -2272,6 +2281,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   // that must be regenerated for the new report (cert no, dates, status).
   useEffect(() => {
     if (!cloneFromId || !cloneSourceReport || hydrated) return;
+    if (cloneApplied.current) return;
     const mapped = mapApiToInstruments(cloneSourceReport as Record<string, unknown>, instrumentPresets);
     if (!mapped.length) return;
     const reassigned = mapped.map((inst) => ({ ...inst, id: uid(), params: inst.params.map((p) => ({ ...p, id: uid(), ranges: p.ranges.map((r) => ({ ...r, id: uid(), measurements: r.measurements.map((m) => ({ ...m, id: uid() })) })) })) }));
@@ -2289,6 +2299,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     };
     setReportMeta(meta);
     setHydrated(true);
+    cloneApplied.current = true;
     cleanSnapshot.current    = { instruments: reassigned, reportMeta: meta };
     originalSnapshot.current = { instruments: reassigned, reportMeta: meta };
     setSnapshotVersion((v) => v + 1);
@@ -3293,7 +3304,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         {/* ── Create mode: step progress strip ── */}
         {!isEditMode && (() => {
           const hasMeta  = instruments.some((i) => i.meta.nomenclature.trim() && i.meta.make.trim());
-          const hasParam = instruments.some((i) => i.params.length > 0);
           const hasReads = instruments.some((i) =>
             i.params.some((p) => p.ranges.some((r) => r.measurements.some((m) => m.readings.some((v) => v !== ""))))
           );
@@ -3492,42 +3502,22 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   <RF id="report-calibrationDueDate" label="Calibration Due Date" value={reportMeta.calibrationDueDate} type="date"
                     readOnly={viewMode}
                     onChange={!viewMode ? (v) => updateReportMeta("calibrationDueDate", v) : undefined} />
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Calibration Interval</Label>
-                    <Select
-                      value={String(reportMeta.calibrationInterval || 12)}
-                      disabled={viewMode}
-                      onValueChange={(v) => {
-                        const months = Number(v) || 12;
-                        setReportMeta((prev) => {
-                          const next = { ...prev, calibrationInterval: months };
-                          if (prev.dateOfCalibration) {
-                            const d = new Date(prev.dateOfCalibration);
-                            if (!isNaN(d.getTime())) {
-                              d.setMonth(d.getMonth() + months);
-                              next.calibrationDueDate = d.toISOString().slice(0, 10);
-                            }
-                          }
-                          return next;
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3">3 months</SelectItem>
-                        <SelectItem value="6">6 months</SelectItem>
-                        <SelectItem value="12">12 months (default)</SelectItem>
-                        <SelectItem value="18">18 months</SelectItem>
-                        <SelectItem value="24">24 months</SelectItem>
-                        <SelectItem value="36">36 months</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {reportMeta.calibrationInterval !== 12 && (
-                      <Badge variant="outline" className="mt-0.5 w-fit border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                  {(() => {
+                    const isClientReq = (() => {
+                      if (!reportMeta.dateOfCalibration || !reportMeta.calibrationDueDate) return false;
+                      const cal = new Date(reportMeta.dateOfCalibration);
+                      const due = new Date(reportMeta.calibrationDueDate);
+                      if (isNaN(cal.getTime()) || isNaN(due.getTime())) return false;
+                      const threshold = new Date(cal);
+                      threshold.setMonth(threshold.getMonth() + 12);
+                      return due > threshold;
+                    })();
+                    return isClientReq ? (
+                      <Badge variant="outline" className="self-end mb-1 border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                         As Per Client Requirement
                       </Badge>
-                    )}
-                  </div>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             )}
