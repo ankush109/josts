@@ -59,6 +59,8 @@ import {
   BLANK_REPORT_META,
   BLANK_INSTRUMENT_META as BLANK_META,
   PARAM_STATUS_DOT,
+  SI_UNIT_FAMILIES,
+  UNIT_TO_FAMILY_KEY,
   type InstrumentPreset,
 } from "./constants";
 import { useInstrumentPresets } from "@/app/hooks/query/useInstrumentPresets";
@@ -76,6 +78,7 @@ import {
   mapApiToInstruments,
   mapApiToReportMeta,
   parseNomInput,
+  getUnitSuggestions,
 } from "./utils";
 import { useGetEquipmentParamSummary } from "@/app/hooks/query/useGetEquipmentParamSummary";
 import { usePresenceHeartbeat } from "@/app/hooks/query/usePresence";
@@ -112,7 +115,7 @@ const Field: FC<{
   showErrors?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
-  onChange: (key: keyof InstrumentMeta, val: string) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean) => void;
   helper?: React.ReactNode;
 }> = ({ label, k, type = "text", span2, span3, required, autoFocus, readOnly, meta, showErrors, touched, onTouch, onChange, helper }) => {
   const isTouched = touched?.has(k) ?? false;
@@ -125,7 +128,7 @@ const Field: FC<{
       <Input
         id={`field-${k}`}
         type={type}
-        value={meta[k]}
+        value={meta[k] as string}
         autoFocus={!readOnly && autoFocus}
         readOnly={readOnly}
         aria-invalid={hasError}
@@ -150,7 +153,7 @@ const SelectField: FC<{
   /** undefined = no status message; true = "Preset params loaded"; false = "No params found" */
   presetMatched?: boolean;
   meta: InstrumentMeta;
-  onChange: (key: keyof InstrumentMeta, val: string) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean) => void;
 }> = ({ label, k, options, span2, locked, readOnly, allowCustom, presetMatched, meta, onChange }) => {
   const listId = useId();
   return (
@@ -182,7 +185,7 @@ const SelectField: FC<{
           />
         </>
       ) : (
-        <Select value={meta[k]} onValueChange={(val) => onChange(k, val)}>
+        <Select value={meta[k] as string} onValueChange={(val) => onChange(k, val)}>
           <SelectTrigger className="h-9 text-sm">
             <SelectValue placeholder={`Select ${label}`} />
           </SelectTrigger>
@@ -354,7 +357,7 @@ const MetaGrid: FC<{
   hasPreset?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
-  onChange: (key: keyof InstrumentMeta, val: string) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean) => void;
 }> = ({ meta, instParamNames, modelLocked, showErrors, readOnly, hasPreset, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
@@ -365,11 +368,35 @@ const MetaGrid: FC<{
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
       <Field label="Job ID"              k="jobId"         {...sharedProps} />
-      <Field label="ID No"               k="idNo"          {...sharedProps} />
+      <div className="flex flex-col gap-1">
+        <Field label="ID No" k="idNo" {...sharedProps} />
+        <label className="flex items-center gap-1.5 cursor-pointer select-none mt-0.5">
+          <input
+            type="checkbox"
+            checked={meta.idNoInReport}
+            disabled={readOnly}
+            onChange={(e) => onChange("idNoInReport", e.target.checked)}
+            className="h-3.5 w-3.5 accent-[#1e3a5f] cursor-pointer"
+          />
+          <span className="text-[10px] text-zinc-400">Show in report</span>
+        </label>
+      </div>
       <Field label="Nomenclature of DUC" k="nomenclature"  {...sharedProps} span2 required />
       <SelectField label="Make"         k="make"      options={["Fluke","SVERKER","Megger","Rishabh","Metravi","Maxtech","FI","Sonel","Motwane"]} locked={modelLocked} readOnly={readOnly} allowCustom presetMatched={hasPreset} meta={meta} onChange={onChange} />
       <SelectField label="Model / Type" k="modelType" options={["8846A","780","287","289","87V","189","101","107","179","15B","17B+","AVO 410","AVO 840","AVO 850","AVO 415","M8035","M5097","Multi 14S","15S","16S","18S","615","6016","19 super","Metra Safe 10","Metra Safe 20","19 TRMS","603","DT 603","MAS830L","919X","CMM-40","M42","DCM45A"]} locked={modelLocked} readOnly={readOnly} allowCustom meta={meta} onChange={onChange} />
-      <Field label="Sl. No"              k="slNo"          {...sharedProps} />
+      <div className="flex flex-col gap-1">
+        <Field label="Sl. No" k="slNo" {...sharedProps} />
+        <label className="flex items-center gap-1.5 cursor-pointer select-none mt-0.5">
+          <input
+            type="checkbox"
+            checked={meta.slNoInReport}
+            disabled={readOnly}
+            onChange={(e) => onChange("slNoInReport", e.target.checked)}
+            className="h-3.5 w-3.5 accent-[#1e3a5f] cursor-pointer"
+          />
+          <span className="text-[10px] text-zinc-400">Show in report</span>
+        </label>
+      </div>
       <Field label="Other Details"       k="othersDetails" {...sharedProps} span2 />
       <Field label="Report Range"        k="ducRange"      {...sharedProps} span2 />
       <Field label="Calibration Procedure" k="calibrationProcedure" {...sharedProps} span2 />
@@ -417,8 +444,6 @@ const MetaGrid: FC<{
 
       <CollapsibleSection label="Reference Standard Used" open={refOpen} onToggle={() => setRefOpen((v) => !v)}>
         <Field label="Reference Standard" k="refStandard"    {...sharedProps} span2 />
-        <Field label="Make"               k="refMake"        {...sharedProps} />
-        <Field label="Model / Type"       k="refModel"       {...sharedProps} />
         <Field label="Sr. No"             k="refSrNo"        {...sharedProps} />
         <Field label="Cal Due Date"       k="refCalDue"      {...sharedProps} type="date" />
         <div className="flex flex-col gap-1.5 col-span-2">
@@ -452,6 +477,15 @@ const MeasureTable: FC<{
   readOnly?: boolean;
   onUpdateParam: (updated: Parameter) => void;
 }> = ({ param, readOnly, onUpdateParam }) => {
+  const [activeSuggest, setActiveSuggest] = useState<{ rid: string; mid: string; items: string[] } | null>(null);
+  const [unitPickerOpen, setUnitPickerOpen] = useState<{ rid: string; mid: string; ri: number } | null>(null);
+
+  const unitFamily = (unit: string): string[] =>
+    SI_UNIT_FAMILIES[UNIT_TO_FAMILY_KEY[unit] ?? unit] ?? (unit ? [unit] : []);
+
+  const getReadingUnit = (m: Measurement, ri: number): string =>
+    m.readingUnits?.[ri] || parseNomInput(m.nomValue)?.unit || param.unit || "";
+
   const updateRangeLabel = (rid: string, label: string) =>
     onUpdateParam({ ...param, ranges: param.ranges.map((r) => r.id === rid ? { ...r, label } : r) });
 
@@ -474,6 +508,22 @@ const MeasureTable: FC<{
           ...r,
           measurements: r.measurements.map((m) =>
             m.id !== mid ? m : { ...m, readings: m.readings.map((v, i) => (i === idx ? val : v)) }
+          ),
+        }
+      ),
+    });
+
+  const updateReadingUnit = (rid: string, mid: string, idx: number, unit: string) =>
+    onUpdateParam({
+      ...param,
+      ranges: param.ranges.map((r) =>
+        r.id !== rid ? r : {
+          ...r,
+          measurements: r.measurements.map((m) =>
+            m.id !== mid ? m : {
+              ...m,
+              readingUnits: (m.readingUnits ?? Array(5).fill("")).map((u, i) => i === idx ? unit : u),
+            }
           ),
         }
       ),
@@ -565,14 +615,48 @@ const MeasureTable: FC<{
             {param.ranges.flatMap((r) =>
               r.measurements.map((m) => (
                 <th key={m.id} className="bg-muted/50 border border-border p-0">
-                  <div className="flex items-center gap-0.5 px-1 py-1">
+                  <div className="relative flex items-center gap-0.5 px-1 py-1">
                     <input
                       value={m.nomValue}
                       readOnly={readOnly}
-                      onChange={(e) => { if (!readOnly) updateMeasurement(r.id, m.id, { nomValue: e.target.value }); }}
+                      onChange={(e) => {
+                        if (!readOnly) {
+                          updateMeasurement(r.id, m.id, { nomValue: e.target.value });
+                          const items = getUnitSuggestions(e.target.value, param.unit);
+                          setActiveSuggest(items.length ? { rid: r.id, mid: m.id, items } : null);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (!readOnly) {
+                          const items = getUnitSuggestions(m.nomValue, param.unit);
+                          if (items.length) setActiveSuggest({ rid: r.id, mid: m.id, items });
+                        }
+                      }}
+                      onBlur={() => setTimeout(() => setActiveSuggest(null), 150)}
                       placeholder="e.g. 1mV"
                       className={cn("flex-1 min-w-0 h-6 font-mono text-[11px] text-center bg-background border border-border rounded px-1 outline-none focus:border-ring focus:ring-1 focus:ring-ring/30 placeholder:text-muted-foreground/40", readOnly && "cursor-default")}
                     />
+                    {activeSuggest?.rid === r.id && activeSuggest?.mid === m.id && (
+                      <div className="absolute top-full left-0 z-50 mt-0.5 flex flex-wrap gap-1 bg-white dark:bg-zinc-900 border border-border rounded-md shadow-lg p-1.5 min-w-[5rem]">
+                        {activeSuggest.items.map((unit) => {
+                          const numPart = m.nomValue.trim().match(/^(-?\d*\.?\d*)/)?.[1] ?? "";
+                          return (
+                            <button
+                              key={unit}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                updateMeasurement(r.id, m.id, { nomValue: numPart + unit });
+                                setActiveSuggest(null);
+                              }}
+                              className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 rounded border border-blue-200 dark:border-blue-800 cursor-pointer"
+                            >
+                              {numPart}{unit}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     {r.measurements.length > 1 && !readOnly && (
                       <Button variant="ghost" size="icon-xs" onClick={() => removeMeasurement(r.id, m.id)} className="text-muted-foreground hover:text-destructive shrink-0">
                         <X />
@@ -600,24 +684,69 @@ const MeasureTable: FC<{
                   const val = m.readings[ri];
                   return (
                   <td key={m.id} className="border border-border p-0">
-                    <input
-                      id={`reading-${m.id}-${ri}`}
-                      data-reading-input="true"
-                      value={val}
-                      readOnly={readOnly}
-                      onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
-                      onKeyDown={(e) => {
-                        if (readOnly) return;
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          const all = Array.from(document.querySelectorAll<HTMLInputElement>("[data-reading-input]"));
-                          const idx = all.indexOf(e.currentTarget);
-                          if (idx >= 0 && idx < all.length - 1) all[idx + 1].focus();
-                        }
-                      }}
-                      placeholder="—"
-                      className={cn("w-full font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-2 placeholder:text-muted-foreground/20", readOnly && "cursor-default")}
-                    />
+                    <div className="flex items-center">
+                      <input
+                        id={`reading-${m.id}-${ri}`}
+                        data-reading-input="true"
+                        value={val}
+                        readOnly={readOnly}
+                        onChange={(e) => { if (!readOnly && isNumericInput(e.target.value)) updateReading(r.id, m.id, ri, e.target.value); }}
+                        onKeyDown={(e) => {
+                          if (readOnly) return;
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const all = Array.from(document.querySelectorAll<HTMLInputElement>("[data-reading-input]"));
+                            const idx = all.indexOf(e.currentTarget);
+                            if (idx >= 0 && idx < all.length - 1) all[idx + 1].focus();
+                          }
+                        }}
+                        placeholder="—"
+                        className={cn("flex-1 min-w-0 font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 px-1 placeholder:text-muted-foreground/20", readOnly && "cursor-default")}
+                      />
+                      <div className="relative shrink-0">
+                        <button
+                          type="button"
+                          disabled={readOnly}
+                          onClick={() => setUnitPickerOpen(
+                            unitPickerOpen?.mid === m.id && unitPickerOpen?.ri === ri
+                              ? null
+                              : { rid: r.id, mid: m.id, ri }
+                          )}
+                          onBlur={() => setTimeout(() => setUnitPickerOpen(null), 150)}
+                          className={cn(
+                            "text-[9px] font-mono px-1 py-0.5 rounded-sm min-w-[1.75rem] text-center leading-none",
+                            readOnly
+                              ? "text-zinc-400 cursor-default"
+                              : "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950 cursor-pointer border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+                          )}
+                        >
+                          {getReadingUnit(m, ri) || "—"}
+                        </button>
+                        {unitPickerOpen?.mid === m.id && unitPickerOpen?.ri === ri && (
+                          <div className="absolute top-full right-0 z-50 mt-0.5 flex flex-wrap gap-1 bg-white dark:bg-zinc-900 border border-border rounded-md shadow-lg p-1.5 min-w-[4rem]">
+                            {unitFamily(getReadingUnit(m, ri) || param.unit).map((u) => (
+                              <button
+                                key={u}
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  updateReadingUnit(r.id, m.id, ri, u);
+                                  setUnitPickerOpen(null);
+                                }}
+                                className={cn(
+                                  "px-1.5 py-0.5 text-[10px] font-mono rounded border cursor-pointer",
+                                  getReadingUnit(m, ri) === u
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                                )}
+                              >
+                                {u}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </td>
                   );
                 })
@@ -2476,7 +2605,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     }
   }, [activeInstId, instruments, makeKeyMap]);
 
-  const updateMeta = useCallback((key: keyof InstrumentMeta, val: string) => {
+  const updateMeta = useCallback((key: keyof InstrumentMeta, val: string | boolean) => {
     setInstruments((ins) =>
       ins.map((i) => i.id !== activeInstId ? i : { ...i, meta: { ...i.meta, [key]: val } })
     );

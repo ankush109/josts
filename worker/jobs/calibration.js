@@ -97,6 +97,19 @@ function buildReferenceStandards(ref = {}) {
  * @param {Date|string|null|undefined} due
  * @returns {Date|null}
  */
+/**
+ * Builds the "Identification / Serial Number" cell for the DUC table.
+ * Uses idNoInReport / slNoInReport flags set by the engineer in the form.
+ * Falls back to slNo if neither flag is set (backwards compat).
+ */
+function buildDucIdentifier(inst) {
+  const parts = [];
+  if (inst.idNoInReport && inst.idNo) parts.push(`ID: ${inst.idNo}`);
+  if (inst.slNoInReport && inst.slNo) parts.push(`SN: ${inst.slNo}`);
+  if (parts.length) return parts.join(" / ");
+  return inst.slNo ?? "";
+}
+
 function validUptoFromDueDate(due) {
   if (!due) return null;
   const d = new Date(due);
@@ -131,6 +144,12 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
     ducReceivedDate:    formatDate(report.ducReceivedDate),
     dateOfCalibration:  formatDate(report.dateOfCalibration || inst.calDate),
     calibrationDueDate: formatDate(report.calibrationDueDate),
+    calibrationDueDateDisplay: (report.calibrationInterval && report.calibrationInterval !== 12)
+      ? "As Per Client Requirement"
+      : formatDate(report.calibrationDueDate),
+    validUpto: (report.calibrationInterval && report.calibrationInterval !== 12)
+      ? "As Per Client Requirement"
+      : formatDate(validUptoFromDueDate(report.calibrationDueDate)),
 
     // Customer
     customerReferenceNo: report.customerRefNo   ?? "",
@@ -139,7 +158,7 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
 
     // Device under calibration (DUC)
     ducName:               inst.nomenclature ?? "",
-    ducSerialNo:           inst.slNo         ?? "",
+    ducSerialNo:           buildDucIdentifier(inst),
     ducMake:               inst.make         ?? "",
     ducModel:              inst.modelType    ?? "",
     locationOfCalibration: report.calibrationLocation === "onsite" ? "At Site" : "At Lab",

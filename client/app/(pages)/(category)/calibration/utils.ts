@@ -12,7 +12,7 @@ import type {
   Parameter,
   ReportMeta,
 } from "@/types/calibration";
-import { BLANK_INSTRUMENT_META, type InstrumentPreset } from "./constants";
+import { BLANK_INSTRUMENT_META, SI_UNIT_FAMILIES, UNIT_TO_FAMILY_KEY, type InstrumentPreset } from "./constants";
 
 /** Map of instrument key (e.g. "Fluke 8846A") → preset data. */
 export type InstrumentPresetMap = Record<string, InstrumentPreset>;
@@ -23,11 +23,21 @@ const NOM_PATTERN = /^(-?\d*\.?\d+)\s*([a-zµ°Ω]+)?$/i;
 
 // Normalise whatever the user types to the canonical unit string used by toSI.
 const UNIT_CANONICAL: Record<string, string> = {
-  mv: "mV", v: "V", kv: "kV",
-  ua: "µA", µa: "µA", ma: "mA", a: "A", ka: "kA",
+  // Voltage
+  µv: "µV", uv: "µV", mv: "mV", v: "V", kv: "kV",
+  // Current
+  pa: "pA", na: "nA", ua: "µA", µa: "µA", ma: "mA", a: "A", ka: "kA",
+  // Resistance
   mω: "mΩ", ω: "Ω", kω: "kΩ", mω2: "MΩ", mΩ: "MΩ",
+  // Frequency
   hz: "Hz", khz: "kHz", mhz: "MHz",
+  // Power
+  µw: "µW", uw: "µW", mw: "mW", w: "W", kw: "kW", mwatt: "MW",
+  // Misc
   "°c": "°C", c: "°C",
+  "%rh": "%RH",
+  // Apparent power
+  va: "VA", kva: "kVA", mva: "MVA",
 };
 
 /**
@@ -44,6 +54,21 @@ export function parseNomInput(raw: string): { value: number; unit: string } | nu
   const rawUnit = m[2] ?? "";
   const unit = UNIT_CANONICAL[rawUnit.toLowerCase()] ?? rawUnit;
   return { value, unit };
+}
+
+/**
+ * Returns unit suggestions for the nomValue input based on what the user has
+ * typed and the parameter's base unit (e.g. "V" → ["µV","mV","V","kV"]).
+ * Filters by the typed prefix so "50m" in a voltage param → ["mV"].
+ * Returns an empty array when the family has only one unit (no choice to make).
+ */
+export function getUnitSuggestions(typed: string, paramUnit: string): string[] {
+  const familyKey = UNIT_TO_FAMILY_KEY[paramUnit] ?? paramUnit;
+  const family = SI_UNIT_FAMILIES[familyKey];
+  if (!family || family.length <= 1) return [];
+  const prefix = (typed.trim().match(/^-?\d*\.?\d*\s*([a-zµ°Ω%]*)/i)?.[1] ?? "").trim();
+  if (!prefix) return family;
+  return family.filter((u) => u.toLowerCase().startsWith(prefix.toLowerCase()));
 }
 
 // ── ID generation ──────────────────────────────────────────────────────────
@@ -69,12 +94,13 @@ export const emptyReadings = (): string[] => Array(5).fill("");
  */
 export function makeMeasurement(): Measurement {
   return {
-    id:       uid(),
-    nomValue: "",
-    nomUnit:  "",
-    readings: emptyReadings(),
-    corrected: "",
-    computed:  null,
+    id:           uid(),
+    nomValue:     "",
+    nomUnit:      "",
+    readings:     emptyReadings(),
+    readingUnits: Array(5).fill(""),
+    corrected:    "",
+    computed:     null,
   };
 }
 
@@ -130,12 +156,13 @@ export function makeParam(
           label,
           measurements: useSamples
             ? rangeSamples.map((s) => ({
-                id:        uid(),
-                nomValue:  s.nominal,
-                nomUnit:   "",
-                readings:  [...s.readings],
-                corrected: "",
-                computed:  null,
+                id:           uid(),
+                nomValue:     s.nominal,
+                nomUnit:      "",
+                readings:     [...s.readings],
+                readingUnits: Array(5).fill(""),
+                corrected:   "",
+                computed:    null,
               }))
             : [makeMeasurement(), makeMeasurement()],
         };
@@ -265,7 +292,7 @@ export function getInstCompletion(inst: Instrument): number {
     "nomenclature", "make", "modelType", "calDate", "slNo",
   ];
   const metaScore =
-    metaKeys.filter((k) => inst.meta[k]?.trim()).length / metaKeys.length;
+    metaKeys.filter((k) => (inst.meta[k] as string)?.trim()).length / metaKeys.length;
 
   if (inst.params.length === 0) return Math.round(metaScore * 50);
 
@@ -330,6 +357,8 @@ export function buildPayload(
         humidity:      inst.meta.humidity,
         voltageArea:   inst.meta.voltageArea || undefined,
       },
+      idNoInReport:         inst.meta.idNoInReport,
+      slNoInReport:         inst.meta.slNoInReport,
       ducRange:             inst.meta.ducRange             || undefined,
       calibrationProcedure: inst.meta.calibrationProcedure || undefined,
       calibrationMethod:    inst.meta.calibrationMethod,
@@ -351,10 +380,11 @@ export function buildPayload(
           measurements: r.measurements.map((m) => {
             const parsed = parseNomInput(m.nomValue);
             return {
-              nomValue:  parsed ? parsed.value : (m.nomValue === "" ? null : Number(m.nomValue)),
-              nomUnit:   parsed?.unit || "",
-              readings:  m.readings.map((v) => (v === "" ? null : Number(v))),
-              corrected: m.corrected,
+              nomValue:     parsed ? parsed.value : (m.nomValue === "" ? null : Number(m.nomValue)),
+              nomUnit:      parsed?.unit || "",
+              readings:     m.readings.map((v) => (v === "" ? null : Number(v))),
+              readingUnits: m.readingUnits ?? Array(5).fill(""),
+              corrected:   m.corrected,
             };
           }),
         })),
@@ -391,6 +421,8 @@ export function mapApiToInstruments(
       temperature:          inst.environmental?.temperature ?? "",
       humidity:             inst.environmental?.humidity ?? "",
       voltageArea:          (inst.environmental?.voltageArea as "high" | "low" | "") ?? "",
+      idNoInReport:         inst.idNoInReport  ?? false,
+      slNoInReport:         inst.slNoInReport  ?? true,
       ducRange:             inst.ducRange             ?? "As Per Instrument Spec.",
       calibrationProcedure: inst.calibrationProcedure ?? "",
       calibrationMethod:    (inst.calibrationMethod as "Direct Method" | "Comparison Method") ?? "Direct Method",
@@ -427,6 +459,7 @@ export function mapApiToInstruments(
             .map((_, i) =>
               m.readings?.[i] != null ? String(m.readings[i]) : "",
             ),
+          readingUnits: Array(5).fill("").map((_, i) => m.readingUnits?.[i] ?? ""),
           corrected: m.corrected ?? "",
           computed:  m.computed ?? null,
         })),

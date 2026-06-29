@@ -68,11 +68,12 @@ const computedSchema = new mongoose.Schema(
 /** One nominal-value row: 5 observed readings + server-computed budget. */
 const measurementSchema = new mongoose.Schema(
   {
-    nomValue:  { type: Number, default: null },
-    nomUnit:   { type: String, trim: true, default: "" },
-    readings:  { type: [Number], default: () => Array(5).fill(null) },
-    corrected: { type: String, trim: true, default: "" },
-    computed:  { type: computedSchema, default: null },
+    nomValue:    { type: Number, default: null },
+    nomUnit:     { type: String, trim: true, default: "" },
+    readings:     { type: [Number], default: () => Array(5).fill(null) },
+    readingUnits: { type: [String], default: () => Array(5).fill("") },
+    corrected:   { type: String, trim: true, default: "" },
+    computed:    { type: computedSchema, default: null },
   },
   { _id: true }
 );
@@ -143,6 +144,8 @@ const instrumentSchema = new mongoose.Schema(
     jobId:         { type: String, trim: true, default: "" },
     calDate:       { type: Date },
     environmental:        { type: environmentalSchema, default: () => ({}) },
+    idNoInReport:         { type: Boolean, default: false },
+    slNoInReport:         { type: Boolean, default: true },
     ducRange:             { type: String, trim: true, default: "As Per Instrument Spec." },
     calibrationProcedure: { type: String, trim: true, default: "" },
     calibrationMethod:    { type: String, enum: ["Direct Method", "Comparison Method"], default: "Direct Method" },

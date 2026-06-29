@@ -75,6 +75,8 @@ export const BLANK_INSTRUMENT_META: InstrumentMeta = {
   temperature:           "",
   humidity:              "",
   voltageArea:           "",
+  idNoInReport:          false,
+  slNoInReport:          true,
   ducRange:              "As Per Instrument Spec.",
   calibrationProcedure:  "",
   calibrationMethod:     "Direct Method",
@@ -85,6 +87,32 @@ export const BLANK_INSTRUMENT_META: InstrumentMeta = {
   refCalDue:      "",
   refTraceability: "",
   refEquipmentId:  "",
+};
+
+// ── SI unit families ───────────────────────────────────────────────────────
+
+/** All scaled SI variants for each measurable quantity, ordered small → large. */
+export const SI_UNIT_FAMILIES: Record<string, string[]> = {
+  V:    ["µV", "mV", "V", "kV"],
+  A:    ["pA", "nA", "µA", "mA", "A", "kA"],
+  Ω:    ["mΩ", "Ω", "kΩ", "MΩ"],
+  Hz:   ["Hz", "kHz", "MHz"],
+  W:    ["µW", "mW", "W", "kW", "MW"],
+  "°C": ["°C"],
+  "%":  ["%", "%RH"],
+  VA:   ["VA", "kVA", "MVA"],
+};
+
+/** Maps any unit variant back to its family key in SI_UNIT_FAMILIES. */
+export const UNIT_TO_FAMILY_KEY: Record<string, string> = {
+  "µV": "V",  "mV": "V",  "V": "V",  "kV": "V",
+  "pA": "A",  "nA": "A",  "µA": "A", "mA": "A", "A": "A", "kA": "A",
+  "mΩ": "Ω",  "Ω": "Ω",  "kΩ": "Ω", "MΩ": "Ω",
+  "Hz": "Hz", "kHz": "Hz","MHz": "Hz",
+  "µW": "W",  "mW": "W",  "W": "W",  "kW": "W", "MW": "W",
+  "°C": "°C",
+  "%": "%",   "%RH": "%",
+  "VA": "VA", "kVA": "VA","MVA": "VA",
 };
 
 // ── UI status dot colours ──────────────────────────────────────────────────

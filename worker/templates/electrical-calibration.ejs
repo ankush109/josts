@@ -337,13 +337,13 @@ var computedTotalPages = 1 + resultPages.length;
     <tr>
       <td class="bold center" style="width:15%">DUC<br/>Received<br/>Date</td>
       <td class="bold center" style="width:16%">Date of<br/>Calibration</td>
-      <td class="bold center" style="width:16%">Calibration<br/>Due Date</td>
+      <td class="bold center" style="width:16%">Valid<br/>Up To</td>
       <td class="bold center" colspan="3">Customer Reference No.</td>
     </tr>
     <tr>
       <td class="center"><%= typeof ducReceivedDate !== 'undefined' ? ducReceivedDate : '' %></td>
       <td class="center"><%= typeof dateOfCalibration !== 'undefined' ? dateOfCalibration : '' %></td>
-      <td class="center"><%= typeof calibrationDueDate !== 'undefined' ? calibrationDueDate : '' %></td>
+      <td class="center"><%= typeof validUpto !== 'undefined' ? validUpto : '' %></td>
       <td class="center" colspan="3"><%= typeof customerReferenceNo !== 'undefined' ? customerReferenceNo : '' %></td>
     </tr>
   </table>

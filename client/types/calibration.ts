@@ -43,6 +43,8 @@ export interface InstrumentMeta {
   temperature: string;
   humidity: string;
   voltageArea: "high" | "low" | "";
+  idNoInReport: boolean;
+  slNoInReport: boolean;
   ducRange: string;
   calibrationProcedure: string;
   calibrationMethod: "Direct Method" | "Comparison Method";
@@ -101,6 +103,8 @@ export interface Measurement {
   nomUnit: string;
   /** Always exactly 5 readings. */
   readings: string[];
+  /** Per-cell unit — one per reading, each independently selectable. */
+  readingUnits: string[];
   corrected: string;
   /** Null until the compute endpoint has been called. */
   computed: ComputedBudget | null;
