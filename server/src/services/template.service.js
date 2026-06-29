@@ -276,26 +276,17 @@ export async function buildSampleData(reportId, instIndex = 0) {
     ducReceivedDate:    fmtDate(report.ducReceivedDate),
     dateOfCalibration:  fmtDate(report.dateOfCalibration || inst.calDate),
     calibrationDueDate: fmtDate(report.calibrationDueDate),
-    calibrationDueDateDisplay: (() => {
+    isClientRequirement: (() => {
       const cal = new Date(report.dateOfCalibration || inst.calDate);
       const due = new Date(report.calibrationDueDate);
       if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
         const threshold = new Date(cal);
         threshold.setMonth(threshold.getMonth() + 12);
-        if (due > threshold) return "As Per Client Requirement";
+        return due > threshold;
       }
-      return fmtDate(report.calibrationDueDate);
+      return false;
     })(),
-    validUpto: (() => {
-      const cal = new Date(report.dateOfCalibration || inst.calDate);
-      const due = new Date(report.calibrationDueDate);
-      if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
-        const threshold = new Date(cal);
-        threshold.setMonth(threshold.getMonth() + 12);
-        if (due > threshold) return "As Per Client Requirement";
-      }
-      return fmtDate(validUptoFromDueDate(report.calibrationDueDate));
-    })(),
+    validUpto: fmtDate(validUptoFromDueDate(report.calibrationDueDate)),
 
     customerReferenceNo: report.customerRefNo   ?? "",
     customerName:        report.customerName    ?? "",

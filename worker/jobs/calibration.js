@@ -145,26 +145,17 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
     ducReceivedDate:    formatDate(report.ducReceivedDate),
     dateOfCalibration:  formatDate(report.dateOfCalibration || inst.calDate),
     calibrationDueDate: formatDate(report.calibrationDueDate),
-    calibrationDueDateDisplay: (() => {
+    isClientRequirement: (() => {
       const cal = new Date(report.dateOfCalibration || inst.calDate);
       const due = new Date(report.calibrationDueDate);
       if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
         const threshold = new Date(cal);
         threshold.setMonth(threshold.getMonth() + 12);
-        if (due > threshold) return "As Per Client Requirement";
+        return due > threshold;
       }
-      return formatDate(report.calibrationDueDate);
+      return false;
     })(),
-    validUpto: (() => {
-      const cal = new Date(report.dateOfCalibration || inst.calDate);
-      const due = new Date(report.calibrationDueDate);
-      if (!isNaN(cal.getTime()) && !isNaN(due.getTime())) {
-        const threshold = new Date(cal);
-        threshold.setMonth(threshold.getMonth() + 12);
-        if (due > threshold) return "As Per Client Requirement";
-      }
-      return formatDate(validUptoFromDueDate(report.calibrationDueDate));
-    })(),
+    validUpto: formatDate(validUptoFromDueDate(report.calibrationDueDate)),
 
     // Customer
     customerReferenceNo: report.customerRefNo   ?? "",

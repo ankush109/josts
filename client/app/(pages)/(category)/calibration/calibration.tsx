@@ -2560,13 +2560,15 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       ? "Draft saved successfully"
       : "Report submitted for verification";
 
-    const onSuccess = () => {
+    const onSuccess = (response?: any) => {
       cleanSnapshot.current = { instruments, reportMeta };
       toast.success(successMsg);
       queryClient.invalidateQueries({ queryKey: ["get-calibration-reports"] });
       if (isEditMode) {
         setViewMode(true);
         setHydrated(false);
+      } else if (response?._id) {
+        router.push(`/calibration/${response._id}`);
       } else {
         router.push("/calibration");
       }
