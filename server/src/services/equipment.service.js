@@ -156,3 +156,99 @@ export const setEquipmentActive = async (id, isActive, userId) => {
 export const deleteEquipment = async (id, userId) => {
   return updateEquipment(id, { isActive: false }, userId);
 };
+
+const CAL_SNAPSHOT_FIELDS = [
+  "calDate", "nextDue", "certificateNo", "nablCert", "calLab",
+  "parameters", "traceabilityFileKey", "traceabilityFiles",
+];
+
+const pickCalSnapshot = (source) =>
+  Object.fromEntries(CAL_SNAPSHOT_FIELDS.map((k) => [k, source[k]]));
+
+export const createEquipmentVersion = async (id, payload, userId) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    const err = new Error("Invalid Equipment ID format");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const doc = await Equipment.findById(id);
+  if (!doc) {
+    const err = new Error("Equipment not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  let newVersionNumber;
+
+  if ((doc.versions ?? []).length === 0) {
+    // First version creation: snapshot current state as v1, payload becomes v2
+    const v1 = { versionNumber: 1, ...pickCalSnapshot(doc.toObject()), createdAt: doc.createdAt || new Date(), createdBy: null };
+    doc.versions.push(v1);
+    newVersionNumber = 2;
+  } else {
+    newVersionNumber = (doc.currentVersion ?? doc.versions.length) + 1;
+  }
+
+  const newSnapshot = { versionNumber: newVersionNumber, ...pickCalSnapshot(payload), createdAt: new Date(), createdBy: userId };
+  doc.versions.push(newSnapshot);
+
+  doc.currentVersion = newVersionNumber;
+  doc.activeVersion  = newVersionNumber;
+
+  for (const k of CAL_SNAPSHOT_FIELDS) {
+    if (payload[k] !== undefined) doc[k] = payload[k];
+  }
+
+  await doc.save();
+
+  await logEquipmentAudit({
+    equipmentId: doc._id,
+    action: "version_created",
+    performedBy: userId,
+    changes: [{ field: "version", from: `v${newVersionNumber - 1}`, to: `v${newVersionNumber}` }],
+  });
+
+  return doc.toObject();
+};
+
+export const activateEquipmentVersion = async (id, versionNumber, userId) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    const err = new Error("Invalid Equipment ID format");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const doc = await Equipment.findById(id);
+  if (!doc) {
+    const err = new Error("Equipment not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const vNum = Number(versionNumber);
+  const version = (doc.versions ?? []).find((v) => v.versionNumber === vNum);
+  if (!version) {
+    const err = new Error(`Version v${vNum} not found`);
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const prevActive = doc.activeVersion ?? doc.currentVersion;
+
+  for (const k of CAL_SNAPSHOT_FIELDS) {
+    doc[k] = version[k];
+  }
+  doc.activeVersion = vNum;
+
+  await doc.save();
+
+  await logEquipmentAudit({
+    equipmentId: doc._id,
+    action: "version_activated",
+    performedBy: userId,
+    changes: [{ field: "activeVersion", from: `v${prevActive}`, to: `v${vNum}` }],
+  });
+
+  return doc.toObject();
+};

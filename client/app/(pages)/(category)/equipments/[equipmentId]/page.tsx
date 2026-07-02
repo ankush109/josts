@@ -7,7 +7,7 @@ import {
   ArrowLeft, Calendar, AlertCircle, CheckCircle2, Clock, FlaskConical,
   Award, Activity, Pencil, Save, X, Power, Plus, Trash2, History, RefreshCw,
   Upload, FileSpreadsheet, Download, FileText, Eye,
-  Paperclip,
+  Paperclip, GitBranch,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import * as XLSX from "xlsx";
@@ -20,6 +20,8 @@ import {
   useUpdateEquipment,
   useSetEquipmentActive,
   useDeleteEquipment,
+  useCreateEquipmentVersion,
+  useActivateEquipmentVersion,
 } from "@/app/hooks/mutate/useUpdateEquipment";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import { useAuth } from "@/app/provider/AuthProvider";
@@ -94,6 +96,21 @@ const NUMERIC_PARAM_KEYS = new Set([
 const isPartialNumeric = (v: string): boolean =>
   v === "" || /^-?\d*\.?\d*$/.test(v);
 
+interface EquipmentVersion {
+  versionNumber:       number;
+  calDate?:            string | null;
+  nextDue?:            string | null;
+  certificateNo?:      string;
+  nablCert?:           string;
+  calLab?:             string;
+  parameters?:         Parameter[];
+  traceabilityFileKey?: string;
+  traceabilityFiles?:  { key: string; name: string; uploadedBy?: string; uploadedAt?: string }[];
+  createdAt?:          string;
+  createdBy?:          { name?: string; email?: string } | string | null;
+  note?:               string;
+}
+
 interface EquipmentDoc {
   _id?:                  string;
   equipmentName?:        string;
@@ -110,6 +127,9 @@ interface EquipmentDoc {
   parameters?:           Parameter[];
   traceabilityFileKey?:  string;
   traceabilityFiles?:    { key: string; name: string; uploadedBy?: string; uploadedAt?: string }[];
+  currentVersion?:       number;
+  activeVersion?:        number;
+  versions?:             EquipmentVersion[];
   isActive?:             boolean;
   createdAt?:            string;
   updatedAt?:            string;
@@ -140,9 +160,12 @@ export default function EquipmentDetailPage() {
   const { data: history } = useGetEquipmentHistory(id);
   const { mutate: update, isPending: isSaving } = useUpdateEquipment();
   const { mutate: setActive, isPending: isToggling } = useSetEquipmentActive();
+  const { mutate: createVersion, isPending: isCreatingVersion } = useCreateEquipmentVersion();
+  const { mutate: activateVersion, isPending: isActivating } = useActivateEquipmentVersion();
 
   const eq: EquipmentDoc | undefined = res?.data;
   const [editMode, setEditMode] = useState(false);
+  const [isNewVersion, setIsNewVersion] = useState(false);
   const [pendingFocus, setPendingFocus] = useState<string | null>(null);
 
   const enterEdit = (focusId?: string) => {
@@ -261,10 +284,17 @@ export default function EquipmentDetailPage() {
   const onSave = () => {
     if (!draft) return;
     const payload = { ...draft, parameters: sanitizeParams(draft.parameters ?? []) };
-    update({ id, payload }, {
-      onSuccess: () => { toast.success("Equipment saved"); setEditMode(false); },
-      onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Save failed"),
-    });
+    if (isNewVersion) {
+      createVersion({ id, payload }, {
+        onSuccess: () => { toast.success("New version created"); setEditMode(false); setIsNewVersion(false); },
+        onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Failed to create version"),
+      });
+    } else {
+      update({ id, payload }, {
+        onSuccess: () => { toast.success("Equipment saved"); setEditMode(false); },
+        onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Save failed"),
+      });
+    }
   };
 
   const onDelete = () => {
@@ -364,7 +394,7 @@ export default function EquipmentDetailPage() {
     }
   };
 
-  const onCancel = () => { setDraft(structuredClone(eq)); setEditMode(false); };
+  const onCancel = () => { setDraft(structuredClone(eq)); setEditMode(false); setIsNewVersion(false); };
 
   const onToggleActive = () => {
     setActive({ id, isActive: !draft.isActive }, {
@@ -419,30 +449,47 @@ export default function EquipmentDetailPage() {
           )
         )}
         {!editMode ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setEditMode(true)}
-            disabled={isOffline}
-            title={isOffline ? "Reference standards can only be edited online" : undefined}
-            className="gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Edit
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setIsNewVersion(false); setEditMode(true); }}
+              disabled={isOffline}
+              title={isOffline ? "Reference standards can only be edited online" : undefined}
+              className="gap-1.5 bg-white/10 border-white/20 text-white hover:bg-white/20 rounded-r-none border-r-0"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setIsNewVersion(true); setEditMode(true); }}
+              disabled={isOffline}
+              title={isOffline ? "Reference standards can only be edited online" : "Save changes as a new calibration-cycle version"}
+              className="gap-1.5 bg-white/10 border-white/20 text-white hover:bg-amber-500/20 rounded-l-none"
+            >
+              <GitBranch className="h-3.5 w-3.5" /> New Version
+            </Button>
+          </div>
         ) : (
           <>
+            {isNewVersion && (
+              <span className="text-[11px] font-mono text-amber-300 bg-amber-500/20 px-2 py-1 rounded">
+                → v{(draft.currentVersion ?? 1) + 1}
+              </span>
+            )}
             <Button size="sm" variant="ghost" onClick={onCancel} className="text-white/80 hover:text-white hover:bg-white/10 gap-1.5">
               <X className="h-3.5 w-3.5" /> Cancel
             </Button>
             <Button
               size="sm"
               onClick={onSave}
-              disabled={!isDirty || isSaving || isOffline}
+              disabled={!isDirty || isSaving || isCreatingVersion || isOffline}
               title={isOffline ? "Save requires internet" : undefined}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+              className={`gap-1.5 ${isNewVersion ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}
             >
               <Save className="h-3.5 w-3.5" />
-              {isSaving ? "Saving…" : "Save"}
+              {isSaving || isCreatingVersion ? "Saving…" : isNewVersion ? "Save as New Version" : "Save"}
             </Button>
           </>
         )}
@@ -717,6 +764,71 @@ export default function EquipmentDetailPage() {
           </div>
           );
         })()}
+
+        {/* Versions */}
+        {(draft.versions?.length ?? 0) > 0 && (
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100 dark:border-zinc-800">
+              <div className="h-8 w-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
+                <GitBranch className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">Versions</span>
+              <span className="text-[11px] text-slate-400 dark:text-zinc-500">{draft.versions!.length} calibration cycles</span>
+            </div>
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...(draft.versions ?? [])].reverse().map((v) => {
+                const activeVn = draft.activeVersion ?? draft.currentVersion ?? 1;
+                const isActiveV = v.versionNumber === activeVn;
+                return (
+                  <div
+                    key={v.versionNumber}
+                    className={`rounded-xl border p-4 transition-colors ${
+                      isActiveV
+                        ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/60 dark:bg-emerald-950/20"
+                        : "border-slate-100 bg-slate-50/50 dark:border-zinc-800 dark:bg-zinc-800/20"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-mono text-[15px] font-bold text-slate-700 dark:text-zinc-100">
+                        v{v.versionNumber}
+                      </span>
+                      {isActiveV && (
+                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60 text-[10px] font-semibold">
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="space-y-1 text-[11px] text-slate-500 dark:text-zinc-400 mb-3">
+                      <div><span className="text-slate-400 dark:text-zinc-500">Cal Date: </span>{fmt(v.calDate)}</div>
+                      <div><span className="text-slate-400 dark:text-zinc-500">Next Due: </span>{fmt(v.nextDue)}</div>
+                      {v.certificateNo && <div><span className="text-slate-400 dark:text-zinc-500">Cert: </span>{v.certificateNo}</div>}
+                      {v.createdAt && (
+                        <div className="text-slate-400 dark:text-zinc-500 text-[10px] pt-1">
+                          {new Date(v.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        </div>
+                      )}
+                    </div>
+                    {!isActiveV && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-7 text-[11px] gap-1"
+                        disabled={isActivating || !canEdit}
+                        onClick={() => activateVersion({ id, versionNumber: v.versionNumber }, {
+                          onSuccess: () => toast.success(`v${v.versionNumber} is now active`),
+                          onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Failed to activate version"),
+                        })}
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        {isActivating ? "Activating…" : "Activate"}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* History */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">

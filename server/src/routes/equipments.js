@@ -15,6 +15,8 @@ router.get("/:id/traceability-url",       authMiddleware, EquipmentController.ge
 router.post("/:id/traceability-presign",  authMiddleware, EquipmentController.getTraceabilityPresignUrl);
 router.put("/:id",                        authMiddleware, EquipmentController.updateEquipment);
 router.patch("/:id/active",               authMiddleware, EquipmentController.setEquipmentActive);
+router.post("/:id/versions",              authMiddleware, EquipmentController.createEquipmentVersion);
+router.patch("/:id/versions/activate",    authMiddleware, EquipmentController.activateEquipmentVersion);
 router.delete("/:id",                     authMiddleware, EquipmentController.deleteEquipment);
 
 export default router;

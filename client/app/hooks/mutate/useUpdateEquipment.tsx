@@ -5,6 +5,8 @@ import {
   EP_EQUIPMENT_ACTIVE,
   EP_EQUIPMENT_DELETE,
   EP_EQUIPMEMTS,
+  EP_EQUIPMENT_VERSIONS,
+  EP_EQUIPMENT_VERSION_ACTIVATE,
 } from "@/lib/endpoints";
 import { EQUIPMENETS_KEY } from "../query/useGetEquipments";
 
@@ -53,6 +55,36 @@ export function useSetEquipmentActive() {
   return useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       const { data } = await authClient.patch(EP_EQUIPMENT_ACTIVE(id), { isActive });
+      return data.data;
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: [EQUIPMENETS_KEY] });
+      qc.invalidateQueries({ queryKey: ["get-equipment-by-id", id] });
+      qc.invalidateQueries({ queryKey: ["equipment-history", id] });
+    },
+  });
+}
+
+export function useCreateEquipmentVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+      const { data } = await authClient.post(EP_EQUIPMENT_VERSIONS(id), payload);
+      return data.data;
+    },
+    onSuccess: (_d, { id }) => {
+      qc.invalidateQueries({ queryKey: [EQUIPMENETS_KEY] });
+      qc.invalidateQueries({ queryKey: ["get-equipment-by-id", id] });
+      qc.invalidateQueries({ queryKey: ["equipment-history", id] });
+    },
+  });
+}
+
+export function useActivateEquipmentVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, versionNumber }: { id: string; versionNumber: number }) => {
+      const { data } = await authClient.patch(EP_EQUIPMENT_VERSION_ACTIVATE(id), { versionNumber });
       return data.data;
     },
     onSuccess: (_d, { id }) => {

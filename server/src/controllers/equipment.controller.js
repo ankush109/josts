@@ -96,6 +96,32 @@ export const getEquipmentHistory = async (req, res, next) => {
   }
 };
 
+export const createEquipmentVersion = async (req, res, next) => {
+  try {
+    const data = await EquipementService.createEquipmentVersion(
+      req.params.id,
+      req.body,
+      req.user?.userId,
+    );
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const activateEquipmentVersion = async (req, res, next) => {
+  try {
+    const data = await EquipementService.activateEquipmentVersion(
+      req.params.id,
+      req.body?.versionNumber,
+      req.user?.userId,
+    );
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getTraceabilityPresignUrl = async (req, res, next) => {
   try {
     const { id } = req.params;

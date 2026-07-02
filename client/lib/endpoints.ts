@@ -149,6 +149,14 @@ export const EP_EQUIPMENT_TRACEABILITY_PRESIGN = (id: string | number) =>
 export const EP_EQUIPMENT_TRACEABILITY_URL = (id: string | number) =>
   `/equipments/${id}/traceability-url` as const;
 
+/** POST /equipments/:id/versions — create a new calibration-cycle version */
+export const EP_EQUIPMENT_VERSIONS = (id: string | number) =>
+  `/equipments/${id}/versions` as const;
+
+/** PATCH /equipments/:id/versions/activate — body `{ versionNumber: number }` */
+export const EP_EQUIPMENT_VERSION_ACTIVATE = (id: string | number) =>
+  `/equipments/${id}/versions/activate` as const;
+
 // ── Instruments (DUC instrument master) ────────────────────────────────────
 
 /** GET /instruments  |  POST /instruments */

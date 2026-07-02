@@ -3,60 +3,82 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
+const parameterFieldDef = {
+  parameterName:    { type: String },
+  range:            { type: String },
+  subRange:         { type: String },
+  stdValue:         { type: Number },
+  ducReading:       { type: Number },
+  unit:             { type: String },
+  errorPct:         { type: Number },
+  uncertaintyPct:   { type: Number },
+  accuracy:         { type: Number },
+  remarks:          { type: String },
+  acc90DayPct:      { type: Number },
+  acc90DayFloor:    { type: Number },
+  acc90DayFloorUnit:{ type: String },
+  acc1YearPct:      { type: Number },
+  acc1YearFloor:    { type: Number },
+  acc1YearFloorUnit:{ type: String },
+  resolution:       { type: String },
+  maxBurden:        { type: String },
+};
+
 const equipmentSchema = new Schema(
   {
-    // From Image 2 - Traceability Master Index
-    equipmentName: { type: String, required: true },        // "Shunt 100A-100mV"
-    make: { type: String },                              // "thermovolt"
-    model: { type: String },                             // "Shunt (100A/100mV)"
-    serialNo: { type: String },                          // "—" or actual serial
-    idNo: { type: String, required: true },// "JECL/KOL/SHUNT-02"
-    certificateNo: { type: String },                     // "04/14 (2025-2026)"
-    calLab: { type: String },                            // "ZEAL Mfg. & Calibration..."
-    calDate: { type: Date },
-    nextDue: { type: Date },
-    nablCert: { type: String },                          // "CC-3385"
+    equipmentName: { type: String, required: true },
+    make:          { type: String },
+    model:         { type: String },
+    serialNo:      { type: String },
+    idNo:          { type: String, required: true },
+    certificateNo: { type: String },
+    calLab:        { type: String },
+    calDate:       { type: Date },
+    nextDue:       { type: Date },
+    nablCert:      { type: String },
 
     nominalRatio: { type: String },
-    parameters: [
-      {
-        parameterName:  { type: String },  // "DC Voltage", "AC Current"
-        range:          { type: String },  // "100 mV", "11 V"
-        subRange:       { type: String },  // "1 mV", "10 mV"
-        stdValue:       { type: Number },  // nominal std value in `unit`
-        ducReading:     { type: Number },  // actual reading by DUC
-        unit:           { type: String },  // "mV", "V", "µA", "A", "Ω", "kHz"
-        errorPct:       { type: Number },
-        uncertaintyPct: { type: Number },  // expanded uncertainty % from cert
-        accuracy:       { type: Number },  // manufacturer accuracy %
-        remarks:        { type: String },
-
-        // OEM per-range accuracy formula: ±(pct% of output + floor).
-        // `floor` is stored in the display unit given by `floorUnit` (e.g. 3 µV, not 3e-6 V).
-        acc90DayPct:      { type: Number },
-        acc90DayFloor:    { type: Number },
-        acc90DayFloorUnit:{ type: String },
-        acc1YearPct:      { type: Number },
-        acc1YearFloor:    { type: Number },
-        acc1YearFloorUnit:{ type: String },
-        resolution:       { type: String },
-        maxBurden:        { type: String },
-      },
-    ],
+    parameters:   [parameterFieldDef],
 
     traceabilityFileKey: { type: String },
     traceabilityFiles: [
       {
-        key:          { type: String },
-        name:         { type: String },
-        uploadedBy:   { type: String },
-        uploadedAt:   { type: Date, default: Date.now },
+        key:        { type: String },
+        name:       { type: String },
+        uploadedBy: { type: String },
+        uploadedAt: { type: Date, default: Date.now },
       },
     ],
 
-    // App-level metadata
+    // Versioning — each new calibration cycle creates a snapshot
+    currentVersion: { type: Number, default: 1 },
+    activeVersion:  { type: Number, default: 1 },
+    versions: [
+      {
+        versionNumber: { type: Number, required: true },
+        calDate:       { type: Date },
+        nextDue:       { type: Date },
+        certificateNo: { type: String },
+        nablCert:      { type: String },
+        calLab:        { type: String },
+        parameters:    [parameterFieldDef],
+        traceabilityFileKey: { type: String },
+        traceabilityFiles: [
+          {
+            key:        { type: String },
+            name:       { type: String },
+            uploadedBy: { type: String },
+            uploadedAt: { type: Date, default: Date.now },
+          },
+        ],
+        createdAt:  { type: Date, default: Date.now },
+        createdBy:  { type: Schema.Types.ObjectId, ref: "User" },
+        note:       { type: String },
+      },
+    ],
+
     isActive: { type: Boolean, default: true },
-    addedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    addedBy:  { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
 );
