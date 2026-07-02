@@ -114,7 +114,7 @@ const Field: FC<{
   showErrors?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
-  onChange: (key: keyof InstrumentMeta, val: string | boolean) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean | string[]) => void;
   helper?: React.ReactNode;
 }> = ({ label, k, type = "text", span2, span3, required, autoFocus, readOnly, meta, showErrors, touched, onTouch, onChange, helper }) => {
   const isTouched = touched?.has(k) ?? false;
@@ -152,7 +152,7 @@ const SelectField: FC<{
   /** undefined = no status message; true = "Preset params loaded"; false = "No params found" */
   presetMatched?: boolean;
   meta: InstrumentMeta;
-  onChange: (key: keyof InstrumentMeta, val: string | boolean) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean | string[]) => void;
 }> = ({ label, k, options, span2, locked, readOnly, allowCustom, presetMatched, meta, onChange }) => {
   const listId = useId();
   return (
@@ -356,7 +356,7 @@ const MetaGrid: FC<{
   hasPreset?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
-  onChange: (key: keyof InstrumentMeta, val: string | boolean) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean | string[]) => void;
 }> = ({ meta, instParamNames, modelLocked, showErrors, readOnly, hasPreset, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
@@ -445,22 +445,57 @@ const MetaGrid: FC<{
         <Field label="Cal Due Date"       k="refCalDue"      {...sharedProps} type="date" />
         <div className="flex flex-col gap-1.5 col-span-2">
           <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Traceability (Master Equipment)
+            Master Equipment (Reference Standards)
           </Label>
-          <EquipmentCombobox
-            value={meta.refTraceability}
-            equipments={equipments}
-            instParamNames={instParamNames}
-            readOnly={readOnly}
-            onChange={(_name, selected) => {
-              onChange("refTraceability", selected.equipmentName);
-              onChange("refEquipmentId", selected._id);
-              onChange("refMake",        selected.make        || "");
-              onChange("refModel",       selected.model       || "");
-              onChange("refSrNo",        selected.serialNo    || "");
-              onChange("refCalDue",      selected.nextDue     || "");
-            }}
-          />
+          {/* Selected masters */}
+          {meta.refEquipmentIds.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-1">
+              {meta.refEquipmentIds.map((eid) => {
+                const eq = equipments.find((e) => e._id === eid);
+                return (
+                  <span
+                    key={eid}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700"
+                  >
+                    {eq?.equipmentName ?? eid}
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onChange(
+                            "refEquipmentIds",
+                            meta.refEquipmentIds.filter((id) => id !== eid),
+                          )
+                        }
+                        className="ml-0.5 text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {/* Add another master */}
+          {!readOnly && (
+            <EquipmentCombobox
+              value=""
+              equipments={equipments.filter((e) => !meta.refEquipmentIds.includes(e._id))}
+              instParamNames={instParamNames}
+              readOnly={false}
+              onChange={(_name, selected) => {
+                onChange("refEquipmentIds", [...meta.refEquipmentIds, selected._id]);
+                if (meta.refEquipmentIds.length === 0) {
+                  onChange("refTraceability", selected.equipmentName);
+                  onChange("refMake",  selected.make      || "");
+                  onChange("refModel", selected.model     || "");
+                  onChange("refSrNo",  selected.serialNo  || "");
+                  onChange("refCalDue", selected.nextDue  || "");
+                }
+              }}
+            />
+          )}
         </div>
       </CollapsibleSection>
     </div>
@@ -2492,7 +2527,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       make:        inst.meta.make,
       modelType:   inst.meta.modelType,
       refStandard: {
-        equipmentId: inst.meta.refEquipmentId || null,
+        equipmentId: inst.meta.refEquipmentIds[0] || null,
       },
       parameters: inst.params.map((p) => ({
         name:   p.name,
@@ -2618,7 +2653,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     }
   }, [activeInstId, instruments, makeKeyMap]);
 
-  const updateMeta = useCallback((key: keyof InstrumentMeta, val: string | boolean) => {
+  const updateMeta = useCallback((key: keyof InstrumentMeta, val: string | boolean | string[]) => {
     setInstruments((ins) =>
       ins.map((i) => i.id !== activeInstId ? i : { ...i, meta: { ...i.meta, [key]: val } })
     );

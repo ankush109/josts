@@ -28,7 +28,7 @@ import {
 const READINGS_PER_SAMPLE = 5;
 
 function emptyRange(): ParameterRangeSpec {
-  return { label: "", stdUncPct: 0, accPct: 0, accOffset: 0, leastCount: 0, scopePct: 0 };
+  return { label: "", leastCount: 0, frequency: "" };
 }
 
 function emptySamplePoint(): ParameterSampleMeasurement {
@@ -38,12 +38,9 @@ function emptySamplePoint(): ParameterSampleMeasurement {
 type ActiveFilter = "all" | "active" | "inactive";
 
 const RANGE_FIELDS: { key: keyof ParameterRangeSpec; label: string }[] = [
-  { key: "label",      label: "Range Label" },
-  { key: "stdUncPct",  label: "Std Unc %" },
-  { key: "accPct",     label: "Acc %" },
-  { key: "accOffset",  label: "Acc Offset" },
-  { key: "leastCount", label: "Least Count" },
-  { key: "scopePct",   label: "Scope %" },
+  { key: "label",      label: "Range" },
+  { key: "leastCount", label: "Decimal / Least Count" },
+  { key: "frequency",  label: "Frequency" },
 ];
 
 // ── SampleEditor — edits the sample points for a single range ────────────────
@@ -156,7 +153,7 @@ function RangeRow({
   const [examplesOpen, setExamplesOpen] = useState(false);
   return (
     <div className="space-y-1.5">
-      <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2 items-center">
+      <div className="grid grid-cols-[2fr_1fr_1fr_auto_auto] gap-2 items-center">
         {RANGE_FIELDS.map(({ key }) => (
           <Input
             key={key}
@@ -228,7 +225,7 @@ function EditPanel({
 
   const handleRangeChange = (i: number, field: keyof ParameterRangeSpec, val: string) => {
     setRanges((prev) => prev.map((r, idx) =>
-      idx !== i ? r : { ...r, [field]: field === "label" ? val : Number(val) }
+      idx !== i ? r : { ...r, [field]: field === "leastCount" ? Number(val) : val }
     ));
   };
 
@@ -284,9 +281,9 @@ function EditPanel({
       {/* Ranges grid */}
       <div className="space-y-2">
         <div className="overflow-x-auto -mx-1 px-1">
-          <div className="min-w-[640px] space-y-2">
+          <div className="min-w-[360px] space-y-2">
             {/* Header */}
-            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
+            <div className="grid grid-cols-[2fr_1fr_1fr_auto_auto] gap-2">
               {RANGE_FIELDS.map(({ key, label }) => (
                 <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
                   {label}
@@ -370,7 +367,7 @@ function AddParameterDialog({
 
   const handleRangeChange = (i: number, field: keyof ParameterRangeSpec, val: string) => {
     setRanges((prev) => prev.map((r, idx) =>
-      idx !== i ? r : { ...r, [field]: field === "label" ? val : Number(val) }
+      idx !== i ? r : { ...r, [field]: field === "leastCount" ? Number(val) : val }
     ));
   };
 
@@ -440,8 +437,8 @@ function AddParameterDialog({
 
           <div className="space-y-2">
             <div className="overflow-x-auto -mx-1 px-1">
-              <div className="min-w-[640px] space-y-2">
-                <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2">
+              <div className="min-w-[360px] space-y-2">
+                <div className="grid grid-cols-[2fr_1fr_1fr_auto_auto] gap-2">
                   {RANGE_FIELDS.map(({ key, label }) => (
                     <span key={key} className="text-[10px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wide">
                       {label}
@@ -648,7 +645,7 @@ function ReadonlyRanges({
 
   return (
     <div className="border border-slate-200 dark:border-zinc-700 rounded-lg bg-slate-50 dark:bg-zinc-800/40 overflow-x-auto">
-      <table className="w-full min-w-[640px] text-xs">
+      <table className="w-full min-w-[360px] text-xs">
         <thead>
           <tr className="border-b border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800">
             {RANGE_FIELDS.map(({ key, label }) => (
@@ -667,11 +664,8 @@ function ReadonlyRanges({
             return (
               <tr key={i} className="border-b last:border-0 border-slate-200 dark:border-zinc-700">
                 <td className="px-3 py-2 font-medium text-slate-800 dark:text-zinc-200">{r.label}</td>
-                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.stdUncPct}</td>
-                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.accPct}</td>
-                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.accOffset}</td>
                 <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.leastCount}</td>
-                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.scopePct}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">{r.frequency || "—"}</td>
                 <td className="px-3 py-2 text-slate-600 dark:text-zinc-400">
                   {exampleCount > 0 ? (
                     <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">

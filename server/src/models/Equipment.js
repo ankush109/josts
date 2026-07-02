@@ -30,6 +30,17 @@ const equipmentSchema = new Schema(
         uncertaintyPct: { type: Number },  // expanded uncertainty % from cert
         accuracy:       { type: Number },  // manufacturer accuracy %
         remarks:        { type: String },
+
+        // OEM per-range accuracy formula: ±(pct% of output + floor).
+        // `floor` is stored in the display unit given by `floorUnit` (e.g. 3 µV, not 3e-6 V).
+        acc90DayPct:      { type: Number },
+        acc90DayFloor:    { type: Number },
+        acc90DayFloorUnit:{ type: String },
+        acc1YearPct:      { type: Number },
+        acc1YearFloor:    { type: Number },
+        acc1YearFloorUnit:{ type: String },
+        resolution:       { type: String },
+        maxBurden:        { type: String },
       },
     ],
 

@@ -6,7 +6,7 @@ import { format, parseISO, isPast, differenceInDays } from "date-fns";
 import {
   ArrowLeft, Calendar, AlertCircle, CheckCircle2, Clock, FlaskConical,
   Award, Activity, Pencil, Save, X, Power, Plus, Trash2, History, RefreshCw,
-  Upload, ToggleLeft, ToggleRight, FileSpreadsheet, Download, FileText, Eye,
+  Upload, FileSpreadsheet, Download, FileText, Eye,
   Paperclip,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -75,10 +75,21 @@ interface Parameter {
   uncertaintyPct?: number | string | null;
   accuracy?:      number | string | null;
   remarks?:       string;
+  // OEM per-range accuracy formula ±(pct% of output + floor). Floor is in SI base units;
+  // floorUnit preserves the original OEM label (e.g. "µV", "µA", "nF") for display.
+  acc90DayPct?:      number | string | null;
+  acc90DayFloor?:    number | string | null;
+  acc90DayFloorUnit?: string;
+  acc1YearPct?:      number | string | null;
+  acc1YearFloor?:    number | string | null;
+  acc1YearFloorUnit?: string;
   [k: string]: any;
 }
 
-const NUMERIC_PARAM_KEYS = new Set(["stdValue", "ducReading", "errorPct", "uncertaintyPct", "accuracy"]);
+const NUMERIC_PARAM_KEYS = new Set([
+  "stdValue", "ducReading", "errorPct", "uncertaintyPct", "accuracy",
+  "acc90DayPct", "acc90DayFloor", "acc1YearPct", "acc1YearFloor",
+]);
 
 const isPartialNumeric = (v: string): boolean =>
   v === "" || /^-?\d*\.?\d*$/.test(v);
@@ -104,13 +115,17 @@ interface EquipmentDoc {
   updatedAt?:            string;
 }
 
-const BASE_PARAM_COLS: { key: keyof Parameter; label: string; align: "left" | "right" | "center" }[] = [
+type ParamColKey = keyof Parameter | "acc90Day" | "acc1Year";
+
+const BASE_PARAM_COLS: { key: ParamColKey; label: string; align: "left" | "right" | "center" }[] = [
   { key: "range",          label: "Range",           align: "left"  },
   { key: "subRange",       label: "Sub Range",       align: "left"  },
   { key: "stdValue",       label: "Std. Value",      align: "right" },
   { key: "ducReading",     label: "DUC Reading",     align: "right" },
   { key: "unit",           label: "Unit",            align: "center"},
   { key: "errorPct",       label: "Error (%)",       align: "right" },
+  { key: "acc90Day",       label: "90-Day Acc",      align: "right" },
+  { key: "acc1Year",       label: "1-Year Acc",      align: "right" },
   { key: "remarks",        label: "Remarks",         align: "left"  },
 ];
 
@@ -144,7 +159,7 @@ export default function EquipmentDetailPage() {
 
   const isOffline = !useOnlineStatus();
   const [draft, setDraft] = useState<EquipmentDoc | null>(null);
-  const [showAccuracy, setShowAccuracy] = useState(false);
+
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -206,6 +221,8 @@ export default function EquipmentDetailPage() {
   const BLANK_PARAM = (): Parameter => ({
     parameterName: "", range: "", subRange: "", stdValue: null, ducReading: null,
     unit: "", errorPct: null, uncertaintyPct: null, accuracy: null, remarks: "",
+    acc90DayPct: null, acc90DayFloor: null, acc90DayFloorUnit: "",
+    acc1YearPct: null, acc1YearFloor: null, acc1YearFloorUnit: "",
   });
 
   const addParam = () =>
@@ -235,6 +252,10 @@ export default function EquipmentDetailPage() {
       errorPct:      num(String(p.errorPct ?? "")),
       uncertaintyPct: num(String(p.uncertaintyPct ?? "")),
       accuracy:      num(String(p.accuracy ?? "")),
+      acc90DayPct:   num(String(p.acc90DayPct ?? "")),
+      acc90DayFloor: num(String(p.acc90DayFloor ?? "")),
+      acc1YearPct:   num(String(p.acc1YearPct ?? "")),
+      acc1YearFloor: num(String(p.acc1YearFloor ?? "")),
     }));
 
   const onSave = () => {
@@ -550,12 +571,27 @@ export default function EquipmentDetailPage() {
 
         {/* Parameters */}
         {(() => {
+          // Cols 0..5 = Range, SubRange, StdValue, DucReading, Unit, Error(%)
+          const hasTwoFormulas = parameters.some(
+            (p) => (p as any).acc90DayPct != null &&
+              ((p as any).acc90DayPct !== (p as any).acc1YearPct ||
+               (p as any).acc90DayFloor !== (p as any).acc1YearFloor)
+          );
+          const hasOemAccuracy = !hasTwoFormulas && parameters.some(
+            (p) => (p as any).acc1YearPct != null || (p as any).acc1YearFloor != null
+          );
+
+          const oemCols: typeof BASE_PARAM_COLS = hasTwoFormulas
+            ? [BASE_PARAM_COLS[6], BASE_PARAM_COLS[7]]   // acc90Day + acc1Year
+            : hasOemAccuracy
+              ? [{ key: "acc1Year" as ParamColKey, label: "OEM Accuracy", align: "right" as const }]
+              : [];
+
           const paramCols = [
-            ...BASE_PARAM_COLS.slice(0, 6),
-            showAccuracy
-              ? { key: "accuracy"      as keyof Parameter, label: "Accuracy (%)", align: "right" as const }
-              : { key: "uncertaintyPct" as keyof Parameter, label: "Uncertainty (%)", align: "right" as const },
-            BASE_PARAM_COLS[6],
+            ...BASE_PARAM_COLS.slice(0, 6),   // range … errorPct
+            { key: "uncertaintyPct" as ParamColKey, label: "Uncertainty (%)", align: "right" as const },
+            ...oemCols,
+            BASE_PARAM_COLS[8],               // remarks
           ];
           return (
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
@@ -570,15 +606,7 @@ export default function EquipmentDetailPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Traceability / Accuracy toggle */}
-                <button
-                  onClick={() => setShowAccuracy((v) => !v)}
-                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg border border-slate-200 dark:border-zinc-700 text-[11px] font-medium text-slate-600 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  {showAccuracy ? <ToggleRight className="h-3.5 w-3.5 text-blue-500" /> : <ToggleLeft className="h-3.5 w-3.5 text-slate-400" />}
-                  {showAccuracy ? "Accuracy" : "Traceability"}
-                </button>
-                {editMode && (
+{editMode && (
                   <Button size="sm" variant="outline" onClick={addParam} className="gap-1.5 h-8">
                     <Plus className="h-3.5 w-3.5" /> Add row
                   </Button>
@@ -629,24 +657,32 @@ export default function EquipmentDetailPage() {
                           className={`px-3 py-2 font-mono text-[12px] text-${c.align}`}
                           onClick={!editMode && canEdit ? (e) => { e.stopPropagation(); enterEdit(`param-${i}-${String(c.key)}`); } : undefined}
                         >
-                          {editMode ? (
+                          {c.key === "acc90Day" || c.key === "acc1Year" ? (
+                            <FormulaCell
+                              param={p}
+                              prefix={c.key === "acc90Day" ? "acc90Day" : "acc1Year"}
+                              editMode={editMode}
+                              onChange={(patch) => updateParam(i, patch)}
+                              autoFocus={pendingFocus === `param-${i}-${String(c.key)}`}
+                            />
+                          ) : editMode ? (
                             <Input
-                              value={p[c.key] == null ? "" : String(p[c.key])}
+                              value={(p as any)[c.key as string] == null ? "" : String((p as any)[c.key as string])}
                               onChange={(e) => {
                                 const raw = e.target.value;
                                 if (NUMERIC_PARAM_KEYS.has(String(c.key))) {
                                   if (!isPartialNumeric(raw)) return;
                                   const isIntermediate = raw === "-" || raw === "." || raw === "-." || raw.endsWith(".");
-                                  updateParam(i, { [c.key]: raw === "" ? null : isIntermediate ? raw : (num(raw) ?? raw) } as any);
+                                  updateParam(i, { [c.key as string]: raw === "" ? null : isIntermediate ? raw : (num(raw) ?? raw) } as any);
                                 } else {
-                                  updateParam(i, { [c.key]: raw } as Partial<Parameter>);
+                                  updateParam(i, { [c.key as string]: raw } as Partial<Parameter>);
                                 }
                               }}
                               autoFocus={pendingFocus === `param-${i}-${String(c.key)}`}
                               className={`h-8 text-[12px] font-mono ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
                             />
                           ) : (
-                            renderCell(c.key, p[c.key])
+                            renderCell(c.key as keyof Parameter, (p as any)[c.key as string])
                           )}
                         </td>
                       ))}
@@ -892,6 +928,66 @@ function DateField({ label, value, onChange }: {
     <div className="flex items-center justify-between gap-3 py-2 border-b border-slate-100 dark:border-zinc-800 last:border-0">
       <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-widest w-36 shrink-0">{label}</span>
       <Input type="date" value={dateInput(value)} onChange={(e) => onChange(e.target.value)} className="h-8 text-[12px]" />
+    </div>
+  );
+}
+
+function FormulaCell({
+  param,
+  prefix,
+  editMode,
+  onChange,
+  autoFocus,
+}: {
+  param: Parameter;
+  prefix: "acc90Day" | "acc1Year";
+  editMode: boolean;
+  onChange: (patch: Partial<Parameter>) => void;
+  autoFocus: boolean | string | null;
+}) {
+  const pct   = (param as any)[`${prefix}Pct`];
+  const floor = (param as any)[`${prefix}Floor`];
+  const unit  = (param as any)[`${prefix}FloorUnit`] ?? "";
+  const empty = (pct == null || pct === "") && (floor == null || floor === "");
+
+  const hasFloor = floor != null && floor !== "" && Number(floor) !== 0;
+
+  if (!editMode) {
+    if (empty) return <span className="text-slate-300">—</span>;
+    return (
+      <span className="text-[11px] text-slate-600 dark:text-zinc-300 whitespace-nowrap">
+        {pct != null && pct !== "" ? `${pct}%` : ""}
+        {pct != null && pct !== "" && hasFloor ? " + " : ""}
+        {hasFloor ? `${floor}${unit ? ` ${unit}` : ""}` : ""}
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 min-w-[140px]">
+      <Input
+        value={pct == null ? "" : String(pct)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (!/^-?\d*\.?\d*$/.test(raw) && raw !== "") return;
+          onChange({ [`${prefix}Pct`]: raw === "" ? null : Number(raw) } as any);
+        }}
+        autoFocus={!!autoFocus}
+        placeholder="%"
+        className="h-7 text-[11px] font-mono text-right w-16"
+      />
+      <span className="text-slate-300 text-[10px]">+</span>
+      <Input
+        value={floor == null ? "" : String(floor)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (!/^-?\d*\.?\d*$/.test(raw) && raw !== "") return;
+          onChange({ [`${prefix}Floor`]: raw === "" ? null : Number(raw) } as any);
+        }}
+        placeholder="floor"
+        className="h-7 text-[11px] font-mono text-right w-20"
+      />
+      {unit && <span className="text-slate-400 text-[10px] whitespace-nowrap">{unit}</span>}
     </div>
   );
 }

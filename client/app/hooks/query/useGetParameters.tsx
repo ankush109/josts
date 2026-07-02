@@ -4,11 +4,8 @@ import { EP_PARAMETERS } from "@/lib/endpoints";
 
 export interface ParameterRangeSpec {
   label:      string;
-  stdUncPct:  number;
-  accPct:     number;
-  accOffset:  number;
   leastCount: number;
-  scopePct:   number;
+  frequency?: string;
 }
 
 export interface ParameterSampleMeasurement {

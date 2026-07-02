@@ -5,11 +5,8 @@ const { Schema } = mongoose;
 const rangeSpecSchema = new Schema(
   {
     label:      { type: String, required: true },
-    stdUncPct:  { type: Number, default: 0 },
-    accPct:     { type: Number, default: 0 },
-    accOffset:  { type: Number, default: 0 },
     leastCount: { type: Number, default: 0 },
-    scopePct:   { type: Number, default: 0 },
+    frequency:  { type: String },   // optional, e.g. "50 Hz" for AC params
   },
   { _id: false }
 );

@@ -18,7 +18,7 @@ import Parameter            from "../models/Parameter.js";
 import User                 from "../models/User.js";
 import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
 import { normalizeParamName, getAcceptableNames } from "../constants/param-synonyms.js";
-import { toSI }                     from "../utils/unit-normalize.js";
+import { toSI, convertUnit }         from "../utils/unit-normalize.js";
 import { pushPdfJobToRedis }        from "../lib/redis.js";
 import logger                       from "../lib/logger.js";
 import { logAudit, computeDiff, getAuditLog } from "./audit.service.js";
@@ -102,33 +102,37 @@ function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
     return null;
   }
 
-  const nomSI = toSI(nomValue, unit);
+  // Unit-filter: prefer master entries whose unit matches the measurement unit.
+  // Falls back to all candidates if no unit match is found.
+  const unitNorm     = (u) => (u ?? "").trim().toLowerCase();
+  const unitFiltered = candidates.filter((p) => unitNorm(p.unit) === unitNorm(unit));
+  const pool         = unitFiltered.length ? unitFiltered : candidates;
 
   logger.info("[Traceability] Looking up UC% from master equipment", {
-    masterEquipment: equipment.equipmentName,
-    parameter:       paramName,
-    nomValue:        `${nomValue} ${unit}`.trim(),
-    nomValueSI:      `${nomSI} V/A/Ω (SI base)`,
-    candidateCount:  candidates.length,
+    masterEquipment:   equipment.equipmentName,
+    parameter:         paramName,
+    nomValue:          `${nomValue} ${unit}`.trim(),
+    candidateCount:    candidates.length,
+    unitFilteredCount: unitFiltered.length,
+    selectionStrategy: "min-abs-error-pct",
   });
 
   let closest = null;
-  let minDist  = Infinity;
+  let minErr   = Infinity;
 
-  for (const entry of candidates) {
-    const entrySI = toSI(entry.stdValue ?? 0, entry.unit ?? "");
-    const dist    = Math.abs(entrySI - nomSI);
+  for (const entry of pool) {
+    const absErr = Math.abs(entry.errorPct ?? Infinity);
 
     logger.debug("[Traceability] Candidate entry", {
       range:          entry.range,
       subRange:       entry.subRange,
       stdValue:       `${entry.stdValue} ${entry.unit}`,
-      stdValueSI:     entrySI,
-      distanceFromNom: dist,
+      errorPct:       entry.errorPct,
+      absErrorPct:    absErr,
       uncertaintyPct: entry.uncertaintyPct,
     });
 
-    if (dist < minDist) { minDist = dist; closest = entry; }
+    if (absErr < minErr) { minErr = absErr; closest = entry; }
   }
 
   // Resolve effective uncertaintyPct — use direct % value if available,
@@ -139,29 +143,32 @@ function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
     effectiveUncPct = (closest.uncertaintyAbs / Math.abs(nomValue)) * 100;
   }
 
-  logger.info("[Traceability] Selected closest master equipment entry", {
-    masterEquipment:  equipment.equipmentName,
-    parameter:        paramName,
-    nomValue:         `${nomValue} ${unit}`.trim(),
+  logger.info("[Traceability] Selected master equipment entry (min |errorPct|)", {
+    masterEquipment:    equipment.equipmentName,
+    parameter:          paramName,
+    nomValue:           `${nomValue} ${unit}`.trim(),
     matchedBy,
-    matchedParam:     closest.parameterName,
-    matchedRange:     closest.range ?? "—",
-    matchedSubRange:  closest.subRange ?? "—",
-    matchedStdValue:  `${closest.stdValue} ${closest.unit}`,
-    distanceSI:       minDist,
+    matchedParam:       closest.parameterName,
+    matchedRange:       closest.range ?? "—",
+    matchedSubRange:    closest.subRange ?? "—",
+    matchedStdValue:    `${closest.stdValue} ${closest.unit}`,
+    selectedErrorPct:   closest.errorPct,
     source,
-    uncertaintyPct:   `±${effectiveUncPct}%  ← this becomes stdUncPct`,
+    uncertaintyPct:     `±${effectiveUncPct}%  ← this becomes stdUncPct`,
   });
 
   return {
-    uncertaintyPct: effectiveUncPct,
-    equipmentId:    String(equipment._id),
-    equipmentName:  equipment.equipmentName,
-    range:          closest.range    ?? null,
-    subRange:       closest.subRange ?? null,
-    stdValue:       closest.stdValue,
-    unit:           closest.unit,
+    uncertaintyPct:    effectiveUncPct,
+    equipmentId:       String(equipment._id),
+    equipmentName:     equipment.equipmentName,
+    range:             closest.range    ?? null,
+    subRange:          closest.subRange ?? null,
+    stdValue:          closest.stdValue,
+    unit:              closest.unit,
     source,
+    acc1YearPct:       closest.acc1YearPct       ?? null,
+    acc1YearFloor:     closest.acc1YearFloor     ?? null,
+    acc1YearFloorUnit: closest.acc1YearFloorUnit ?? null,
   };
 }
 
@@ -175,8 +182,11 @@ function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
 async function buildEquipmentMap(instruments) {
   const ids = [...new Set(
     (instruments ?? [])
-      .map((i) => i.refStandard?.equipmentId)
-      .filter((id) => id && mongoose.Types.ObjectId.isValid(String(id)))
+      .flatMap((i) => {
+        const arr = i.refStandards?.length ? i.refStandards : (i.refStandard ? [i.refStandard] : []);
+        return arr.map((r) => r?.equipmentId).filter(Boolean);
+      })
+      .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
   )];
 
   if (!ids.length) {
@@ -256,7 +266,10 @@ export function injectComputed(instruments, equipmentMap = {}, paramLookupMap = 
   if (!Array.isArray(instruments)) return instruments;
 
   return instruments.map((inst) => {
-    const masterEquipment = equipmentMap[String(inst.refStandard?.equipmentId ?? "")] ?? null;
+    const refList = inst.refStandards?.length ? inst.refStandards : (inst.refStandard ? [inst.refStandard] : []);
+    const masterEquipments = refList
+      .map((r) => equipmentMap[String(r?.equipmentId ?? "")])
+      .filter(Boolean);
 
     return {
       ...inst,
@@ -272,9 +285,17 @@ export function injectComputed(instruments, equipmentMap = {}, paramLookupMap = 
 
               // Determine stdUncPct: prefer master equipment lookup, fall back to constants
               const effectiveUnit = m.nomUnit?.trim() || param.unit?.trim() || "";
-              const masterMatch   = masterEquipment
-                ? lookupMasterUncertainty(masterEquipment, param.name, m.nomValue, effectiveUnit)
-                : null;
+              const validReadings = (m.readings ?? []).filter((r) => r != null && !isNaN(r));
+              const meanReading   = validReadings.length
+                ? validReadings.reduce((s, r) => s + r, 0) / validReadings.length
+                : m.nomValue;
+
+              // Try each master equipment in order; use first one that matches the parameter
+              let masterMatch = null;
+              for (const equipment of masterEquipments) {
+                const match = lookupMasterUncertainty(equipment, param.name, meanReading, effectiveUnit);
+                if (match) { masterMatch = match; break; }
+              }
               const stdUncPct = masterMatch?.uncertaintyPct ?? constants?.stdUncPct;
 
               if (masterMatch != null) {
@@ -287,16 +308,26 @@ export function injectComputed(instruments, equipmentMap = {}, paramLookupMap = 
                 });
               }
 
-              if (stdUncPct == null && !constants) return { ...m, computed: null };
+              // OEM accuracy formula for O: (acc1YearPct% × nomValue + floor) / √3
+              // Floor stored in floorUnit; convert to measurement's effectiveUnit.
+              let refAccPct         = null;
+              let refAccFloorInUnit = 0;
+              if (masterMatch?.acc1YearPct != null) {
+                refAccPct         = masterMatch.acc1YearPct;
+                refAccFloorInUnit = convertUnit(
+                  masterMatch.acc1YearFloor     ?? 0,
+                  masterMatch.acc1YearFloorUnit ?? "",
+                  effectiveUnit,
+                );
+              }
 
               const budget = computeUncertaintyBudget({
-                nomValue:   m.nomValue,
-                readings:   (m.readings ?? []).filter((r) => r != null && !isNaN(r)),
+                nomValue:         m.nomValue,
+                readings:         (m.readings ?? []).filter((r) => r != null && !isNaN(r)),
                 stdUncPct,
-                accPct:     constants?.accPct,
-                accOffset:  constants?.accOffset,
-                leastCount: constants?.leastCount,
-                scopePct:   constants?.scopePct,
+                leastCount:       constants?.leastCount,
+                refAccPct,
+                refAccFloorInUnit,
               });
 
               return {

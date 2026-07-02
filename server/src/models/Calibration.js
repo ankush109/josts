@@ -149,7 +149,8 @@ const instrumentSchema = new mongoose.Schema(
     ducRange:             { type: String, trim: true, default: "As Per Instrument Spec." },
     calibrationProcedure: { type: String, trim: true, default: "" },
     calibrationMethod:    { type: String, enum: ["Direct Method", "Comparison Method"], default: "Direct Method" },
-    refStandard:          { type: refStandardSchema, default: () => ({}) },
+    refStandard:          { type: refStandardSchema, default: () => ({}) },  // legacy single
+    refStandards:         { type: [refStandardSchema], default: [] },         // multi master support
     parameters:    { type: [parameterSchema],   default: [] },
   },
   { _id: true }

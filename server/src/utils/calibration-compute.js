@@ -77,8 +77,7 @@ function tinv(dof) {
  * @property {number|null} effectiveDof        - [R] Welch-Satterthwaite effective DoF.
  * @property {number}      kFactor             - [S] Coverage factor k.
  * @property {number}      expandedUncertainty - [T] Expanded uncertainty U = k × Uc.
- * @property {number}      scopeClaimed        - [U] Scope claimed by the lab.
- * @property {number}      resultedExpandedUc  - [V] max(T, U).
+ * @property {number}      resultedExpandedUc  - [V] Expanded uncertainty (= T).
  * @property {number}      percentUc           - [W] % uncertainty = V / |nomValue| × 100.
  */
 
@@ -92,20 +91,18 @@ function tinv(dof) {
  * @param {number}   params.nomValue   - Nominal (reference) value.
  * @param {number[]} params.readings   - Raw observed readings (nulls pre-filtered by caller).
  * @param {number}   params.stdUncPct  - % for M = (stdUncPct/100) × |nomValue|.
- * @param {number}   params.accPct     - % for O numerator accuracy term.
- * @param {number}   params.accOffset  - Fixed offset for O numerator accuracy term.
- * @param {number}   params.leastCount - Least count of DUC for P computation.
- * @param {number}   params.scopePct   - % for U = (scopePct/100) × |nomValue|.
+ * @param {number}   params.leastCount          - Least count of DUC for P computation.
+ * @param {number}   [params.refAccPct]         - 1-year OEM acc% from ref std (for O).
+ * @param {number}   [params.refAccFloorInUnit] - OEM floor in measurement unit (for O).
  * @returns {BudgetResult|null}
  */
 export function computeUncertaintyBudget({
   nomValue,
   readings,
   stdUncPct,
-  accPct,
-  accOffset,
   leastCount,
-  scopePct,
+  refAccPct,
+  refAccFloorInUnit,
 }) {
   const valid = (readings ?? []).filter((r) => r != null && !isNaN(r));
   if (!valid.length || nomValue == null) return null;
@@ -117,14 +114,13 @@ export function computeUncertaintyBudget({
   const K = n > 1 ? stdev(valid) / Math.sqrt(n) : 0;                           // u_A (Type A)
   const M = ((stdUncPct  || 0) / 100) * absNom;                                // Std. uncertainty
   const N = M / 2;                                                               // U/c of ref std
-  const O = (((accPct || 0) / 100) * absNom + (accOffset || 0)) / Math.sqrt(3); // U/c acc of ref
-  const P = leastCount ? leastCount / (2 * Math.sqrt(3)) : 0;                  // U/c LC of DUC
-  const Q = Math.sqrt(K ** 2 + N ** 2 + O ** 2 + P ** 2);                     // Combined Uc
-  const R = K === 0 ? Infinity : 4 * (Q ** 4 / K ** 4);                        // Effective DoF
-  const S = tinv(R);                                                             // Coverage factor k
-  const T = S * Q;                                                               // Expanded uncertainty
-  const U = ((scopePct || 0) / 100) * absNom;                                  // Scope claimed
-  const V = Math.max(T, U);                                                     // Resulted expanded U/C
+  const O = (((refAccPct || 0) / 100) * absNom + (refAccFloorInUnit || 0)) / Math.sqrt(3); // U/c acc of ref std
+  const P = leastCount ? leastCount / (2 * Math.sqrt(3)) : 0;                             // U/c LC of DUC
+  const Q = Math.sqrt(K ** 2 + N ** 2 + O ** 2 + P ** 2);                                // Combined Uc
+  const R = K === 0 ? Infinity : 4 * (Q ** 4 / K ** 4);                                   // Effective DoF
+  const S = tinv(R);                                                                        // Coverage factor k
+  const T = S * Q;                                                                          // Expanded uncertainty
+  const V = T;                                                                              // Resulted expanded U/C
   const W = absNom ? (V / absNom) * 100 : 0;                                   // % U/C
 
   return {
@@ -139,7 +135,6 @@ export function computeUncertaintyBudget({
     effectiveDof:        isFinite(R) ? Math.floor(R) : null,
     kFactor:             S,
     expandedUncertainty: T,
-    scopeClaimed:        U,
     resultedExpandedUc:  V,
     percentUc:           W,
   };

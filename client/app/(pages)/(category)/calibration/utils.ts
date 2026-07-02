@@ -369,9 +369,9 @@ export function buildPayload(
         srNo:         inst.meta.refSrNo,
         calDueDate:   inst.meta.refCalDue || undefined,
         traceability: inst.meta.refTraceability,
-        equipmentId:  inst.meta.refEquipmentId || null,
-
+        equipmentId:  inst.meta.refEquipmentIds[0] || null,
       },
+      refStandards: inst.meta.refEquipmentIds.map((id: string) => ({ equipmentId: id })),
       parameters: inst.params.map((p) => ({
         name:   p.name,
         unit:   p.unit,
@@ -438,9 +438,11 @@ export function mapApiToInstruments(
         ? inst.refStandard.calDueDate.slice(0, 10)
         : "",
       refTraceability: inst.refStandard?.traceability ?? "",
-      refEquipmentId:  inst.refStandard?.equipmentId
-        ? String(inst.refStandard.equipmentId)
-        : "",
+      refEquipmentIds: inst.refStandards?.length
+        ? inst.refStandards.map((r: any) => String(r.equipmentId)).filter(Boolean)
+        : inst.refStandard?.equipmentId
+          ? [String(inst.refStandard.equipmentId)]
+          : [],
     },
     params: (inst.parameters ?? []).map((p: any) => ({
       id:           p._id ?? uid(),

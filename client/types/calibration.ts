@@ -54,7 +54,7 @@ export interface InstrumentMeta {
   refSrNo: string;
   refCalDue: string;
   refTraceability: string;
-  refEquipmentId :string
+  refEquipmentIds: string[];
 }
 
 // ── Uncertainty budget ─────────────────────────────────────────────────────
