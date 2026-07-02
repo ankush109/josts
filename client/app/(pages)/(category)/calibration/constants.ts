@@ -87,6 +87,7 @@ export const BLANK_INSTRUMENT_META: InstrumentMeta = {
   refCalDue:      "",
   refTraceability: "",
   refEquipmentIds: [],
+  refStandards:   [],
 };
 
 // ── SI unit families ───────────────────────────────────────────────────────

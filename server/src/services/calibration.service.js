@@ -108,19 +108,42 @@ function lookupMasterUncertainty(equipment, paramName, nomValue, unit) {
   const unitFiltered = candidates.filter((p) => unitNorm(p.unit) === unitNorm(unit));
   const pool         = unitFiltered.length ? unitFiltered : candidates;
 
+  // Step 1 — group pool entries by range prefix (part before the " – " separator).
+  // e.g. "100 mV range – 1 mV"  →  group key "100 mV range"
+  const rangeGroups = new Map();
+  for (const entry of pool) {
+    const rangeKey = (entry.range ?? "").split(/\s*–\s*/)[0].trim() || "(unset)";
+    if (!rangeGroups.has(rangeKey)) rangeGroups.set(rangeKey, []);
+    rangeGroups.get(rangeKey).push(entry);
+  }
+
+  // Step 2 — pick the range group whose stdValues (in SI) are closest to nomValue (in SI).
+  const nomSI = toSI(nomValue, unit);
+  let bestGroupEntries = pool;
+  let bestDist = Infinity;
+  for (const [, entries] of rangeGroups) {
+    const dist = Math.min(
+      ...entries.map((e) => Math.abs(toSI(e.stdValue ?? 0, e.unit ?? unit) - nomSI))
+    );
+    if (dist < bestDist) { bestDist = dist; bestGroupEntries = entries; }
+  }
+
   logger.info("[Traceability] Looking up UC% from master equipment", {
     masterEquipment:   equipment.equipmentName,
     parameter:         paramName,
     nomValue:          `${nomValue} ${unit}`.trim(),
     candidateCount:    candidates.length,
     unitFilteredCount: unitFiltered.length,
-    selectionStrategy: "min-abs-error-pct",
+    rangeGroups:       [...rangeGroups.keys()],
+    selectedGroup:     bestGroupEntries[0]?.range?.split(/\s*–\s*/)[0]?.trim() ?? "—",
+    selectionStrategy: "range-proximity → min-abs-error-pct",
   });
 
+  // Step 3 — within the best group, pick the entry with minimum |errorPct|.
   let closest = null;
   let minErr   = Infinity;
 
-  for (const entry of pool) {
+  for (const entry of bestGroupEntries) {
     const absErr = Math.abs(entry.errorPct ?? Infinity);
 
     logger.debug("[Traceability] Candidate entry", {

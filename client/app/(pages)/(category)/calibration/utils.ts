@@ -363,15 +363,25 @@ export function buildPayload(
       calibrationProcedure: inst.meta.calibrationProcedure || undefined,
       calibrationMethod:    inst.meta.calibrationMethod,
       refStandard: {
-        name:         inst.meta.refStandard,
+        name:         inst.meta.refStandards[0]?.name || inst.meta.refStandard,
         make:         inst.meta.refMake,
         modelType:    inst.meta.refModel,
-        srNo:         inst.meta.refSrNo,
-        calDueDate:   inst.meta.refCalDue || undefined,
+        srNo:         inst.meta.refStandards[0]?.srNo || inst.meta.refSrNo,
+        calDueDate:   inst.meta.refStandards[0]?.calDate || inst.meta.refCalDue || undefined,
         traceability: inst.meta.refTraceability,
-        equipmentId:  inst.meta.refEquipmentIds[0] || null,
+        equipmentId:  inst.meta.refStandards[0]?.equipmentId || inst.meta.refEquipmentIds[0] || null,
       },
-      refStandards: inst.meta.refEquipmentIds.map((id: string) => ({ equipmentId: id })),
+      refStandards: inst.meta.refStandards.length
+        ? inst.meta.refStandards.map((r) => ({
+            equipmentId:  r.equipmentId,
+            name:         r.name,
+            make:         r.make,
+            modelType:    r.modelType,
+            srNo:         r.srNo,
+            calDueDate:   r.calDate || undefined,
+            traceability: r.traceabilityCertNo,
+          }))
+        : inst.meta.refEquipmentIds.map((id: string) => ({ equipmentId: id })),
       parameters: inst.params.map((p) => ({
         name:   p.name,
         unit:   p.unit,
@@ -442,6 +452,20 @@ export function mapApiToInstruments(
         ? inst.refStandards.map((r: any) => String(r.equipmentId)).filter(Boolean)
         : inst.refStandard?.equipmentId
           ? [String(inst.refStandard.equipmentId)]
+          : [],
+      refStandards: inst.refStandards?.length
+        ? inst.refStandards.map((r: any) => ({
+            equipmentId:      String(r.equipmentId ?? ""),
+            calDate:          r.calDueDate ? String(r.calDueDate).slice(0, 10) : "",
+            name:             r.name ?? "",
+            srNo:             r.srNo ?? "",
+            idNo:             r.idNo ?? "",
+            make:             r.make ?? "",
+            modelType:        r.modelType ?? "",
+            traceabilityCertNo: r.traceability ?? "",
+          }))
+        : inst.refStandard?.equipmentId
+          ? [{ equipmentId: String(inst.refStandard.equipmentId), calDate: inst.refStandard.calDueDate ? String(inst.refStandard.calDueDate).slice(0, 10) : "", name: inst.refStandard.name ?? "", srNo: inst.refStandard.srNo ?? "", idNo: "", make: inst.refStandard.make ?? "", modelType: inst.refStandard.modelType ?? "", traceabilityCertNo: inst.refStandard.traceability ?? "" }]
           : [],
     },
     params: (inst.parameters ?? []).map((p: any) => ({

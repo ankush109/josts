@@ -35,9 +35,9 @@ export const getEquipments = async(reqQuery,reqUser)=>{
     const equipment = await Equipment.find(query)
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .sort({ [sortBy]: 1 }) // Defaults to ascending order of nextDue
-      .select("-parameters") // Optional: Exclude nested parameters for faster list loading
-      .lean(); // Faster execution for read-only operations
+      .sort({ [sortBy]: 1 })
+      .select("-parameters -versions.parameters") // exclude heavy arrays from list
+      .lean();
 
     // 3. Get total count for frontend pagination controls
     const count = await Equipment.countDocuments(query);

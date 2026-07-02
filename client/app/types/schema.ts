@@ -32,6 +32,9 @@ export interface Equipment {
   nablCert?: string;
   isActive: boolean;
   parameters?: EquipmentParameter[];
+  currentVersion?: number;
+  activeVersion?: number;
+  versions?: { versionNumber: number; calDate?: string | null; nextDue?: string | null; certificateNo?: string; nablCert?: string; calLab?: string; createdAt?: string }[];
   createdAt: string;
   updatedAt: string;
 }

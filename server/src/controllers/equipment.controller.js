@@ -7,7 +7,7 @@ import { getPresignedUploadUrl, getSignedDownloadUrl } from "../lib/s3.js";
 export const getEquipmentParamSummary = async (req, res, next) => {
   try {
     const equipments = await Equipment.find({ isActive: true })
-      .select("equipmentName make model serialNo nextDue parameters.parameterName")
+      .select("equipmentName make model serialNo idNo nablCert certificateNo nextDue parameters.parameterName")
       .lean();
     res.status(200).json({ success: true, data: equipments });
   } catch (err) {

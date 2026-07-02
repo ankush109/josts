@@ -110,6 +110,7 @@ const refStandardSchema = new mongoose.Schema(
     make:         { type: String, trim: true, default: "" },
     modelType:    { type: String, trim: true, default: "" },
     srNo:         { type: String, trim: true, default: "" },
+    idNo:         { type: String, trim: true, default: "" },
     calDueDate:   { type: Date },
     traceability: { type: String, trim: true, default: "" },
     equipmentId:  { type: mongoose.Schema.Types.ObjectId, ref: "Equipment", default: null },

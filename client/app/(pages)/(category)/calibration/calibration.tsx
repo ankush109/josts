@@ -207,7 +207,7 @@ const SelectField: FC<{
 
 // ─── EquipmentCombobox ────────────────────────────────────────────────────────
 
-type EqOption = { equipmentName: string; _id: string; make?: string; model?: string; serialNo?: string; nextDue?: string; parameters: { parameterName: string }[] };
+type EqOption = { equipmentName: string; _id: string; make?: string; model?: string; serialNo?: string; idNo?: string; nablCert?: string; certificateNo?: string; nextDue?: string; parameters: { parameterName: string }[] };
 
 const EquipmentCombobox: FC<{
   value: string;
@@ -356,7 +356,7 @@ const MetaGrid: FC<{
   hasPreset?: boolean;
   touched?: Set<string>;
   onTouch?: (key: string) => void;
-  onChange: (key: keyof InstrumentMeta, val: string | boolean | string[]) => void;
+  onChange: (key: keyof InstrumentMeta, val: string | boolean | string[] | { equipmentId: string; calDate: string; name: string; srNo: string }[]) => void;
 }> = ({ meta, instParamNames, modelLocked, showErrors, readOnly, hasPreset, touched, onTouch, onChange }) => {
   const [envOpen, setEnvOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
@@ -440,63 +440,88 @@ const MetaGrid: FC<{
       </CollapsibleSection>
 
       <CollapsibleSection label="Reference Standard Used" open={refOpen} onToggle={() => setRefOpen((v) => !v)}>
-        <Field label="Reference Standard" k="refStandard"    {...sharedProps} span2 />
-        <Field label="Sr. No"             k="refSrNo"        {...sharedProps} />
-        <Field label="Cal Due Date"       k="refCalDue"      {...sharedProps} type="date" />
-        <div className="flex flex-col gap-1.5 col-span-2">
-          <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Master Equipment (Reference Standards)
-          </Label>
-          {/* Selected masters */}
-          {meta.refEquipmentIds.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-1">
-              {meta.refEquipmentIds.map((eid) => {
-                const eq = equipments.find((e) => e._id === eid);
-                return (
-                  <span
-                    key={eid}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700"
-                  >
-                    {eq?.equipmentName ?? eid}
-                    {!readOnly && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onChange(
-                            "refEquipmentIds",
-                            meta.refEquipmentIds.filter((id) => id !== eid),
-                          )
-                        }
-                        className="ml-0.5 text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </span>
-                );
-              })}
+        <div className="col-span-2 flex flex-col gap-2">
+          {/* Per-standard table */}
+          {meta.refStandards.length > 0 && (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border">
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-widest">Name</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-widest">Sr. No</th>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-widest">Cal Due Date</th>
+                    {!readOnly && <th className="w-8" />}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {meta.refStandards.map((rs, idx) => (
+                    <tr key={rs.equipmentId} className="bg-background">
+                      <td className="px-3 py-2 text-foreground font-medium">{rs.name || rs.equipmentId}</td>
+                      <td className="px-3 py-2 font-mono text-muted-foreground">{rs.srNo || "—"}</td>
+                      <td className="px-3 py-2">
+                        {readOnly ? (
+                          <span className="text-foreground">{rs.calDate || "—"}</span>
+                        ) : (
+                          <input
+                            type="date"
+                            value={rs.calDate}
+                            onChange={(e) => {
+                              const updated = meta.refStandards.map((r, i) =>
+                                i === idx ? { ...r, calDate: e.target.value } : r
+                              );
+                              onChange("refStandards", updated);
+                            }}
+                            className="h-8 px-2 text-[11px] border border-input rounded-md bg-background text-foreground"
+                          />
+                        )}
+                      </td>
+                      {!readOnly && (
+                        <td className="px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={() => onChange("refStandards", meta.refStandards.filter((_, i) => i !== idx))}
+                            className="text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            ×
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-          {/* Add another master */}
+          {/* Combobox to add more */}
           {!readOnly && (
             <EquipmentCombobox
               value=""
-              equipments={equipments.filter((e) => !meta.refEquipmentIds.includes(e._id))}
+              equipments={equipments.filter((e) => !meta.refStandards.some((r) => r.equipmentId === e._id))}
               instParamNames={instParamNames}
               readOnly={false}
               onChange={(_name, selected) => {
-                onChange("refEquipmentIds", [...meta.refEquipmentIds, selected._id]);
-                if (meta.refEquipmentIds.length === 0) {
+                const isFirst = meta.refStandards.length === 0;
+                const newEntry = {
+                  equipmentId: selected._id,
+                  calDate: "",
+                  name: selected.equipmentName,
+                  srNo: selected.serialNo || "",
+                  idNo: selected.idNo || "",
+                  make: selected.make || "",
+                  modelType: selected.model || "",
+                  traceabilityCertNo: selected.nablCert || selected.certificateNo || "",
+                };
+                onChange("refStandards", [...meta.refStandards, newEntry]);
+                if (isFirst) {
                   onChange("refTraceability", selected.equipmentName);
-                  onChange("refMake",  selected.make      || "");
-                  onChange("refModel", selected.model     || "");
-                  onChange("refSrNo",  selected.serialNo  || "");
-                  onChange("refCalDue", selected.nextDue  || "");
+                  onChange("refMake",  selected.make  || "");
+                  onChange("refModel", selected.model || "");
                 }
               }}
             />
           )}
         </div>
+        <Field label="Traceability" k="refTraceability" {...sharedProps} span2 />
       </CollapsibleSection>
     </div>
   );
@@ -2472,16 +2497,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             errors.push({ message: `[${lbl}] Humidity must be ≤ 60 %RH for Low Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
         }
       }
-      if (!inst.meta.refStandard.trim())
-        errors.push({ message: `[${lbl}] Ref. Standard name is required`, instId: inst.id, fieldId: "field-refStandard" });
-      if (!inst.meta.refMake.trim())
-        errors.push({ message: `[${lbl}] Ref. Standard Make is required`, instId: inst.id, fieldId: "field-refMake" });
-      if (!inst.meta.refModel.trim())
-        errors.push({ message: `[${lbl}] Ref. Standard Model is required`, instId: inst.id, fieldId: "field-refModel" });
-      if (!inst.meta.refSrNo.trim())
-        errors.push({ message: `[${lbl}] Ref. Standard Sr. No is required`, instId: inst.id, fieldId: "field-refSrNo" });
-      if (!inst.meta.refCalDue)
-        errors.push({ message: `[${lbl}] Ref. Standard Cal Due Date is required`, instId: inst.id, fieldId: "field-refCalDue" });
+      if (inst.meta.refStandards.length === 0)
+        errors.push({ message: `[${lbl}] At least one Reference Standard is required`, instId: inst.id });
+      else if (inst.meta.refStandards.some((r) => !r.calDate))
+        errors.push({ message: `[${lbl}] Cal Due Date is required for all Reference Standards`, instId: inst.id });
       if (!inst.meta.refTraceability.trim())
         errors.push({ message: `[${lbl}] Ref. Standard Traceability is required`, instId: inst.id, fieldId: "field-refTraceability" });
       if (inst.params.length === 0)
@@ -2527,7 +2546,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       make:        inst.meta.make,
       modelType:   inst.meta.modelType,
       refStandard: {
-        equipmentId: inst.meta.refEquipmentIds[0] || null,
+        equipmentId: inst.meta.refStandards[0]?.equipmentId || inst.meta.refEquipmentIds[0] || null,
       },
       parameters: inst.params.map((p) => ({
         name:   p.name,
@@ -2653,7 +2672,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     }
   }, [activeInstId, instruments, makeKeyMap]);
 
-  const updateMeta = useCallback((key: keyof InstrumentMeta, val: string | boolean | string[]) => {
+  const updateMeta = useCallback((key: keyof InstrumentMeta, val: string | boolean | string[] | { equipmentId: string; calDate: string; name: string; srNo: string }[]) => {
     setInstruments((ins) =>
       ins.map((i) => i.id !== activeInstId ? i : { ...i, meta: { ...i.meta, [key]: val } })
     );

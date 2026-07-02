@@ -72,21 +72,34 @@ function buildCalibrationResults(parameters = []) {
 }
 
 /**
- * Builds the `referenceStandards` array for the EJS template from the
- * instrument's `refStandard` field.
- * Returns an empty array when no reference data is present.
+ * Builds the `referenceStandards` array for the EJS template.
+ * Prefers `inst.refStandards` (multi-standard array) when present;
+ * falls back to the legacy `inst.refStandard` singular object.
  *
- * @param {object} [ref={}] - `instrument.refStandard` from the DB.
+ * @param {object} inst - Instrument document from the DB.
  * @returns {object[]}
  */
-function buildReferenceStandards(ref = {}) {
+function buildReferenceStandards(inst) {
+  const multi = inst.refStandards ?? [];
+  if (multi.length > 0) {
+    return multi.map((std) => ({
+      name:               std.name || "",
+      makeModel:          [std.make, std.modelType].filter(Boolean).join("/"),
+      validUpto:          formatDate(validUptoFromDueDate(std.calDueDate)),
+      traceabilityCertNo: std.traceability ?? "",
+      idNo:               std.idNo || "",
+      srNo:               std.srNo || "",
+    }));
+  }
+  // Legacy fallback: single refStandard object
+  const ref = inst.refStandard ?? {};
   if (!ref.name) return [];
   return [{
     name:               ref.name,
-    makeModel:          [ref.make, ref.modelType].filter(Boolean).join(" / "),
+    makeModel:          [ref.make, ref.modelType].filter(Boolean).join("/"),
     validUpto:          formatDate(validUptoFromDueDate(ref.calDueDate)),
     traceabilityCertNo: ref.traceability ?? "",
-    idNo:               "",
+    idNo:               ref.idNo || "",
     srNo:               ref.srNo ?? "",
   }];
 }
@@ -129,7 +142,6 @@ function validUptoFromDueDate(due) {
  */
 function buildCalibrationTemplateData(report, instIndex = 0) {
   const inst = report.instruments?.[instIndex] ?? {};
-  const ref  = inst.refStandard ?? {};
 
   return {
     ...CERT_DEFAULTS,
@@ -179,7 +191,7 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
     methodOfCalibration:  inst.calibrationMethod    || "Direct Method",
 
     // Standards & measurement results
-    referenceStandards: buildReferenceStandards(ref),
+    referenceStandards: buildReferenceStandards(inst),
     calibrationResults: buildCalibrationResults(inst.parameters),
 
     // Signatories

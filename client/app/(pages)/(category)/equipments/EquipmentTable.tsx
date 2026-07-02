@@ -2,13 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, ExternalLink, AlertCircle, RefreshCw, Clock, CheckCircle2, ChevronLeft, ChevronRight, FlaskConical, MoreHorizontal, Loader2, Power, CircleSlash } from "lucide-react";
+import {
+  Search, Plus, ExternalLink, AlertCircle, RefreshCw, Clock, CheckCircle2,
+  ChevronLeft, ChevronRight, FlaskConical, MoreHorizontal, Loader2, Power,
+  CircleSlash, ChevronDown, ChevronUp, GitBranch,
+} from "lucide-react";
 import { format, parseISO, isPast, differenceInDays } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useGetEuipments } from "@/app/hooks/query/useGetEquipments";
-import { useCreateEquipment } from "@/app/hooks/mutate/useUpdateEquipment";
+import {
+  useCreateEquipment,
+  useActivateEquipmentVersion,
+} from "@/app/hooks/mutate/useUpdateEquipment";
 import toast from "react-hot-toast";
 import Link from "next/link";
 
@@ -70,7 +78,6 @@ const Stat = ({
         ? "bg-gradient-to-br from-[#1e3a5f] to-[#162d4a] border-[#1e3a5f] text-white shadow-lg shadow-[#1e3a5f]/20"
         : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm dark:bg-zinc-900 dark:border-zinc-800 dark:hover:border-zinc-700"
     }`}>
-      {/* Accent strip for non-active cards */}
       {!active && (
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${
           t === "valid"   ? "bg-emerald-500/70" :
@@ -100,6 +107,96 @@ const Stat = ({
   );
 };
 
+// ─── version expansion row ────────────────────────────────────────────────────
+
+interface EquipmentVersion {
+  versionNumber: number;
+  calDate?:      string | null;
+  nextDue?:      string | null;
+  certificateNo?: string;
+  nablCert?:     string;
+  calLab?:       string;
+  createdAt?:    string;
+}
+
+function VersionsRow({
+  item,
+  colSpan,
+}: {
+  item: any;
+  colSpan: number;
+}) {
+  const { mutate: activateVersion, isPending: isActivating } = useActivateEquipmentVersion();
+  const versions: EquipmentVersion[] = item.versions ?? [];
+  const activeVn: number = item.activeVersion ?? item.currentVersion ?? 1;
+
+  if (!versions.length) return null;
+
+  const sorted = [...versions].sort((a, b) => b.versionNumber - a.versionNumber);
+
+  return (
+    <tr className="bg-slate-50/80 dark:bg-zinc-800/30">
+      <td colSpan={colSpan} className="px-6 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <GitBranch className="h-3.5 w-3.5 text-amber-500" />
+          <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-widest">
+            {versions.length} Calibration Versions
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {sorted.map((v) => {
+            const isActiveV = v.versionNumber === activeVn;
+            return (
+              <div
+                key={v.versionNumber}
+                className={`min-w-[200px] rounded-xl border px-4 py-3 flex flex-col gap-1.5 ${
+                  isActiveV
+                    ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/60 dark:bg-emerald-950/20"
+                    : "border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="font-mono text-[14px] font-bold text-slate-700 dark:text-zinc-100">
+                    v{v.versionNumber}
+                  </span>
+                  {isActiveV && (
+                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60 text-[10px] font-semibold h-5">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-zinc-400 space-y-0.5">
+                  <div><span className="text-slate-400 dark:text-zinc-500">Cal Date: </span>{fmt(v.calDate)}</div>
+                  <div><span className="text-slate-400 dark:text-zinc-500">Next Due: </span>{fmt(v.nextDue)}</div>
+                  {v.certificateNo && <div><span className="text-slate-400 dark:text-zinc-500">Cert: </span>{v.certificateNo}</div>}
+                  {v.createdAt && (
+                    <div className="text-[10px] text-slate-400 dark:text-zinc-500 pt-0.5">
+                      {fmt(v.createdAt)}
+                    </div>
+                  )}
+                </div>
+                {!isActiveV && (
+                  <button
+                    disabled={isActivating}
+                    onClick={() => activateVersion({ id: item._id, versionNumber: v.versionNumber }, {
+                      onSuccess: () => toast.success(`v${v.versionNumber} is now active`),
+                      onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Failed to activate"),
+                    })}
+                    className="mt-1.5 flex items-center justify-center gap-1 h-7 w-full rounded-lg border border-slate-200 dark:border-zinc-700 text-[11px] text-slate-500 dark:text-zinc-400 hover:border-emerald-300 hover:text-emerald-600 dark:hover:border-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    {isActivating ? "Activating…" : "Activate"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 interface CreateForm {
@@ -124,15 +221,17 @@ const BLANK_FORM: CreateForm = {
 type ActiveFilter = "all" | "active" | "inactive";
 type StatusFilter = "all" | "overdue" | "soon" | "ok";
 
+const COL_COUNT = 11;
+
 export default function EquipmentTable() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useGetEuipments(page);
 
-  // ── Add Entry dialog state ──
   const [createOpen, setCreateOpen]   = useState(false);
   const [form, setForm]               = useState<CreateForm>(BLANK_FORM);
   const { mutate: createEquipment, isPending: isCreating } = useCreateEquipment();
@@ -165,13 +264,13 @@ export default function EquipmentTable() {
     });
   }
 
-  const allItems = data?.data ?? [];
+  const allItems  = data?.data ?? [];
   const totalPages = data?.totalPages ?? 1;
   const totalItems = data?.totalItems ?? 0;
 
-  const overdue  = allItems.filter(e => getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined) === "overdue").length;
-  const soon     = allItems.filter(e => getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined) === "soon").length;
-  const valid    = allItems.filter(e => getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined) === "ok").length;
+  const overdue = allItems.filter(e => getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined) === "overdue").length;
+  const soon    = allItems.filter(e => getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined) === "soon").length;
+  const valid   = allItems.filter(e => getDueStatus(typeof e.nextDue === "string" ? e.nextDue : undefined) === "ok").length;
 
   const activeCount   = allItems.filter(e => e.isActive !== false).length;
   const inactiveCount = allItems.filter(e => e.isActive === false).length;
@@ -229,7 +328,6 @@ export default function EquipmentTable() {
                 className="pl-9 h-8 w-72 text-[13px] bg-slate-50 dark:bg-zinc-800/60 border-slate-200 dark:border-zinc-700 rounded-lg"
               />
             </div>
-            {/* Active/Inactive filter */}
             <div className="inline-flex rounded-lg border border-slate-200 dark:border-zinc-700 overflow-hidden bg-slate-50 dark:bg-zinc-800/60">
               {([
                 { v: "all",      label: "All",      count: allItems.length },
@@ -250,7 +348,6 @@ export default function EquipmentTable() {
                 </button>
               ))}
             </div>
-            {/* Due-status filter */}
             <div className="inline-flex rounded-lg border border-slate-200 dark:border-zinc-700 overflow-hidden bg-slate-50 dark:bg-zinc-800/60">
               {([
                 { v: "all",     label: "All Status", count: allItems.length },
@@ -308,7 +405,7 @@ export default function EquipmentTable() {
 
               {isLoading && (
                 <tr>
-                  <td colSpan={11} className="text-center py-20 text-slate-400 dark:text-zinc-500">
+                  <td colSpan={COL_COUNT} className="text-center py-20 text-slate-400 dark:text-zinc-500">
                     <RefreshCw className="h-4 w-4 animate-spin inline mr-2" />Loading equipment…
                   </td>
                 </tr>
@@ -316,7 +413,7 @@ export default function EquipmentTable() {
 
               {isError && (
                 <tr>
-                  <td colSpan={11} className="text-center py-20">
+                  <td colSpan={COL_COUNT} className="text-center py-20">
                     <p className="text-red-500 dark:text-red-400 text-[13px] mb-2">Failed to load equipment.</p>
                     <button onClick={() => refetch()} className="text-[12px] text-slate-400 dark:text-zinc-500 underline underline-offset-2">Retry</button>
                   </td>
@@ -325,7 +422,7 @@ export default function EquipmentTable() {
 
               {!isLoading && !isError && items.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="text-center py-20">
+                  <td colSpan={COL_COUNT} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2 text-slate-400 dark:text-zinc-500">
                       <FlaskConical className="h-10 w-10 opacity-40" />
                       <p className="text-[13px] font-medium">
@@ -344,94 +441,126 @@ export default function EquipmentTable() {
                 </tr>
               )}
 
-              {items.map((item) => (
-                <tr
-                  key={item._id}
-                  onClick={() => router.push(`/equipments/${item._id}`)}
-                  className={`group hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer ${
-                    item.isActive === false ? "opacity-60" : ""
-                  }`}
-                >
+              {items.map((item) => {
+                const hasVersions = (item.versions?.length ?? 0) > 0;
+                const isExpanded  = expandedId === item._id;
+                const activeVn    = item.activeVersion ?? item.currentVersion ?? 1;
 
-                  {/* Equipment name */}
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/40 transition-colors">
-                        <FlaskConical className="h-3.5 w-3.5 text-slate-400 dark:text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-semibold text-[13px] text-slate-800 dark:text-zinc-100 leading-tight truncate">{item.equipmentName || "—"}</div>
-                        <div className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5 truncate">{[item.make, item.model].filter(Boolean).join(" · ") || "—"}</div>
-                      </div>
-                    </div>
-                  </td>
+                return (
+                  <>
+                    <tr
+                      key={item._id}
+                      onClick={() => router.push(`/equipments/${item._id}`)}
+                      className={`group hover:bg-slate-50/70 dark:hover:bg-zinc-800/40 transition-colors cursor-pointer ${
+                        item.isActive === false ? "opacity-60" : ""
+                      } ${isExpanded ? "bg-slate-50/40 dark:bg-zinc-800/20" : ""}`}
+                    >
+                      {/* Equipment name */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-zinc-800 flex items-center justify-center shrink-0 group-hover:bg-blue-50 dark:group-hover:bg-blue-950/40 transition-colors">
+                            <FlaskConical className="h-3.5 w-3.5 text-slate-400 dark:text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-[13px] text-slate-800 dark:text-zinc-100 leading-tight truncate flex items-center gap-2">
+                              {item.equipmentName || "—"}
+                              {hasVersions && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-600 dark:bg-amber-950/30 dark:border-amber-800/50 dark:text-amber-400 font-mono text-[9px] font-bold shrink-0">
+                                  v{activeVn}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5 truncate">{[item.make, item.model].filter(Boolean).join(" · ") || "—"}</div>
+                          </div>
+                        </div>
+                      </td>
 
-                  {/* ID No. */}
-                  <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 dark:bg-teal-950/40 dark:border-teal-900/60 dark:text-teal-300 font-mono text-[11px] font-bold tracking-wide whitespace-nowrap">
-                      {item.idNo}
-                    </span>
-                  </td>
+                      {/* ID No. */}
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 dark:bg-teal-950/40 dark:border-teal-900/60 dark:text-teal-300 font-mono text-[11px] font-bold tracking-wide whitespace-nowrap">
+                          {item.idNo}
+                        </span>
+                      </td>
 
-                  {/* Serial No. */}
-                  <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500 dark:text-zinc-400">{item.serialNo || "—"}</td>
+                      {/* Serial No. */}
+                      <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500 dark:text-zinc-400">{item.serialNo || "—"}</td>
 
-                  {/* Certificate */}
-                  <td className="px-4 py-3.5 text-[11px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap max-w-[160px] truncate" title={item.certificateNo ?? ""}>
-                    {item.certificateNo || "—"}
-                  </td>
+                      {/* Certificate */}
+                      <td className="px-4 py-3.5 text-[11px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap max-w-[160px] truncate" title={item.certificateNo ?? ""}>
+                        {item.certificateNo || "—"}
+                      </td>
 
-                  {/* Cal. Lab */}
-                  <td className="px-4 py-3.5 text-[11px] text-slate-500 dark:text-zinc-400 max-w-[180px] truncate" title={item.calLab ?? ""}>
-                    {item.calLab || "—"}
-                  </td>
+                      {/* Cal. Lab */}
+                      <td className="px-4 py-3.5 text-[11px] text-slate-500 dark:text-zinc-400 max-w-[180px] truncate" title={item.calLab ?? ""}>
+                        {item.calLab || "—"}
+                      </td>
 
-                  {/* Cal. Date */}
-                  <td className="px-4 py-3.5 text-[12px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">{fmt(item.calDate)}</td>
+                      {/* Cal. Date */}
+                      <td className="px-4 py-3.5 text-[12px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">{fmt(item.calDate)}</td>
 
-                  {/* Next Due */}
-                  <td className="px-4 py-3.5 text-[12px] text-slate-600 dark:text-zinc-300 whitespace-nowrap">{fmt(typeof item.nextDue === "string" ? item.nextDue : undefined)}</td>
+                      {/* Next Due */}
+                      <td className="px-4 py-3.5 text-[12px] text-slate-600 dark:text-zinc-300 whitespace-nowrap">{fmt(typeof item.nextDue === "string" ? item.nextDue : undefined)}</td>
 
-                  {/* Status badge */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    <StatusBadge nextDue={typeof item.nextDue === "string" ? item.nextDue : undefined} />
-                  </td>
+                      {/* Status badge */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <StatusBadge nextDue={typeof item.nextDue === "string" ? item.nextDue : undefined} />
+                      </td>
 
-                  {/* Active / Inactive */}
-                  <td className="px-4 py-3.5 whitespace-nowrap">
-                    {item.isActive === false ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
-                        <CircleSlash className="h-3 w-3" /> Inactive
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
-                        <Power className="h-3 w-3" /> Active
-                      </span>
+                      {/* Active / Inactive */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {item.isActive === false ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
+                            <CircleSlash className="h-3 w-3" /> Inactive
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
+                            <Power className="h-3 w-3" /> Active
+                          </span>
+                        )}
+                      </td>
+
+                      {/* NABL */}
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400 font-mono text-[10px]">
+                          {item.nablCert || "—"}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          {hasVersions && (
+                            <button
+                              onClick={() => setExpandedId(isExpanded ? null : item._id)}
+                              className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors ${
+                                isExpanded
+                                  ? "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/30"
+                                  : "text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:text-zinc-500 dark:hover:text-amber-400 dark:hover:bg-amber-950/30"
+                              }`}
+                              title="Show versions"
+                            >
+                              {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                          <Link href={`/equipments/${item._id}`}>
+                            <button className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-zinc-500 dark:hover:text-blue-400 dark:hover:bg-blue-950/40 transition-colors opacity-0 group-hover:opacity-100">
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </button>
+                          </Link>
+                          <button className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors opacity-0 group-hover:opacity-100">
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Version sub-rows */}
+                    {isExpanded && hasVersions && (
+                      <VersionsRow key={`${item._id}-versions`} item={item} colSpan={COL_COUNT} />
                     )}
-                  </td>
-
-                  {/* NABL */}
-                  <td className="px-4 py-3.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400 font-mono text-[10px]">
-                      {item.nablCert || "—"}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Link href={`/equipments/${item._id}`}>
-                        <button className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:text-zinc-500 dark:hover:text-blue-400 dark:hover:bg-blue-950/40 transition-colors">
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </button>
-                      </Link>
-                      <button className="h-7 w-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:text-zinc-500 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors">
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>

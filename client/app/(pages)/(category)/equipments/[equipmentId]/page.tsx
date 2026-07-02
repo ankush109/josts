@@ -21,7 +21,6 @@ import {
   useSetEquipmentActive,
   useDeleteEquipment,
   useCreateEquipmentVersion,
-  useActivateEquipmentVersion,
 } from "@/app/hooks/mutate/useUpdateEquipment";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import { useAuth } from "@/app/provider/AuthProvider";
@@ -161,7 +160,6 @@ export default function EquipmentDetailPage() {
   const { mutate: update, isPending: isSaving } = useUpdateEquipment();
   const { mutate: setActive, isPending: isToggling } = useSetEquipmentActive();
   const { mutate: createVersion, isPending: isCreatingVersion } = useCreateEquipmentVersion();
-  const { mutate: activateVersion, isPending: isActivating } = useActivateEquipmentVersion();
 
   const eq: EquipmentDoc | undefined = res?.data;
   const [editMode, setEditMode] = useState(false);
@@ -419,6 +417,11 @@ export default function EquipmentDetailPage() {
           <p className="text-[12px] text-white/50 mt-0.5">Equipment Detail · <span className="font-mono">{draft.idNo}</span></p>
         </div>
         <DueStatusBadge nextDue={draft.nextDue} />
+        {(draft.versions?.length ?? 0) > 0 && (
+          <Badge className="bg-amber-100 text-amber-700 border border-amber-200 font-mono text-[11px]">
+            v{draft.activeVersion ?? draft.currentVersion ?? 1}
+          </Badge>
+        )}
         <Badge className={draft.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-500"}>
           {draft.isActive ? "Active" : "Inactive"}
         </Badge>
@@ -764,71 +767,6 @@ export default function EquipmentDetailPage() {
           </div>
           );
         })()}
-
-        {/* Versions */}
-        {(draft.versions?.length ?? 0) > 0 && (
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100 dark:border-zinc-800">
-              <div className="h-8 w-8 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
-                <GitBranch className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              </div>
-              <span className="text-[13px] font-semibold text-slate-700 dark:text-zinc-200">Versions</span>
-              <span className="text-[11px] text-slate-400 dark:text-zinc-500">{draft.versions!.length} calibration cycles</span>
-            </div>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {[...(draft.versions ?? [])].reverse().map((v) => {
-                const activeVn = draft.activeVersion ?? draft.currentVersion ?? 1;
-                const isActiveV = v.versionNumber === activeVn;
-                return (
-                  <div
-                    key={v.versionNumber}
-                    className={`rounded-xl border p-4 transition-colors ${
-                      isActiveV
-                        ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/60 dark:bg-emerald-950/20"
-                        : "border-slate-100 bg-slate-50/50 dark:border-zinc-800 dark:bg-zinc-800/20"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="font-mono text-[15px] font-bold text-slate-700 dark:text-zinc-100">
-                        v{v.versionNumber}
-                      </span>
-                      {isActiveV && (
-                        <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60 text-[10px] font-semibold">
-                          Active
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="space-y-1 text-[11px] text-slate-500 dark:text-zinc-400 mb-3">
-                      <div><span className="text-slate-400 dark:text-zinc-500">Cal Date: </span>{fmt(v.calDate)}</div>
-                      <div><span className="text-slate-400 dark:text-zinc-500">Next Due: </span>{fmt(v.nextDue)}</div>
-                      {v.certificateNo && <div><span className="text-slate-400 dark:text-zinc-500">Cert: </span>{v.certificateNo}</div>}
-                      {v.createdAt && (
-                        <div className="text-slate-400 dark:text-zinc-500 text-[10px] pt-1">
-                          {new Date(v.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                        </div>
-                      )}
-                    </div>
-                    {!isActiveV && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full h-7 text-[11px] gap-1"
-                        disabled={isActivating || !canEdit}
-                        onClick={() => activateVersion({ id, versionNumber: v.versionNumber }, {
-                          onSuccess: () => toast.success(`v${v.versionNumber} is now active`),
-                          onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Failed to activate version"),
-                        })}
-                      >
-                        <CheckCircle2 className="h-3 w-3" />
-                        {isActivating ? "Activating…" : "Activate"}
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* History */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
