@@ -121,7 +121,6 @@ interface EquipmentVersion {
 
 function VersionsRow({
   item,
-  colSpan,
 }: {
   item: any;
   colSpan: number;
@@ -135,65 +134,133 @@ function VersionsRow({
   const sorted = [...versions].sort((a, b) => b.versionNumber - a.versionNumber);
 
   return (
-    <tr className="bg-slate-50/80 dark:bg-zinc-800/30">
-      <td colSpan={colSpan} className="px-6 py-4">
-        <div className="flex items-center gap-2 mb-3">
-          <GitBranch className="h-3.5 w-3.5 text-amber-500" />
-          <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-widest">
-            {versions.length} Calibration Versions
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {sorted.map((v) => {
-            const isActiveV = v.versionNumber === activeVn;
-            return (
-              <div
-                key={v.versionNumber}
-                className={`min-w-[200px] rounded-xl border px-4 py-3 flex flex-col gap-1.5 ${
-                  isActiveV
-                    ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/60 dark:bg-emerald-950/20"
-                    : "border-slate-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <span className="font-mono text-[14px] font-bold text-slate-700 dark:text-zinc-100">
-                    v{v.versionNumber}
-                  </span>
-                  {isActiveV && (
-                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60 text-[10px] font-semibold h-5">
-                      Active
-                    </Badge>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-500 dark:text-zinc-400 space-y-0.5">
-                  <div><span className="text-slate-400 dark:text-zinc-500">Cal Date: </span>{fmt(v.calDate)}</div>
-                  <div><span className="text-slate-400 dark:text-zinc-500">Next Due: </span>{fmt(v.nextDue)}</div>
-                  {v.certificateNo && <div><span className="text-slate-400 dark:text-zinc-500">Cert: </span>{v.certificateNo}</div>}
+    <>
+      {sorted.map((v) => {
+        const isActiveV = v.versionNumber === activeVn;
+        return (
+          <tr
+            key={v.versionNumber}
+            className={`bg-slate-50/60 dark:bg-zinc-800/20 border-l-2 transition-colors ${
+              isActiveV
+                ? "border-l-emerald-400 dark:border-l-emerald-500"
+                : "border-l-slate-200 dark:border-l-zinc-700 hover:bg-slate-100/60 dark:hover:bg-zinc-800/40"
+            }`}
+          >
+            {/* Equipment / version label */}
+            <td className="px-4 py-2.5">
+              <div className="flex items-center gap-3 pl-4">
+                <button
+                  type="button"
+                  disabled={isActiveV || isActivating}
+                  onClick={() =>
+                    activateVersion(
+                      { id: item._id, versionNumber: v.versionNumber },
+                      {
+                        onSuccess: () => toast.success(`v${v.versionNumber} is now active`),
+                        onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to activate"),
+                      },
+                    )
+                  }
+                  title={isActiveV ? "Active version" : `Activate v${v.versionNumber}`}
+                  className={`h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                    isActiveV
+                      ? "border-emerald-500 bg-emerald-500 dark:border-emerald-400 dark:bg-emerald-400 cursor-default"
+                      : "border-slate-300 dark:border-zinc-600 hover:border-emerald-500 dark:hover:border-emerald-400 cursor-pointer disabled:opacity-50"
+                  }`}
+                >
+                  {isActiveV && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                </button>
+                <GitBranch className="h-3.5 w-3.5 text-slate-300 dark:text-zinc-600 shrink-0" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 leading-tight">
+                    <span className="font-mono text-[12px] font-bold text-slate-700 dark:text-zinc-200">
+                      v{v.versionNumber}
+                    </span>
+                    {isActiveV && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-900/60 dark:text-emerald-300 text-[9px] font-semibold uppercase tracking-wider">
+                        Active
+                      </span>
+                    )}
+                  </div>
                   {v.createdAt && (
-                    <div className="text-[10px] text-slate-400 dark:text-zinc-500 pt-0.5">
-                      {fmt(v.createdAt)}
+                    <div className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">
+                      created {fmt(v.createdAt)}
                     </div>
                   )}
                 </div>
-                {!isActiveV && (
-                  <button
-                    disabled={isActivating}
-                    onClick={() => activateVersion({ id: item._id, versionNumber: v.versionNumber }, {
-                      onSuccess: () => toast.success(`v${v.versionNumber} is now active`),
-                      onError:   (err: any) => toast.error(err?.response?.data?.message ?? "Failed to activate"),
-                    })}
-                    className="mt-1.5 flex items-center justify-center gap-1 h-7 w-full rounded-lg border border-slate-200 dark:border-zinc-700 text-[11px] text-slate-500 dark:text-zinc-400 hover:border-emerald-300 hover:text-emerald-600 dark:hover:border-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors disabled:opacity-50"
-                  >
-                    <CheckCircle2 className="h-3 w-3" />
-                    {isActivating ? "Activating…" : "Activate"}
-                  </button>
-                )}
               </div>
-            );
-          })}
-        </div>
-      </td>
-    </tr>
+            </td>
+
+            {/* ID No. — inherited */}
+            <td className="px-4 py-2.5 text-[11px] text-slate-300 dark:text-zinc-600">—</td>
+
+            {/* Serial No. — inherited */}
+            <td className="px-4 py-2.5 text-[11px] text-slate-300 dark:text-zinc-600">—</td>
+
+            {/* Certificate */}
+            <td className="px-4 py-2.5 text-[11px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap max-w-[160px] truncate" title={v.certificateNo ?? ""}>
+              {v.certificateNo || "—"}
+            </td>
+
+            {/* Cal. Lab */}
+            <td className="px-4 py-2.5 text-[11px] text-slate-500 dark:text-zinc-400 max-w-[180px] truncate" title={v.calLab ?? ""}>
+              {v.calLab || "—"}
+            </td>
+
+            {/* Cal. Date */}
+            <td className="px-4 py-2.5 text-[12px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+              {fmt(v.calDate)}
+            </td>
+
+            {/* Next Due */}
+            <td className="px-4 py-2.5 text-[12px] text-slate-600 dark:text-zinc-300 whitespace-nowrap">
+              {fmt(v.nextDue)}
+            </td>
+
+            {/* Status */}
+            <td className="px-4 py-2.5 whitespace-nowrap">
+              <StatusBadge nextDue={v.nextDue} />
+            </td>
+
+            {/* Active state */}
+            <td className="px-4 py-2.5 whitespace-nowrap">
+              {isActiveV ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/60">
+                  <CheckCircle2 className="h-3 w-3" /> Active
+                </span>
+              ) : (
+                <button
+                  disabled={isActivating}
+                  onClick={() =>
+                    activateVersion(
+                      { id: item._id, versionNumber: v.versionNumber },
+                      {
+                        onSuccess: () => toast.success(`v${v.versionNumber} is now active`),
+                        onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to activate"),
+                      },
+                    )
+                  }
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:border-emerald-700 dark:hover:text-emerald-400 dark:hover:bg-emerald-950/20 transition-colors disabled:opacity-50"
+                >
+                  {isActivating ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                  {isActivating ? "…" : "Set active"}
+                </button>
+              )}
+            </td>
+
+            {/* NABL */}
+            <td className="px-4 py-2.5">
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400 font-mono text-[10px]">
+                {v.nablCert || "—"}
+              </span>
+            </td>
+
+            {/* Actions column — empty for versions */}
+            <td className="px-4 py-2.5" />
+          </tr>
+        );
+      })}
+    </>
   );
 }
 

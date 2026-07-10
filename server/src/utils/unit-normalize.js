@@ -7,10 +7,10 @@
  */
 
 const SI_FACTORS = {
-  µV: 1e-6, mV: 1e-3, V: 1, kV: 1e3,
-  µA: 1e-6, uA: 1e-6, mA: 1e-3, A: 1, kA: 1e3,
+  nV: 1e-9, µV: 1e-6, uV: 1e-6, mV: 1e-3, V: 1, kV: 1e3,
+  pA: 1e-12, nA: 1e-9, µA: 1e-6, uA: 1e-6, mA: 1e-3, A: 1, kA: 1e3,
   µΩ: 1e-6, mΩ: 1e-3, Ω: 1, kΩ: 1e3, KΩ: 1e3, MΩ: 1e6,
-  pF: 1e-12, nF: 1e-9, µF: 1e-6, mF: 1e-3, F: 1,
+  pF: 1e-12, nF: 1e-9, µF: 1e-6, uF: 1e-6, mF: 1e-3, F: 1,
   mHz: 1e-3, Hz: 1, kHz: 1e3, MHz: 1e6, GHz: 1e9,
   "°C": 1, C: 1,
 };

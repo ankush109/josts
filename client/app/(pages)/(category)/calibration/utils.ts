@@ -378,6 +378,7 @@ export function buildPayload(
             make:         r.make,
             modelType:    r.modelType,
             srNo:         r.srNo,
+            idNo:         r.idNo,
             calDueDate:   r.calDate || undefined,
             traceability: r.traceabilityCertNo,
           }))

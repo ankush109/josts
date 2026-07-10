@@ -440,59 +440,72 @@ const MetaGrid: FC<{
       </CollapsibleSection>
 
       <CollapsibleSection label="Reference Standard Used" open={refOpen} onToggle={() => setRefOpen((v) => !v)}>
-        <div className="col-span-2 flex flex-col gap-2">
-          {/* Per-standard table */}
-          {meta.refStandards.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="bg-muted/40 border-b border-border">
-                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-widest">Name</th>
-                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-widest">Sr. No</th>
-                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground uppercase tracking-widest">Cal Due Date</th>
-                    {!readOnly && <th className="w-8" />}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {meta.refStandards.map((rs, idx) => (
-                    <tr key={rs.equipmentId} className="bg-background">
-                      <td className="px-3 py-2 text-foreground font-medium">{rs.name || rs.equipmentId}</td>
-                      <td className="px-3 py-2 font-mono text-muted-foreground">{rs.srNo || "—"}</td>
-                      <td className="px-3 py-2">
-                        {readOnly ? (
-                          <span className="text-foreground">{rs.calDate || "—"}</span>
-                        ) : (
-                          <input
-                            type="date"
-                            value={rs.calDate}
-                            onChange={(e) => {
-                              const updated = meta.refStandards.map((r, i) =>
-                                i === idx ? { ...r, calDate: e.target.value } : r
-                              );
-                              onChange("refStandards", updated);
-                            }}
-                            className="h-8 px-2 text-[11px] border border-input rounded-md bg-background text-foreground"
-                          />
-                        )}
-                      </td>
-                      {!readOnly && (
-                        <td className="px-2 py-2">
-                          <button
-                            type="button"
-                            onClick={() => onChange("refStandards", meta.refStandards.filter((_, i) => i !== idx))}
-                            className="text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            ×
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="col-span-2 flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Standards Used
+            </Label>
+            {meta.refStandards.length > 0 && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {meta.refStandards.length} {meta.refStandards.length === 1 ? "entry" : "entries"}
+              </span>
+            )}
+          </div>
+
+          {meta.refStandards.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border bg-muted/10 px-3 py-5 text-center">
+              <FlaskConical className="h-4 w-4 mx-auto mb-1 text-muted-foreground/60" />
+              <p className="text-[11px] text-muted-foreground">No reference standards selected</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {meta.refStandards.map((rs, idx) => (
+                <div
+                  key={rs.equipmentId}
+                  className="group flex items-center gap-3 rounded-md border border-border bg-muted/10 hover:bg-muted/20 transition-colors px-3 py-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-medium text-foreground truncate">
+                      {rs.name || rs.equipmentId}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                      <span className="uppercase tracking-widest">SR</span>
+                      <span className="font-mono">{rs.srNo || "—"}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">Cal Due</span>
+                    {readOnly ? (
+                      <span className="h-7 flex items-center text-[11px] text-foreground font-mono">{rs.calDate || "—"}</span>
+                    ) : (
+                      <input
+                        type="date"
+                        value={rs.calDate}
+                        onChange={(e) => {
+                          const updated = meta.refStandards.map((r, i) =>
+                            i === idx ? { ...r, calDate: e.target.value } : r
+                          );
+                          onChange("refStandards", updated);
+                        }}
+                        className="h-7 px-2 text-[11px] border border-input rounded-md bg-background text-foreground"
+                      />
+                    )}
+                  </div>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => onChange("refStandards", meta.refStandards.filter((_, i) => i !== idx))}
+                      className="shrink-0 h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      aria-label="Remove reference standard"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
-          {/* Combobox to add more */}
+
           {!readOnly && (
             <EquipmentCombobox
               value=""
@@ -551,7 +564,7 @@ const MeasureTable: FC<{
   };
 
   const getReadingUnit = (m: Measurement, ri: number): string =>
-    m.readingUnits?.[ri] || "";
+    m.readingUnits?.[ri] || parseNomInput(m.nomValue)?.unit || "";
 
   const updateRangeLabel = (rid: string, label: string) =>
     onUpdateParam({ ...param, ranges: param.ranges.map((r) => r.id === rid ? { ...r, label } : r) });
@@ -2187,10 +2200,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     return [...names].sort();
   }, [equipParamSummary]);
 
-  const blankInstrument = useMemo((): Instrument => ({
-    id: uid(), meta: { ...BLANK_META }, params: [],
+  const blankInstrument = useMemo((): Instrument => makeInstrument({ ...BLANK_META }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), []);
+  []);
   const [instruments,   setInstruments]   = useState<Instrument[]>([blankInstrument]);
   const [activeInstId,  setActiveInstId]  = useState<string>(blankInstrument.id);
   const [activeParamId, setActiveParamId] = useState<string>("");
@@ -2478,8 +2490,6 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
         errors.push({ message: `[${lbl}] Make is required`, instId: inst.id });
       if (!inst.meta.modelType.trim())
         errors.push({ message: `[${lbl}] Model / Type is required`, instId: inst.id });
-      if (!inst.meta.calDate)
-        errors.push({ message: `[${lbl}] Calibration Date is required`, instId: inst.id, fieldId: "field-calDate" });
       if (!inst.meta.slNo.trim())
         errors.push({ message: `[${lbl}] Serial No is required`, instId: inst.id, fieldId: "field-slNo" });
       if (!inst.meta.supplyVoltage.trim())
