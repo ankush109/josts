@@ -10,6 +10,8 @@
  *   computeUncertaintyBudget({ nomValue, readings, ...constants }) → BudgetResult
  */
 
+import { evaluateChain } from "./formula-evaluator.js";
+
 // ─── t-distribution critical values (two-tailed, 95% confidence) ─────────────
 // Indexed by degrees of freedom (1–30). For DoF > 30 the normal approximation
 // k = 2.0 is used (coverage factor for ~95.45% confidence).
@@ -96,6 +98,75 @@ function tinv(dof) {
  * @param {number}   [params.refAccFloorInUnit] - OEM floor in measurement unit (for O).
  * @returns {BudgetResult|null}
  */
+/**
+ * Computes the uncertainty budget using a stored FormulaConfig.
+ * Falls back to computeUncertaintyBudget when no config is provided.
+ *
+ * @param {object} params - Same shape as computeUncertaintyBudget params.
+ * @param {object|null} formulaConfig - FormulaConfig document (lean), or null.
+ * @returns {BudgetResult|null}
+ */
+export function computeWithConfig(params, formulaConfig) {
+  if (!formulaConfig?.formulas?.length) {
+    return computeUncertaintyBudget(params);
+  }
+
+  const {
+    nomValue,
+    readings,
+    stdUncPct,
+    leastCount,
+    refAccPct,
+    refAccFloorInUnit: refAccFloor,
+  } = params;
+
+  const valid = (readings ?? []).filter((r) => r != null && !isNaN(r));
+  if (!valid.length || nomValue == null) return null;
+
+  const absNom = Math.abs(nomValue);
+  const n      = valid.length;
+  const J      = mean(valid);
+  const K      = n > 1 ? stdev(valid) / Math.sqrt(n) : 0;
+
+  const baseScope = {
+    nomValue,
+    absNom,
+    n,
+    J,
+    K,
+    stdUncPct:    stdUncPct    ?? 0,
+    leastCount:   leastCount   ?? 0,
+    refAccPct:    refAccPct    ?? 0,
+    refAccFloor:  refAccFloor  ?? 0,
+  };
+
+  const symbolResults = evaluateChain(formulaConfig.formulas, baseScope);
+
+  const get = (sym) => {
+    const v = symbolResults[sym];
+    return typeof v === "number" ? v : 0;
+  };
+
+  const R = get("R");
+  const Q = get("Q");
+
+  return {
+    meanValue:           J,
+    error:               J - nomValue,
+    stdUcMean:           K,
+    stdUncertainty:      get("M"),
+    ucOfRefStd:          get("N"),
+    ucDueToAccOfRefStd:  get("O"),
+    ucDueToLcOfDuc:      get("P"),
+    combinedUc:          Q,
+    effectiveDof:        isFinite(R) ? Math.floor(R) : null,
+    kFactor:             get("S"),
+    expandedUncertainty: get("T"),
+    resultedExpandedUc:  get("V"),
+    percentUc:           get("W"),
+  };
+}
+
 export function computeUncertaintyBudget({
   nomValue,
   readings,

@@ -251,6 +251,23 @@ export const EP_TEMPLATE_CREATE_VERSION = (key: string) =>
 export const EP_TEMPLATE_ACTIVATE = (key: string) =>
   `/templates/${encodeURIComponent(key)}/activate` as const;
 
+// ── Formula Config ─────────────────────────────────────────────────────────
+
+/** GET /formula-config */
+export const EP_FORMULA_CONFIGS = () => `/formula-config` as const;
+
+/** GET /formula-config/active */
+export const EP_FORMULA_CONFIG_ACTIVE = () => `/formula-config/active` as const;
+
+/** GET /formula-config/:id  |  PUT /formula-config/:id  |  DELETE /formula-config/:id */
+export const EP_FORMULA_CONFIG_BY_ID = (id: string) => `/formula-config/${id}` as const;
+
+/** PATCH /formula-config/:id/activate */
+export const EP_FORMULA_CONFIG_ACTIVATE = (id: string) => `/formula-config/${id}/activate` as const;
+
+/** POST /formula-config/:id/test */
+export const EP_FORMULA_CONFIG_TEST = (id: string) => `/formula-config/${id}/test` as const;
+
 // ── Legacy namespace export ────────────────────────────────────────────────
 // Keeps existing call-sites working while the codebase is migrated to the
 // named exports above.  Remove once all imports are updated.

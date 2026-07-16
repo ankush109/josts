@@ -11,7 +11,8 @@
     "seed:instruments": "node scripts/seedInstruments.js",
     "seed:parameters": "node scripts/seedParameters.js",
     "seed:templates": "node scripts/seedTemplates.js",
-    "import:equipments": "node scripts/importEquipments.js"
+    "import:equipments": "node scripts/importEquipments.js",
+    "seed:formula-config": "node scripts/seedFormulaConfig.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",
@@ -22,6 +23,7 @@
     "express": "^5.2.1",
     "ioredis": "^5.9.2",
     "jsonwebtoken": "^9.0.3",
+    "mathjs": "^15.2.0",
     "mongodb": "^7.0.0",
     "mongoose": "^9.1.5",
     "nodemailer": "^8.0.7",

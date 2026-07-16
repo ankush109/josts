@@ -16,7 +16,8 @@ import CalibrationReport    from "../models/Calibration.js";
 import Equipment            from "../models/Equipment.js";
 import Parameter            from "../models/Parameter.js";
 import User                 from "../models/User.js";
-import { computeUncertaintyBudget } from "../utils/calibration-compute.js";
+import { computeWithConfig } from "../utils/calibration-compute.js";
+import { getActiveFormulaConfig } from "./formula-config.service.js";
 import { normalizeParamName, getAcceptableNames } from "../constants/param-synonyms.js";
 import { toSI, convertUnit }         from "../utils/unit-normalize.js";
 import { pushPdfJobToRedis }        from "../lib/redis.js";
@@ -285,8 +286,10 @@ async function generateCertNo(userId, customerName) {
  * @param {Record<string, object>} equipmentMap  - equipmentId → Equipment doc (pre-fetched)
  * @param {Record<string, object>} paramLookupMap - paramName → rangeLabel → RangeSpec (from DB)
  */
-export function injectComputed(instruments, equipmentMap = {}, paramLookupMap = {}) {
+export async function injectComputed(instruments, equipmentMap = {}, paramLookupMap = {}) {
   if (!Array.isArray(instruments)) return instruments;
+
+  const formulaConfig = await getActiveFormulaConfig();
 
   return instruments.map((inst) => {
     const refList = inst.refStandards?.length ? inst.refStandards : (inst.refStandard ? [inst.refStandard] : []);
@@ -344,14 +347,14 @@ export function injectComputed(instruments, equipmentMap = {}, paramLookupMap = 
                 );
               }
 
-              const budget = computeUncertaintyBudget({
+              const budget = computeWithConfig({
                 nomValue:         m.nomValue,
                 readings:         (m.readings ?? []).filter((r) => r != null && !isNaN(r)),
                 stdUncPct,
                 leastCount:       constants?.leastCount,
                 refAccPct,
                 refAccFloorInUnit,
-              });
+              }, formulaConfig);
 
               return {
                 ...m,
@@ -398,7 +401,7 @@ export async function createReport(data, userId) {
   const report = await CalibrationReport.create({
     ...data,
     certNo,
-    instruments: injectComputed(data.instruments ?? [], equipmentMap, paramLookupMap),
+    instruments: await injectComputed(data.instruments ?? [], equipmentMap, paramLookupMap),
     signatures: {
       ...(data.signatures ?? {}),
       calibratedBy: data.createdBy ?? userId,
@@ -565,7 +568,7 @@ export async function updateReport(reportId, updates) {
       buildEquipmentMap(safeUpdates.instruments),
       buildParamLookupMap(),
     ]);
-    safeUpdates.instruments = injectComputed(safeUpdates.instruments, equipmentMap, paramLookupMap);
+    safeUpdates.instruments = await injectComputed(safeUpdates.instruments, equipmentMap, paramLookupMap);
   }
 
   // Fetch old doc for diff + calibratedBy backfill
@@ -675,7 +678,7 @@ export async function previewCompute(instrument) {
     buildEquipmentMap([instrument]),
     buildParamLookupMap(),
   ]);
-  const [result] = injectComputed([instrument], equipmentMap, paramLookupMap);
+  const [result] = await injectComputed([instrument], equipmentMap, paramLookupMap);
   return result;
 }
 

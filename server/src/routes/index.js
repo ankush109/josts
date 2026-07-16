@@ -17,6 +17,7 @@ import supportRoutes     from "./support.routes.js";
 import dashboardRoutes   from "./dashboard.routes.js";
 import presenceRoutes    from "./presence.routes.js";
 import templateRoutes    from "./template.routes.js";
+import formulaConfigRoutes from "./formula-config.routes.js";
 const router = Router();
 
 /** Liveness probe — no auth required. */
@@ -34,6 +35,7 @@ router.use("/parameters",  parameterRoutes);
 router.use("/support",    supportRoutes);
 router.use("/dashboard",  dashboardRoutes);
 router.use("/presence",   presenceRoutes);
-router.use("/templates",  templateRoutes);
+router.use("/templates",      templateRoutes);
+router.use("/formula-config", formulaConfigRoutes);
 
 export default router;
