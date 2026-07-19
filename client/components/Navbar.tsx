@@ -116,13 +116,13 @@ export default function Navbar() {
                   href={href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150",
+                    "relative flex shrink-0 items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 whitespace-nowrap",
                     active
                       ? "text-primary bg-primary/10 ring-1 ring-inset ring-primary/20"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
                   )}
                 >
-                  <Icon className={cn("h-4 w-4 transition-colors", active ? "text-primary" : "opacity-70 group-hover:opacity-100")} />
+                  <Icon className={cn("h-4 w-4 transition-colors shrink-0", active ? "text-primary" : "opacity-70 group-hover:opacity-100")} />
                   <span className="hidden lg:inline">{label}</span>
                   <span className="lg:hidden">{label.split(" ")[0]}</span>
                 </Link>

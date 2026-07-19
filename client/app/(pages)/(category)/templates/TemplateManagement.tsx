@@ -65,14 +65,20 @@ function Popover({
   children:  React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useLayoutEffect(() => {
     if (!open) return;
     const update = () => {
       const a = anchorRef.current?.getBoundingClientRect();
       if (!a) return;
-      setPos({ top: a.bottom + 4, right: window.innerWidth - a.right });
+      const margin = 12;
+      const vw = window.innerWidth;
+      const width = Math.min(320, vw - margin * 2);
+      let left = a.right - width;
+      if (left < margin) left = margin;
+      if (left + width > vw - margin) left = vw - margin - width;
+      setPos({ top: a.bottom + 4, left, width });
     };
     update();
     window.addEventListener("resize", update);
@@ -103,8 +109,8 @@ function Popover({
   return createPortal(
     <div
       ref={ref}
-      style={{ position: "fixed", top: pos.top, right: pos.right }}
-      className="z-[100] w-[320px] max-h-[60vh] overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-900 shadow-lg"
+      style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+      className="z-[100] max-h-[60vh] overflow-hidden rounded-lg border border-border bg-white dark:bg-zinc-900 shadow-lg"
     >
       {children}
     </div>,
@@ -1056,7 +1062,7 @@ export default function TemplateManagement() {
       </div>
 
       {/* Main grid: editor/diff/preview, full width */}
-      <div className="grid grid-cols-1 gap-3 h-[calc(100vh-220px)] min-h-[480px]">
+      <div className={`grid grid-cols-1 gap-3 ${view === "split" ? "min-h-[calc(100vh-220px)] lg:h-[calc(100vh-220px)]" : "h-[calc(100vh-220px)]"} min-h-[480px]`}>
         <div className="flex flex-col min-h-0">
           {loadingVersion && (
             <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1 shrink-0">
@@ -1077,7 +1083,7 @@ export default function TemplateManagement() {
             </div>
           )}
 
-          <div className={`grid flex-1 min-h-0 ${view === "split" ? "grid-cols-2" : "grid-cols-1"} gap-4`}>
+          <div className={`grid flex-1 min-h-0 ${view === "split" ? "grid-cols-1 lg:grid-cols-2 auto-rows-fr [&>*]:min-h-[420px] lg:[&>*]:min-h-0" : "grid-cols-1"} gap-4`}>
             {(view === "editor" || view === "split") && (
               showDiff
                 ? <DiffView

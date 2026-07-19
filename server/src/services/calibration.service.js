@@ -21,6 +21,7 @@ import { getActiveFormulaConfig } from "./formula-config.service.js";
 import { normalizeParamName, getAcceptableNames } from "../constants/param-synonyms.js";
 import { toSI, convertUnit }         from "../utils/unit-normalize.js";
 import { pushPdfJobToRedis }        from "../lib/redis.js";
+import { getSignedDownloadUrlAttachment } from "../lib/s3.js";
 import logger                       from "../lib/logger.js";
 import { logAudit, computeDiff, getAuditLog } from "./audit.service.js";
 
@@ -1019,6 +1020,67 @@ export async function regeneratePdf(reportId, { timeoutMs = 90_000, pollMs = 500
   }
 
   const err = new Error("PDF generation timed out — try again");
+  err.statusCode = 504;
+  throw err;
+}
+
+/**
+ * Enqueues a raw form-data PDF render job on the worker and blocks until the
+ * worker uploads to S3 (or fails). Returns a signed download URL that expires
+ * per the S3 presign defaults.
+ *
+ * @param {string} reportId
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs=120_000]
+ * @param {number} [opts.pollMs=500]
+ * @returns {Promise<{ url: string, key: string, filename: string }>}
+ */
+export async function generateRawPdf(reportId, { timeoutMs = 120_000, pollMs = 500 } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(reportId)) {
+    const err = new Error("Invalid report ID");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const existing = await CalibrationReport.findOne({ _id: reportId, deletedAt: null }).select("_id reportMeta").lean();
+  if (!existing) {
+    const err = new Error("Report not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  await CalibrationReport.updateOne(
+    { _id: reportId },
+    { $set: { rawPdfPath: "", rawPdfFailedAt: null, rawPdfError: "" } },
+  );
+
+  await pushPdfJobToRedis({ reportId, action: "edit", type: "raw-calibration" });
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, pollMs));
+    const doc = await CalibrationReport.findById(reportId)
+      .select("rawPdfPath rawPdfFailedAt rawPdfError reportMeta")
+      .lean();
+    if (!doc) {
+      const err = new Error("Report not found");
+      err.statusCode = 404;
+      throw err;
+    }
+    if (doc.rawPdfFailedAt) {
+      const err = new Error(doc.rawPdfError || "Raw PDF generation failed");
+      err.statusCode = 422;
+      throw err;
+    }
+    if (doc.rawPdfPath) {
+      const cert = String(doc?.reportMeta?.certNo || reportId).replace(/[^\w.-]+/g, "-");
+      const filename = `${cert}_raw.pdf`;
+      const url = await getSignedDownloadUrlAttachment(doc.rawPdfPath, filename);
+      return { url, key: doc.rawPdfPath, filename };
+    }
+  }
+
+  const err = new Error("Raw PDF generation timed out — try again");
   err.statusCode = 504;
   throw err;
 }

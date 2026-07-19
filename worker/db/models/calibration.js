@@ -100,6 +100,10 @@ const calibrationReportSchema = new mongoose.Schema(
     filePaths:   { type: [String], default: [] },
     pdfFailedAt: { type: Date,   default: null },
     pdfError:    { type: String, default: "" },
+    /** S3 key for the raw form-data PDF export. Set by the raw-calibration job. */
+    rawPdfPath:     { type: String, default: "" },
+    rawPdfFailedAt: { type: Date,   default: null },
+    rawPdfError:    { type: String, default: "" },
   },
   { timestamps: true }
 );

@@ -7,6 +7,7 @@ import { redis } from "./lib/redis.js";
 import { QUEUE_NAME } from "./config.js";
 import { handleReportJob } from "./jobs/report.js";
 import { handleCalibrationJob } from "./jobs/calibration.js";
+import { handleRawCalibrationJob } from "./jobs/rawCalibration.js";
 import logger from "./lib/logger.js";
 
 const log = logger("worker");
@@ -15,8 +16,9 @@ const log = logger("worker");
 
 /** @type {Record<string, (reportId: string) => Promise<void>>} */
 const JOB_HANDLERS = {
-  report:      handleReportJob,
-  calibration: handleCalibrationJob,
+  report:            handleReportJob,
+  calibration:       handleCalibrationJob,
+  "raw-calibration": handleRawCalibrationJob,
 };
 
 // ─── Dispatcher ───────────────────────────────────────────────────────────────
@@ -64,6 +66,13 @@ async function markJobFailed(type, reportId, err) {
     await Calibration.updateOne(
       { _id: reportId },
       { $set: { pdfFailedAt: new Date(), pdfError: message } },
+    );
+  }
+  if (type === "raw-calibration") {
+    const { default: Calibration } = await import("./db/models/calibration.js");
+    await Calibration.updateOne(
+      { _id: reportId },
+      { $set: { rawPdfFailedAt: new Date(), rawPdfError: message } },
     );
   }
 }

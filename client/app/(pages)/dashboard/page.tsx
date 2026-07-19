@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BarChart3, Beaker, FileCode, Users as UsersIcon, Wrench } from "lucide-react";
+import { BarChart3, Beaker, FileCode, Users as UsersIcon, Wrench, Activity } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import UserManagement from "@/app/(pages)/(category)/users/UserManagement";
 import TemplateManagement from "@/app/(pages)/(category)/templates/TemplateManagement";
 import SmokeTestPanel from "./SmokeTest";
+import OpsPanel from "./OpsPanel";
 import Analytics from "./Analytics";
 import {
   useGetDashboard,
@@ -706,13 +707,14 @@ function ActiveUsersPanel({ users, currentUserId }: { users: PresenceUser[] | un
 
 // ─── actions sub-view ──────────────────────────────────────────────────────
 
-type ActionsTab = "users" | "templates" | "smoke";
+type ActionsTab = "users" | "templates" | "ops" | "smoke";
 
 function ActionsView() {
   const [tab, setTab] = useState<ActionsTab>("users");
   const tabs: { key: ActionsTab; label: string; icon: typeof UsersIcon }[] = [
     { key: "users",     label: "Users",     icon: UsersIcon },
     { key: "templates", label: "Templates", icon: FileCode },
+    { key: "ops",       label: "Ops",       icon: Activity },
     { key: "smoke",     label: "Smoke Test", icon: Beaker },
   ];
   return (
@@ -735,6 +737,7 @@ function ActionsView() {
       </div>
       {tab === "users"     && <UserManagement />}
       {tab === "templates" && <TemplateManagement />}
+      {tab === "ops"       && <OpsPanel />}
       {tab === "smoke"     && <SmokeTestPanel />}
     </div>
   );

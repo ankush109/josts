@@ -107,6 +107,10 @@ export const EP_CALIBRATION_AUDIT_LOG = (reportId: string) =>
 export const EP_REGENERATE_CALIBRATION_PDF = (reportId: string) =>
   `/calibration-report/${reportId}/regenerate-pdf`;
 
+/** POST /calibration-report/:reportId/raw-pdf — server-rendered raw-form-data PDF */
+export const EP_RAW_CALIBRATION_PDF = (reportId: string) =>
+  `/calibration-report/${reportId}/raw-pdf`;
+
 /** POST /calibration-report/:reportId/reopen — admin reverts to "submitted" */
 export const EP_REOPEN_CALIBRATION_REPORT = (reportId: string) =>
   `/calibration-report/${reportId}/reopen`;

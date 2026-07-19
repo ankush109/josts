@@ -11,6 +11,7 @@
 
 import { Cloud, CloudOff, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useSyncQueue } from "../hooks/useSyncQueue";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 
@@ -20,39 +21,46 @@ export default function SyncIndicator() {
 
   if (online && pendingCount === 0) return null;
 
+  const label = !online
+    ? (pendingCount > 0 ? `${pendingCount} pending` : "Offline")
+    : `${pendingCount} pending`;
+
   return (
-    <div className="hidden sm:flex items-center gap-2 mr-2">
-      <div
-        className="flex items-center gap-1.5 text-xs text-muted-foreground"
-        aria-live="polite"
+    <div className="hidden sm:flex items-center gap-1.5 mr-1 shrink-0" aria-live="polite">
+      {/* Status chip — icon + count, no wrapping */}
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 h-7 px-2 rounded-md text-[11px] font-medium whitespace-nowrap",
+          !online
+            ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+        )}
+        title={label}
       >
         {!online ? (
-          <>
-            <CloudOff className="h-3.5 w-3.5 text-amber-500" />
-            <span>{pendingCount > 0 ? `${pendingCount} pending` : "Offline"}</span>
-          </>
-        ) : pendingCount > 0 ? (
-          <>
-            <Cloud className="h-3.5 w-3.5" />
-            <span>{pendingCount} pending</span>
-          </>
-        ) : null}
-      </div>
+          <CloudOff className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <Cloud className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span className="tabular-nums">{pendingCount || (!online ? "!" : "")}</span>
+      </span>
 
+      {/* Sync button — icon only, tighter footprint */}
       {online && pendingCount > 0 && (
         <Button
           size="sm"
           variant="outline"
           onClick={() => syncNow()}
           disabled={running}
-          className="h-7 gap-1.5 text-xs"
+          className="h-7 w-7 p-0 shrink-0"
+          title={running ? "Syncing…" : "Sync now"}
+          aria-label={running ? "Syncing…" : "Sync now"}
         >
           {running ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <RefreshCw className="h-3 w-3" />
+            <RefreshCw className="h-3.5 w-3.5" />
           )}
-          {running ? "Syncing…" : "Sync now"}
         </Button>
       )}
     </div>

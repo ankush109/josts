@@ -54,6 +54,29 @@ export async function getReportUrl(req, res, next) {
 }
 
 /**
+ * GET /report/pdf/:id
+ * Public 302 redirect to a freshly-signed S3 URL for the calibration PDF.
+ * No auth — designed for QR-code scans from printed certificates.
+ * The QR code encodes this URL so a stable link survives regenerations
+ * (signed URLs otherwise expire in hours).
+ *
+ * @type {import("express").RequestHandler}
+ */
+export async function redirectToReportPdf(req, res, next) {
+  try {
+    const { fileUrls } = await ReportService.getReportSignedUrl(req.params.id, true, false);
+    if (!fileUrls?.length) {
+      const err = new Error("PDF not available");
+      err.statusCode = 404;
+      throw err;
+    }
+    res.redirect(302, fileUrls[0]);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * GET /report/drafts/:id
  * Returns a single report owned by the requesting user.
  *

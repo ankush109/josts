@@ -150,12 +150,14 @@ async function buildCalibrationTemplateData(report, instIndex = 0) {
     : "kol";
   const letterHead = LETTER_HEAD_VARIANTS[letterHeadKey];
 
-  // Per-report QR — encodes the deep-link so scanning takes you to the
-  // report. Only generated when the chosen letterhead needs one.
+  // Per-report QR — encodes the public PDF redirect endpoint so scanning the
+  // printed certificate opens the soft-copy PDF directly (not the report UI).
+  // The server route `/report/pdf/:id` is public and 302-redirects to a fresh
+  // signed S3 URL, so this link stays valid across PDF regenerations.
   let qrUrl = "";
   if (letterHead.showQr && report._id) {
     try {
-      const reportUrl = `${PUBLIC_APP_URL}/calibration/${String(report._id)}`;
+      const reportUrl = `${PUBLIC_APP_URL}/api-proxy/report/pdf/${String(report._id)}`;
       qrUrl = await QRCode.toDataURL(reportUrl, {
         errorCorrectionLevel: "M",
         margin: 1,

@@ -5,7 +5,7 @@ import {
   Eye, Download, Loader2, RefreshCw, XCircle,
   MoreHorizontal, Pencil, FileText, History,
   ShieldCheck, ShieldX, RotateCcw, UserCog, Trash2, AlertCircle,
-  FlaskConical, Layers,
+  FlaskConical, Layers, FileSpreadsheet, FileType2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -247,6 +247,8 @@ export function RowActionsMenu({
   onReopen,
   onReassign,
   onDelete,
+  onDownloadRawExcel,
+  onDownloadRawPdf,
   t,
 }: {
   report: ReportRow;
@@ -259,6 +261,8 @@ export function RowActionsMenu({
   onReopen: () => void;
   onReassign: () => void;
   onDelete: () => void;
+  onDownloadRawExcel: () => void;
+  onDownloadRawPdf: () => void;
   t: ThemeTokens;
 }) {
   return (
@@ -288,6 +292,14 @@ export function RowActionsMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onHistory(); }}>
           <History size={13} style={{ marginRight: 8, color: t.muted }} /> View history
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDownloadRawExcel(); }}>
+          <FileSpreadsheet size={13} style={{ marginRight: 8, color: t.muted }} /> Raw data · Excel
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDownloadRawPdf(); }}>
+          <FileType2 size={13} style={{ marginRight: 8, color: t.muted }} /> Raw data · PDF
         </DropdownMenuItem>
 
         {isAdmin && report.status !== "draft" && (

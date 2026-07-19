@@ -12,6 +12,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import type { AxiosError } from "axios";
 
 import { AuthBrandingPanel } from "@/components/AuthBrandingPanel";
+import Wordmark from "@/components/Wordmark";
 import { useRegisterMutation } from "@/app/hooks/mutation/useRegisterMutation";
 
 const registerSchema = z
@@ -93,15 +94,10 @@ export function RegisterForm() {
 
         {/* Mobile wordmark */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }} className="lg:hidden">
-          <div style={{
-            width: 32, height: 32, borderRadius: 8, background: ACCENT,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
-              <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
-            </svg>
-          </div>
-          <span style={{ fontWeight: 700, fontSize: 22, letterSpacing: "-0.01em", color: INK }}>Jasper</span>
+          <Wordmark size="md" markOnly />
+          <span style={{ fontWeight: 700, fontSize: 22, letterSpacing: "-0.01em", color: INK }}>
+            Jasper
+          </span>
         </div>
 
         <div style={{ width: "100%", maxWidth: 380 }}>

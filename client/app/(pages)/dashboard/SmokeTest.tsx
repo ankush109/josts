@@ -594,7 +594,7 @@ function PipelineRow({
       <button
         onClick={onToggle}
         disabled={!canExpand}
-        className="w-full flex items-center gap-3 px-5 py-3.5 text-left disabled:cursor-default"
+        className="w-full flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 sm:px-5 py-3 sm:py-3.5 text-left disabled:cursor-default"
       >
         {/* index gutter */}
         <div className="w-6 text-center font-mono text-[10px] text-muted-foreground">
@@ -633,14 +633,14 @@ function PipelineRow({
         </div>
 
         {/* detail + duration */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 basis-full sm:basis-auto ml-9 sm:ml-0 justify-start sm:justify-end min-w-0">
           {duration && (
             <span className="flex items-center gap-1 text-[10.5px] font-mono text-muted-foreground">
               <Timer className="h-3 w-3" />
               {duration}s
             </span>
           )}
-          <span className={`text-[11px] font-mono ${
+          <span className={`text-[11px] font-mono truncate min-w-0 ${
             step.status === "failed"  ? "text-red-600" :
             step.status === "passed"  ? "text-emerald-600" :
             step.status === "running" ? "text-blue-500" :

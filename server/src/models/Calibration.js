@@ -217,6 +217,11 @@ const calibrationReportSchema = new mongoose.Schema(
     /** Set by the worker when PDF generation fails. Cleared when a new job is queued. */
     pdfFailedAt:         { type: Date,   default: null },
     pdfError:            { type: String, default: "" },
+    /** S3 key for the "raw form data" PDF export. Populated by the raw-calibration job. */
+    rawPdfPath:          { type: String, default: "" },
+    /** Set when raw-PDF generation fails. Cleared when a new job is queued. */
+    rawPdfFailedAt:      { type: Date,   default: null },
+    rawPdfError:         { type: String, default: "" },
     /** Soft-delete timestamp. Non-null means the report is deleted. */
     deletedAt:           { type: Date, default: null },
     /** Total view count — incremented on every getReportById. */

@@ -26,7 +26,9 @@ import {
 } from "@/app/lib/offline-drafts";
 import { useOnlineStatus } from "@/app/hooks/useOnlineStatus";
 import { cn } from "@/lib/utils";
-import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine, GitBranch, List, FileDown } from "lucide-react";
+import { Plus, X, Loader2, ArrowLeft, FlaskConical, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, Calculator, Info, History, ArrowRight, MapPin, Menu, Save, Send, Eye, EyeOff, PenLine, GitBranch, List, FileDown, FileSpreadsheet, FileType2 } from "lucide-react";
+import { exportRawExcel, exportRawPdf } from "./_components/rawExport";
+import { RawExportPreview } from "./_components/RawExportPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -557,18 +559,26 @@ const MeasureTable: FC<{
   const unitFamily = (unit: string): string[] =>
     SI_UNIT_FAMILIES[UNIT_TO_FAMILY_KEY[unit] ?? unit] ?? (unit ? [unit] : []);
 
-  const ALL_KNOWN_UNITS = new Set(Object.values(SI_UNIT_FAMILIES).flat());
-
-  const isKnownUnit = (u: string) => !u || ALL_KNOWN_UNITS.has(u);
-
   const unitSuggestions = (typed: string): string[] => {
     const family = unitFamily(param.unit);
     if (!typed) return family;
     return family.filter((u) => u.toLowerCase().startsWith(typed.toLowerCase()));
   };
 
-  const getReadingUnit = (m: Measurement, ri: number): string =>
-    m.readingUnits?.[ri] || parseNomInput(m.nomValue)?.unit || "";
+  /**
+   * Extracts the unit prefix from a range label like "500mA/0.1" → "mA".
+   * Falls back to the raw label if parseNomInput can't handle it.
+   */
+  const parseRangeUnit = (label: string): string => {
+    const head = String(label ?? "").split("/")[0].trim();
+    return parseNomInput(head)?.unit || "";
+  };
+
+  const getReadingUnit = (m: Measurement, ri: number, rangeLabel?: string): string =>
+    m.readingUnits?.[ri]
+    || parseNomInput(m.nomValue)?.unit
+    || parseRangeUnit(rangeLabel ?? "")
+    || "";
 
   const updateRangeLabel = (rid: string, label: string) =>
     onUpdateParam({ ...param, ranges: param.ranges.map((r) => r.id === rid ? { ...r, label } : r) });
@@ -768,7 +778,12 @@ const MeasureTable: FC<{
                   const val = m.readings[ri];
                   return (
                   <td key={m.id} className="border border-border p-0">
-                    <div className="flex items-center justify-center gap-0">
+                    <div
+                      className={cn(
+                        "group/reading flex items-center h-8 w-full transition-colors relative",
+                        !readOnly && "focus-within:bg-blue-50/40 dark:focus-within:bg-blue-950/20",
+                      )}
+                    >
                       <input
                         id={`reading-${m.id}-${ri}`}
                         data-reading-input="true"
@@ -789,28 +804,32 @@ const MeasureTable: FC<{
                           }
                         }}
                         placeholder="—"
-                        className={cn("w-10 font-mono text-[12px] text-center bg-transparent border-none outline-none py-2 placeholder:text-muted-foreground/20", readOnly && "cursor-default")}
+                        inputMode="decimal"
+                        className={cn(
+                          "flex-1 min-w-0 font-mono text-[12px] text-right bg-transparent border-none outline-none pl-1.5 pr-1 placeholder:text-muted-foreground/30 tabular-nums",
+                          readOnly && "cursor-default",
+                        )}
                       />
-                      <div className="relative shrink-0">
+                      <div className="relative shrink-0 flex items-center">
                         <input
                           type="text"
-                          value={getReadingUnit(m, ri)}
+                          value={m.readingUnits?.[ri] ?? ""}
                           disabled={readOnly}
                           onChange={(e) => updateReadingUnit(r.id, m.id, ri, e.target.value)}
                           onFocus={() => !readOnly && setUnitFocus({ rid: r.id, mid: m.id, ri })}
                           onBlur={() => setTimeout(() => setUnitFocus(null), 150)}
-                          placeholder="unit"
+                          placeholder={(parseNomInput(m.nomValue)?.unit || parseRangeUnit(r.label)) || "unit"}
                           className={cn(
-                            "w-8 text-[10px] font-mono text-center bg-transparent border-b outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-600 transition-colors",
-                            readOnly ? "cursor-default border-transparent" :
-                            !getReadingUnit(m, ri) ? "border-zinc-200 dark:border-zinc-700 text-zinc-400" :
-                            isKnownUnit(getReadingUnit(m, ri)) ? "border-blue-300 text-blue-600 dark:text-blue-400" :
-                            "border-red-300 text-red-500"
+                            "w-9 text-[10px] font-mono text-left bg-transparent border-none outline-none pl-1 pr-1.5 tracking-wide transition-colors",
+                            readOnly && "cursor-default",
+                            m.readingUnits?.[ri]
+                              ? "text-zinc-700 dark:text-zinc-200 font-semibold"
+                              : "text-zinc-400 dark:text-zinc-500 placeholder:text-zinc-400 dark:placeholder:text-zinc-500",
                           )}
                         />
-                        {unitFocus?.mid === m.id && unitFocus?.ri === ri && unitSuggestions(getReadingUnit(m, ri)).length > 0 && (
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 z-50 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-md shadow-lg overflow-hidden min-w-[3.5rem]">
-                            {unitSuggestions(getReadingUnit(m, ri)).map((u) => (
+                        {unitFocus?.mid === m.id && unitFocus?.ri === ri && unitSuggestions(m.readingUnits?.[ri] ?? "").length > 0 && (
+                          <div className="absolute top-full right-0 z-50 mt-1 bg-white dark:bg-zinc-900 border border-border rounded-md shadow-lg overflow-hidden min-w-[3.5rem]">
+                            {unitSuggestions(m.readingUnits?.[ri] ?? "").map((u) => (
                               <button
                                 key={u}
                                 type="button"
@@ -821,9 +840,9 @@ const MeasureTable: FC<{
                                 }}
                                 className={cn(
                                   "w-full px-2 py-1 text-[10px] font-mono text-left transition-colors",
-                                  getReadingUnit(m, ri) === u
+                                  getReadingUnit(m, ri, r.label) === u
                                     ? "bg-blue-600 text-white"
-                                    : "hover:bg-blue-50 dark:hover:bg-blue-950 text-zinc-700 dark:text-zinc-300"
+                                    : "hover:bg-blue-50 dark:hover:bg-blue-950 text-zinc-700 dark:text-zinc-300",
                                 )}
                               >
                                 {u}
@@ -1752,46 +1771,63 @@ const SbInstrument: FC<{
 
   return (
     <div className={cn(
-      "mb-2 rounded-xl border transition-all",
+      "mb-1.5 rounded-lg border transition-colors",
       isActive
-        ? "border-blue-200 bg-blue-50/40 shadow-sm dark:border-blue-800 dark:bg-blue-950/30"
-        : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800/50 dark:hover:border-zinc-600"
+        ? "border-blue-300/70 bg-blue-50/50 dark:border-blue-800/70 dark:bg-blue-950/25"
+        : "border-transparent bg-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
     )}>
       <div
         onClick={() => { onSelectInstrument(inst.id); if (inst.params[0]) onSelectParam(inst.id, inst.params[0].id); }}
-        className="flex items-center justify-between px-2.5 py-2.5 rounded-xl cursor-pointer group"
+        className="flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer group"
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className={cn(
-            "shrink-0 h-5 w-5 rounded-md text-[10px] font-bold flex items-center justify-center",
-            isActive ? "bg-blue-600 text-white" : "bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400"
+        <span className={cn(
+          "shrink-0 mt-0.5 h-5 w-5 rounded-md text-[10px] font-bold flex items-center justify-center font-mono",
+          isActive ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+        )}>
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className={cn(
+            "text-[13px] font-semibold leading-tight truncate",
+            isActive ? "text-blue-900 dark:text-blue-200" : "text-zinc-800 dark:text-zinc-200",
           )}>
-            {index + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className={cn("text-xs font-semibold truncate", isActive ? "text-blue-900 dark:text-blue-300" : "text-zinc-800 dark:text-zinc-200")}>{label}</div>
-            {sub && <div className="text-[10px] text-zinc-400 mt-0.5 truncate">{sub}</div>}
-            <div className="text-[10px] text-zinc-400 mt-0.5 font-mono">{inst.meta.slNo || inst.meta.nomenclature || "—"}</div>
-            {/* Completion bar */}
-            {(() => {
-              const pct = getInstCompletion(inst);
-              return (
-                <div className="mt-1.5 h-1 rounded-full bg-zinc-100 dark:bg-zinc-700 overflow-hidden">
+            {label}
+          </div>
+          {sub && (
+            <div className="text-[10.5px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate font-mono">
+              {sub}{inst.meta.slNo ? ` · ${inst.meta.slNo}` : ""}
+            </div>
+          )}
+          {(() => {
+            const pct = getInstCompletion(inst);
+            return (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 h-1 rounded-full bg-zinc-200/70 dark:bg-zinc-700/60 overflow-hidden">
                   <div
-                    className={cn("h-full rounded-full transition-all duration-500",
-                      pct === 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-zinc-300 dark:bg-zinc-500"
+                    className={cn(
+                      "h-full rounded-full transition-all duration-500",
+                      pct === 100 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-zinc-400 dark:bg-zinc-500",
                     )}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
-              );
-            })()}
-          </div>
+                <span className={cn(
+                  "text-[9.5px] font-mono tabular-nums shrink-0",
+                  pct === 100 ? "text-emerald-600 dark:text-emerald-400"
+                  : pct >= 50 ? "text-amber-600 dark:text-amber-400"
+                  : "text-zinc-400 dark:text-zinc-500",
+                )}>
+                  {pct}%
+                </span>
+              </div>
+            );
+          })()}
         </div>
         {!readOnly && (
           <button
             onClick={(e) => { e.stopPropagation(); onRemoveInstrument(inst.id); }}
-            className="ml-1.5 p-0.5 text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded"
+            className="p-0.5 text-zinc-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded"
+            title="Remove instrument"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -2609,6 +2645,25 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
     });
   }
 
+  /** Build a report snapshot for raw-data export from current in-memory form state. */
+  function buildExportPayload() {
+    const existing = (existingReport ?? {}) as Record<string, unknown>;
+    return {
+      _id:          reportId ?? "",
+      status:       (existing.status as string) ?? "draft",
+      createdAt:    existing.createdAt,
+      updatedAt:    existing.updatedAt,
+      submittedAt:  existing.submittedAt,
+      verifiedAt:   existing.verifiedAt,
+      rejectedAt:   existing.rejectedAt,
+      reportMeta,
+      instruments,
+      signatures:   existing.signatures ?? {},
+    };
+  }
+
+  const [rawExportOpen, setRawExportOpen] = useState(false);
+
   function handleSave(status: "draft" | "submitted") {
     if (!userId) { toast.error("You must be logged in to save a report"); return; }
     const errors = validate(status);
@@ -3380,34 +3435,31 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       )}>
 
         {/* Brand header */}
-        <div className="px-4 py-4 border-b border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center gap-2.5 mb-3">
+        <div className="px-3 py-3 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => isDirty ? setExitDialog(true) : router.push("/calibration")}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+              className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+              title="Back to reports"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            {/* Close button on mobile */}
-            <button
-              className="lg:hidden ml-auto p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <Wordmark size="sm" showDot caption="Calibration Suite" />
             </div>
-          </div>
-          <div className="flex items-center gap-2">
             {isEditMode && (
               <div className="relative">
                 <button
                   onClick={() => setHistoryPopover((v) => !v)}
-                  className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                  className={cn(
+                    "p-1.5 rounded-md transition-colors",
+                    historyPopover
+                      ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                      : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800",
+                  )}
+                  title="Audit history"
                 >
-                  <History className="h-3 w-3" />
-                  History
+                  <History className="h-4 w-4" />
                 </button>
                 {historyPopover && (
                   <HistoryPopover
@@ -3422,26 +3474,34 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             {!isEditMode && (
               <button
                 onClick={() => setTourRun(true)}
-                className="flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-800 px-2.5 py-1 rounded-full border border-blue-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                className="p-1.5 rounded-md text-blue-600 hover:text-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                title="Take the guided tour"
               >
-                <MapPin className="h-3 w-3" />
-                Tour
+                <MapPin className="h-4 w-4" />
               </button>
             )}
-            {!isEditMode && (
-              <span className="inline-flex text-[10px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full border bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60">
-                New report
-              </span>
-            )}
+            <button
+              className="lg:hidden p-1.5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+              onClick={() => setSidebarOpen(false)}
+              title="Close menu"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+          {!isEditMode && (
+            <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-blue-600 dark:text-blue-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+              New report
+            </div>
+          )}
         </div>
 
         {/* Instruments label */}
-        <div data-tour="instrument-sidebar" className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+        <div data-tour="instrument-sidebar" className="px-3 pt-3 pb-1.5 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
             Instruments
           </span>
-          <span className="text-[10px] text-zinc-400 font-mono bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded tabular-nums">
             {instruments.length}
           </span>
         </div>
@@ -3489,7 +3549,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       </div>
 
       {/* ── Main content ── */}
-      <div className="flex-1 overflow-x-auto flex flex-col">
+      <div className="flex-1 min-w-0 overflow-x-auto flex flex-col">
 
         {showHistoryPanel && (
           <HistoryFullPanel
@@ -3517,9 +3577,9 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
             <div className="flex-1 min-w-0">
               {isEditMode ? (
                 <>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <FlaskConical className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 truncate">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <FlaskConical className="h-3 w-3 text-blue-500 dark:text-blue-400 shrink-0" />
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400 truncate">
                       {activeInst.meta.nomenclature || "Instrument"}
                     </span>
                   </div>
@@ -3530,13 +3590,19 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                       onChange={(e) => !activeParam.isPredefined && updateParam(activeInstId, { ...activeParam, name: e.target.value })}
                       readOnly={activeParam.isPredefined || viewMode}
                       placeholder="Parameter name"
-                      className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
+                      className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 bg-transparent border-none outline-none w-full leading-tight placeholder:text-zinc-300 dark:placeholder:text-zinc-600 tracking-tight"
                     />
                   ) : (
-                    <div className="text-lg font-semibold text-zinc-300">No parameters yet</div>
+                    <div className="text-lg font-semibold text-zinc-400 dark:text-zinc-500 tracking-tight">No parameters yet</div>
                   )}
-                  <div className="text-xs text-zinc-400 mt-0.5 hidden sm:block">
-                    JECL/KOL/LAB/FM/36B · {activeInst.meta.calDate || "No date set"}
+                  <div className="text-[11px] mt-1 hidden sm:flex items-center gap-2 font-mono tracking-wide">
+                    <span className="text-zinc-500 dark:text-zinc-400">JECL/KOL/LAB/FM/36B</span>
+                    <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                    <span className={cn(
+                      activeInst.meta.calDate ? "text-zinc-600 dark:text-zinc-300" : "text-amber-600 dark:text-amber-400",
+                    )}>
+                      {activeInst.meta.calDate || "No date set"}
+                    </span>
                   </div>
                 </>
               ) : (
@@ -3585,8 +3651,8 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               <ReportViewerStack reportId={presenceReportId} currentUserId={authUser?.id} />
             )}
             {isEditMode && viewMode && (
-              <span className="shrink-0 hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700">
-                <Eye className="h-2.5 w-2.5" />
+              <span className="shrink-0 hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 ring-1 ring-inset ring-zinc-200 dark:ring-zinc-700/60">
+                <Eye className="h-3 w-3" />
                 Viewing
               </span>
             )}
@@ -3637,6 +3703,17 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                   {pdfLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showPdfPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   <span className="hidden sm:inline">{pdfLoading ? "Loading…" : showPdfPreview ? "Close preview" : "Preview PDF"}</span>
                   <span className="sm:hidden">{pdfLoading ? "…" : showPdfPreview ? "Close" : "Preview"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRawExportOpen(true)}
+                  className="gap-1.5 px-2.5 sm:px-3"
+                  title="Preview and download the raw form data"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Export raw data</span>
+                  <span className="sm:hidden">Export</span>
                 </Button>
                 <div className="flex-1" />
                 <Button
@@ -3698,6 +3775,17 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
                 {/* Spacer pushes primary actions to the right */}
                 <div className="flex-1" />
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRawExportOpen(true)}
+                  className="gap-1.5 px-2.5 lg:px-3"
+                  title="Preview and download the raw form data"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Export raw data</span>
+                </Button>
 
                 {/* Separator */}
                 <div className="hidden sm:block h-5 w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
@@ -3824,7 +3912,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
 
         {/* ── Status timeline ── */}
         {isEditMode && existingReport && (
-          <div className="flex items-center gap-0 px-4 lg:px-8 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/50 overflow-x-auto shrink-0">
+          <div className="flex flex-wrap items-center gap-x-0 gap-y-2 px-4 lg:px-8 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/50 shrink-0">
             {(() => {
               const current = (existingReport as any)?.status ?? "draft";
               const isRejected = current === "rejected";
@@ -3876,9 +3964,12 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                     </div>
                     {i < ORDER.length - 1 && (
                       <div className={cn(
-                        "w-8 lg:w-14 h-px mx-3",
+                        "hidden sm:block w-8 lg:w-14 h-px mx-3",
                         isDone ? "bg-emerald-300 dark:bg-emerald-800" : "bg-zinc-200 dark:bg-zinc-700"
                       )} />
+                    )}
+                    {i < ORDER.length - 1 && (
+                      <div className="sm:hidden w-3" />
                     )}
                   </div>
                 );
@@ -4607,6 +4698,13 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
           overlayColor: "rgba(0,0,0,0.45)",
         }}
       />
+
+      {rawExportOpen && (
+        <RawExportPreview
+          report={buildExportPayload()}
+          onClose={() => setRawExportOpen(false)}
+        />
+      )}
     </div>
   );
 }

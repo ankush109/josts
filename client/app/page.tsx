@@ -3,6 +3,7 @@
 import Link from "next/link";
 import React from "react";
 import { useAuth } from "@/app/provider/AuthProvider";
+import Wordmark from "@/components/Wordmark";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -475,6 +476,18 @@ export default function Home() {
           .jz-h1 { font-size: 40px !important; }
           .jz-sec-title { font-size: 32px !important; }
           .jz-pad { padding-left: 20px !important; padding-right: 20px !important; }
+          .jz-hero-grid { padding-top: 128px !important; padding-bottom: 56px !important; gap: 40px !important; }
+          .jz-hero-tags { gap: 10px 14px !important; }
+          .jz-hero-tags .jz-hero-sep { display: none !important; }
+          .jz-hero-cta { width: 100% !important; justify-content: center !important; }
+          .jz-hero-cta-row { flex-direction: column !important; align-items: stretch !important; gap: 12px !important; }
+          .jz-hero-cta-row a { justify-content: center !important; }
+        }
+        @media (max-width: 460px) {
+          .jz-h1 { font-size: 34px !important; letter-spacing: -0.03em !important; }
+          .jz-sec-title { font-size: 26px !important; }
+          .jz-pad { padding-left: 16px !important; padding-right: 16px !important; }
+          .jz-hero-grid { padding-top: 116px !important; padding-bottom: 48px !important; gap: 32px !important; }
         }
       `}</style>
 
@@ -512,19 +525,18 @@ export default function Home() {
             borderRadius: 16,
             boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: "var(--jz-accent)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 0 0 1px rgba(255,255,255,0.1) inset",
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
-                  <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
-                </svg>
-              </div>
-              <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", color: "#fff" }}>Jasper</span>
-            </div>
+            <Link
+              href="/"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 10,
+                color: "#fff", textDecoration: "none",
+              }}
+            >
+              <Wordmark size="md" markOnly />
+              <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", color: "#fff" }}>
+                Jasper
+              </span>
+            </Link>
             <nav style={{ display: "flex", alignItems: "center", gap: 34 }}>
               <div className="jz-nav-links" style={{ display: "flex", gap: 28, fontSize: 14, color: "#c3ccdb" }}>
                 <a href="#platform" style={{ color: "#c3ccdb" }}>Platform</a>
@@ -605,8 +617,8 @@ export default function Home() {
               }}>
                 One structured system to record measurements, generate ISO-compliant certificates, and trace every instrument — from the bench to the field.
               </p>
-              <div style={{ marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-                <Link href={ctaHref} style={{
+              <div className="jz-hero-cta-row" style={{ marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+                <Link href={ctaHref} className="jz-hero-cta" style={{
                   display: "inline-flex", alignItems: "center", gap: 9,
                   background: "var(--jz-accent)", color: "#fff",
                   fontWeight: 640, fontSize: 15, padding: "14px 24px",
@@ -627,15 +639,15 @@ export default function Home() {
                   </svg>
                 </a>
               </div>
-              <div style={{
+              <div className="jz-hero-tags" style={{
                 marginTop: 38, display: "flex", gap: 26, flexWrap: "wrap",
                 fontFamily: "'Geist Mono', ui-monospace, monospace",
                 fontSize: 11, letterSpacing: "0.12em", color: "#7e8ba0",
               }}>
                 <span>ISO&nbsp;17025-READY</span>
-                <span style={{ color: "#39435a" }}>/</span>
+                <span className="jz-hero-sep" style={{ color: "#39435a" }}>/</span>
                 <span>OFFLINE-FIRST</span>
-                <span style={{ color: "#39435a" }}>/</span>
+                <span className="jz-hero-sep" style={{ color: "#39435a" }}>/</span>
                 <span>BUILT FOR ENGINEERS</span>
               </div>
             </div>

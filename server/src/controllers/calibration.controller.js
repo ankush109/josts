@@ -156,6 +156,22 @@ export async function regeneratePdf(req, res, next) {
 }
 
 /**
+ * POST /calibration-report/:reportId/raw-pdf
+ * Server-side render of the "raw form data" export. Enqueues a worker job,
+ * blocks until the PDF is uploaded to S3, then returns a signed download URL.
+ *
+ * @type {import("express").RequestHandler}
+ */
+export async function generateRawPdf(req, res, next) {
+  try {
+    const result = await CalibrationService.generateRawPdf(req.params.reportId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * POST /calibration-report/:reportId/reopen
  * Reverts a verified/rejected report to "submitted". Admin-only.
  */

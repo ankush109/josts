@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title><%= (report.reportMeta && report.reportMeta.certNo) || "Raw Form Data" %></title>
+  <style>
+    @page { size: A4 landscape; margin: 8mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: "Calibri", "Segoe UI", Arial, sans-serif;
+      color: #000; padding: 6px;
+      background: #fff; font-size: 8.5pt;
+    }
+    .sheet { width: 100%; padding: 0; }
+
+    .doc-title {
+      color: #000; padding: 6px 8px; text-align: center;
+      font-size: 12pt; font-weight: 700; letter-spacing: 0.02em;
+      border: 1px solid #000;
+    }
+    .doc-sub {
+      color: #000; padding: 3px 8px; text-align: center; font-size: 8.5pt;
+      border: 1px solid #000; border-top: 0; margin-bottom: 8px; font-weight: 700;
+    }
+
+    .section-title {
+      color: #000; padding: 4px 8px; font-weight: 700; font-size: 10.5pt;
+      text-align: center; margin-top: 10px;
+      border: 1px solid #000;
+      page-break-after: avoid;
+    }
+    .sub-title {
+      color: #000; padding: 3px 8px; font-weight: 700; font-size: 9.5pt;
+      margin-top: 6px; border: 1px solid #000;
+      page-break-after: avoid;
+    }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 0;
+      page-break-inside: avoid; }
+    th, td { border: 1px solid #000; padding: 3px 5px; vertical-align: middle; }
+    th { color: #000; font-weight: 700; font-size: 8.5pt; text-align: center; }
+    td { font-size: 8.5pt; }
+    td.ctr { text-align: center; }
+    td.left { text-align: left; }
+
+    table.meta th { text-align: left; width: 100px; }
+    table.meta td { text-align: left; }
+
+    table.results { font-size: 7.5pt; }
+    table.results th, table.results td { padding: 2px 4px; }
+    table.results thead th { font-weight: 700; }
+    table.results thead tr:nth-child(2) th { font-size: 7pt; font-weight: 700; }
+
+    .muted { color: #666; font-style: italic; }
+    .ctr   { text-align: center; }
+
+    .signatures { display: flex; justify-content: space-between; margin-top: 14px;
+      border-top: 1px solid #000; padding-top: 8px; page-break-inside: avoid; }
+    .sig-block { flex: 1; }
+    .sig-label { font-size: 7.5pt; color: #000; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 2px; }
+    .sig-name { font-size: 10pt; font-weight: 600; }
+    .sig-block.right { text-align: right; }
+
+    ol.remarks { padding-left: 18px; margin: 3px 0 0; }
+    ol.remarks li { margin-bottom: 2px; font-size: 8.5pt; }
+
+    .instrument-section { page-break-before: auto; }
+    .instrument-section + .instrument-section { page-break-before: always; }
+  </style>
+</head>
+<body>
+<div class="sheet">
+  <div class="doc-title">CALIBRATION CERTIFICATE — DRAFT (RAW FORM DATA)</div>
+  <div class="doc-sub">Jost's Engineering Company Limited · Calibration Laboratory, Kolkata</div>
+
+  <div class="section-title">Report Details</div>
+  <table class="meta">
+    <tbody>
+      <tr>
+        <th>Certificate No.</th><td><%= reportMeta.certNo %></td>
+        <th>Issue Date</th><td><%= reportMeta.dateOfCalibrationFmt %></td>
+        <th>Exported</th><td><%= exportedAtFmt %></td>
+      </tr>
+      <tr>
+        <th>DUC Received</th><td><%= reportMeta.ducReceivedDateFmt %></td>
+        <th>Date of Calibration</th><td><%= reportMeta.dateOfCalibrationFmt %></td>
+        <th>Calibration Due</th><td><%= reportMeta.calibrationDueDateFmt %></td>
+      </tr>
+      <tr>
+        <th>Customer</th><td colspan="5"><%= reportMeta.customerName %></td>
+      </tr>
+      <tr>
+        <th>Address</th><td colspan="5"><%= reportMeta.customerAddress %></td>
+      </tr>
+      <tr>
+        <th>Customer Ref.</th><td><%= reportMeta.customerRefNo %></td>
+        <th>Location</th><td><%= reportMeta.calibrationLocationLabel %></td>
+        <th>Interval</th><td><%= reportMeta.calibrationInterval %> mo.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <% if (remarks && remarks.length) { %>
+    <div class="sub-title">Remarks</div>
+    <ol class="remarks">
+      <% remarks.forEach(function(r) { %>
+        <li><%= r %></li>
+      <% }); %>
+    </ol>
+  <% } %>
+
+  <% if (!instruments.length) { %>
+    <p class="muted ctr">No instruments recorded</p>
+  <% } else { %>
+    <% instruments.forEach(function(inst, idx) { %>
+      <section class="instrument-section">
+        <div class="section-title">
+          Instrument <%= idx + 1 %><% if (inst.meta.nomenclature) { %> — <%= inst.meta.nomenclature %><% } %>
+        </div>
+
+        <table class="meta">
+          <tbody>
+            <tr>
+              <th>Make</th><td><%= inst.meta.make %></td>
+              <th>Model / Type</th><td><%= inst.meta.modelType %></td>
+              <th>Sr. No</th><td><%= inst.meta.slNo %></td>
+            </tr>
+            <tr>
+              <th>ID No</th><td><%= inst.meta.idNo %></td>
+              <th>Job ID</th><td><%= inst.meta.jobId %></td>
+              <th>Cal Date</th><td><%= inst.meta.calDateFmt %></td>
+            </tr>
+            <tr>
+              <th>Report Range</th><td><%= inst.meta.ducRange %></td>
+              <th>Cal Procedure</th><td><%= inst.meta.calibrationProcedure %></td>
+              <th>Method</th><td><%= inst.meta.calibrationMethod %></td>
+            </tr>
+            <tr>
+              <th>Other Details</th><td colspan="5"><%= inst.meta.othersDetails %></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="sub-title">Environmental Conditions</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Supply Voltage (V)</th>
+              <th>Temperature (°C)</th>
+              <th>Humidity (%RH)</th>
+              <th>Voltage Area</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="ctr"><%= inst.meta.supplyVoltage %></td>
+              <td class="ctr"><%= inst.meta.temperature %></td>
+              <td class="ctr"><%= inst.meta.humidity %></td>
+              <td class="ctr"><%= inst.meta.voltageArea %></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="sub-title">Reference Standards Used</div>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Name</th><th>Make</th><th>Model</th>
+              <th>Sr. No</th><th>ID No</th><th>Cal Due</th><th>Traceability Cert No</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!inst.refStandards.length) { %>
+              <tr><td colspan="8" class="muted ctr">None</td></tr>
+            <% } %>
+            <% inst.refStandards.forEach(function(r, i) { %>
+              <tr>
+                <td class="ctr"><%= i + 1 %></td>
+                <td><%= r.name %></td>
+                <td><%= r.make %></td>
+                <td><%= r.modelType %></td>
+                <td class="ctr"><%= r.srNo %></td>
+                <td class="ctr"><%= r.idNo %></td>
+                <td class="ctr"><%= r.calDateFmt %></td>
+                <td><%= r.traceabilityCertNo %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+
+        <div class="sub-title">Calibration Results</div>
+        <table class="results">
+          <thead>
+            <tr>
+              <th rowspan="2">Parameter</th>
+              <th rowspan="2">Range</th>
+              <th colspan="2">STANDARD</th>
+              <th colspan="2">DUC</th>
+              <th rowspan="2">Error %</th>
+              <th colspan="6">Uncertainty Components</th>
+              <th rowspan="2">Combined Uc</th>
+              <th rowspan="2">Eff. DoF</th>
+              <th rowspan="2">k</th>
+              <th rowspan="2">Expanded Uc</th>
+              <th rowspan="2">Scope Claimed</th>
+              <th rowspan="2">Resulted Exp. U/C</th>
+              <th rowspan="2">% U/C</th>
+            </tr>
+            <tr>
+              <th>Nom.</th><th>Unit</th>
+              <th>Mean</th><th>Unit</th>
+              <th>Std U/c Mean</th>
+              <th>Std Uncertainty</th>
+              <th>U/c Ref Std</th>
+              <th>U/c Acc Ref</th>
+              <th>U/c L/c DUC</th>
+              <th>—</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!inst.results.length) { %>
+              <tr><td colspan="19" class="muted ctr">No measurements recorded</td></tr>
+            <% } %>
+            <% inst.results.forEach(function(r) { %>
+              <tr>
+                <td class="left"><%= r.paramName %></td>
+                <td class="ctr"><%= r.rangeLabel %></td>
+                <td class="ctr"><%= r.standardValue %></td>
+                <td class="ctr"><%= r.standardUnit %></td>
+                <td class="ctr"><%= r.ducValue %></td>
+                <td class="ctr"><%= r.ducUnit %></td>
+                <td class="ctr"><%= r.errorPct %></td>
+                <td class="ctr"><%= r.stdUncMean %></td>
+                <td class="ctr"><%= r.stdUncertainty %></td>
+                <td class="ctr"><%= r.ucRef %></td>
+                <td class="ctr"><%= r.ucAccRef %></td>
+                <td class="ctr"><%= r.ucLcDuc %></td>
+                <td class="ctr"><%= r.combinedUc %></td>
+                <td class="ctr"><%= r.effectiveDof %></td>
+                <td class="ctr"><%= r.kFactor %></td>
+                <td class="ctr"><%= r.expandedUnc %></td>
+                <td class="ctr"><%= r.scopeClaimed %></td>
+                <td class="ctr"><%= r.resultedUnc %></td>
+                <td class="ctr"><%= r.percentUc %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </section>
+    <% }); %>
+  <% } %>
+
+  <div class="signatures">
+    <div class="sig-block">
+      <div class="sig-label">Calibrated By</div>
+      <div class="sig-name"><%= signatures.calibratedBy %></div>
+    </div>
+    <div class="sig-block right">
+      <div class="sig-label">Verified By</div>
+      <div class="sig-name"><%= signatures.verifiedBy %></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

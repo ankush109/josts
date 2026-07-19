@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Wordmark from "@/components/Wordmark";
 
 const TAGLINES = [
   "Calibration reports that work offline, anywhere.",
@@ -85,18 +86,11 @@ export function AuthBrandingPanel() {
       }}>
         {/* Top row: wordmark + status pill */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: "#2f6fed",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 0 1px rgba(255,255,255,0.1) inset",
-            }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
-                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
-              </svg>
-            </div>
-            <span style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em", color: "#fff" }}>Jasper</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Wordmark size="md" markOnly />
+            <span style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em", color: "#fff" }}>
+              Jasper
+            </span>
           </div>
           <div style={{
             display: "flex", alignItems: "center", gap: 7,

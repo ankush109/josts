@@ -18,7 +18,9 @@ import {
   EP_USER_PROFILE,
   EP_REPORT_URL,
   EP_REGENERATE_CALIBRATION_PDF,
+  EP_CALIBRATION_REPORT_BY_ID,
 } from "@/lib/endpoints";
+import { RawExportPreview } from "./_components/RawExportPreview";
 import { useAuth } from "@/app/provider/AuthProvider";
 import {
   useReopenCalibrationReport,
@@ -260,6 +262,31 @@ export default function CalibrationReportsTable() {
   function handleDelete() {
     if (!reportToDelete) return;
     deleteReport(reportToDelete._id);
+  }
+
+  const [rawExportReport, setRawExportReport] = useState<Record<string, unknown> | null>(null);
+  const [rawExportMode,   setRawExportMode]   = useState<"pdf" | "excel">("pdf");
+  const [rawExportLoading, setRawExportLoading] = useState(false);
+
+  async function handleRawExport(reportId: string, format: "excel" | "pdf") {
+    if (String(reportId).startsWith("local-")) {
+      toast.error("This draft hasn't synced yet — export from the editor");
+      return;
+    }
+    setRawExportMode(format);
+    setRawExportLoading(true);
+    const toastId = toast.loading("Loading report data…");
+    try {
+      const { data } = await AUTH_API.get(EP_CALIBRATION_REPORT_BY_ID(reportId));
+      const report = (data?.report ?? data) as Record<string, unknown>;
+      setRawExportReport(report);
+      toast.dismiss(toastId);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to load report";
+      toast.error(msg, { id: toastId });
+    } finally {
+      setRawExportLoading(false);
+    }
   }
 
   function handleVerifyReject(e: React.MouseEvent, reportId: string, status: "verified" | "rejected") {
@@ -723,6 +750,8 @@ export default function CalibrationReportsTable() {
                           onReopen={() => { setReopenReport(report); setReopenReason(""); }}
                           onReassign={() => openReassignDialog(report)}
                           onDelete={() => confirmDelete(report)}
+                          onDownloadRawExcel={() => handleRawExport(report._id, "excel")}
+                          onDownloadRawPdf={() => handleRawExport(report._id, "pdf")}
                           t={t}
                         />
                       </td>
@@ -810,6 +839,14 @@ export default function CalibrationReportsTable() {
         onClose={() => setBulkConfirm(null)}
         t={t}
       />
+
+      {rawExportReport && !rawExportLoading && (
+        <RawExportPreview
+          report={rawExportReport}
+          initialMode={rawExportMode}
+          onClose={() => setRawExportReport(null)}
+        />
+      )}
     </div>
   );
 }

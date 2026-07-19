@@ -24,6 +24,8 @@ const router = Router();
 router.get( "/drafts",           authMiddleware,                    ReportController.getMyDrafts);
 router.get( "/drafts/:id",       authMiddleware,                    ReportController.getReport);
 router.get( "/url/:id",          authMiddleware,                    ReportController.getReportUrl);
+// Public — QR-code destination on printed certificates. No auth by design.
+router.get( "/pdf/:id",                                             ReportController.redirectToReportPdf);
 
 // Dynamic paths
 router.post(  "/",               authMiddleware,                    ReportController.upsertReport);
