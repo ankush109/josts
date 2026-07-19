@@ -709,7 +709,7 @@ var computedTotalPages = 1 + resultPages.length;
     </tbody>
   </table>
 
-  <% if (pageIdx === resultPages.length - 1 && Array.isArray(remarks) && remarks.length > 0) { %>
+  <% if (pageIdx === resultPages.length - 1 && typeof remarks !== 'undefined' && Array.isArray(remarks) && remarks.length > 0) { %>
     <div class="remarks-box">
       <div class="remarks-title">Remarks :</div>
       <ol class="remarks-list">
