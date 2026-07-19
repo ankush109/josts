@@ -37,6 +37,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const themeInitScript = `(function(){try{var t=localStorage.getItem('theme')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);var el=document.documentElement;el.classList.add(d?'dark':'light');el.style.colorScheme=d?'dark':'light';el.style.backgroundColor=d?'oklch(0.17 0.022 255)':'oklch(0.99 0.005 264)';}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -44,6 +46,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html{background-color:oklch(0.99 0.005 264);color-scheme:light}@media (prefers-color-scheme: dark){html:not(.light){background-color:oklch(0.17 0.022 255);color-scheme:dark}}html.dark{background-color:oklch(0.17 0.022 255);color-scheme:dark}html.light{background-color:oklch(0.99 0.005 264);color-scheme:light}`,
+          }}
+        />
+      </head>
       <body style={{ fontFamily: '"Times New Roman", Times, serif' }}>
         <ServiceWorkerRegister />
         <RootProvider>{children}</RootProvider>

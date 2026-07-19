@@ -19,6 +19,7 @@ import {
 } from "@/app/hooks/mutate/useUpdateEquipment";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import JasperTone from "@/app/components/theme/JasperTone";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -355,7 +356,8 @@ export default function EquipmentTable() {
   });
 
   return (
-    <div className="w-full space-y-5">
+    <div data-jz="jasper" className="w-full space-y-5 -mx-4 -mt-10 px-4 pt-10 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 pb-16 min-h-[calc(100vh-6rem)]">
+      <JasperTone />
 
       {/* Page heading */}
       <div className="flex items-start justify-between gap-4 flex-wrap">

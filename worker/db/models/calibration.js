@@ -73,6 +73,17 @@ const calibrationReportSchema = new mongoose.Schema(
   {
     csrNo:      { type: String, required: true, unique: true },
     formatNo:   { type: String, default: "JECL/KOL/LAB/FM/36B" },
+    layoutStyle: {
+      type:    String,
+      enum:    ["current", "fm36", "fm36a", "fm36b"],
+      default: "current",
+    },
+    letterHeadStyle: {
+      type:    String,
+      enum:    ["kol", "kol_nabl", "del_non_nabl"],
+      default: "kol",
+    },
+    remarks:    { type: [String], default: [] },
     status:     { type: String, enum: ["draft", "submitted", "verified", "rejected"], default: "draft" },
     createdBy:  { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     instruments: { type: [instrumentSchema], default: [] },

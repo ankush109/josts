@@ -48,6 +48,17 @@ export interface InstrumentPreset {
 
 // ── Blank state factories (immutable defaults) ─────────────────────────────
 
+/** Standard remarks printed on every calibration certificate unless the user edits them. */
+export const DEFAULT_REMARKS: readonly string[] = [
+  "DUC : Device Under Calibration.",
+  "Average of 5 reading has been taken in DUC.",
+  "This certificate refer only to the particular item submitted for calibration",
+  "The results in the certificate are valid at the time of measurement under stated conditions.",
+  "Calibration sticker has been affix on the calibrated sample indicating \"CALIBRATION STATUS\".",
+  "The certificate should not be produced except in full without prior approval from the Technical Manager and / or the Quality Manager",
+  "Measurement Uncertainty reported is at appproximately 95% of Confidence Level with k = 2, Units of measurement results and uncertainty are the same as that of a range selected Unless otherwise indicated.",
+];
+
 /** Default empty report metadata used when creating a new report. */
 export const BLANK_REPORT_META: ReportMeta = {
   certNo:              "",
@@ -59,7 +70,25 @@ export const BLANK_REPORT_META: ReportMeta = {
   dateOfCalibration:   "",
   calibrationDueDate:  "",
   calibrationInterval: 12,
+  layoutStyle:         "current",
+  letterHeadStyle:     "kol",
+  remarks:             [...DEFAULT_REMARKS],
 };
+
+/** UI dropdown options for the letterhead style. */
+export const LETTER_HEAD_OPTIONS = [
+  { value: "kol"          as const, label: "Kolkata — plain",             hint: "No QR · No NABL" },
+  { value: "kol_nabl"     as const, label: "Kolkata — NABL + QR",         hint: "NABLC0526WB04743" },
+  { value: "del_non_nabl" as const, label: "Delhi — Non-NABL (QR only)",  hint: "Gopal Heights, New Delhi" },
+];
+
+/** Human-readable labels + format numbers for each PDF layout option. */
+export const LAYOUT_STYLE_OPTIONS = [
+  { value: "current" as const, label: "Certificate (default)",   formatNo: "JECL/KOL/LAB/FM/36B" },
+  { value: "fm36"    as const, label: "Draft — Direct",          formatNo: "JECL/KOL/LAB/FM/36"  },
+  { value: "fm36a"   as const, label: "Draft — Comparison",      formatNo: "JECL/KOL/LAB/FM/36A" },
+  { value: "fm36b"   as const, label: "Draft — Direct (IR)",     formatNo: "JECL/KOL/LAB/FM/36B" },
+];
 
 /** Default empty instrument metadata used when adding a new instrument. */
 export const BLANK_INSTRUMENT_META: InstrumentMeta = {

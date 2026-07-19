@@ -12,7 +12,7 @@ import type {
   Parameter,
   ReportMeta,
 } from "@/types/calibration";
-import { BLANK_INSTRUMENT_META, SI_UNIT_FAMILIES, UNIT_TO_FAMILY_KEY, type InstrumentPreset } from "./constants";
+import { BLANK_INSTRUMENT_META, DEFAULT_REMARKS, SI_UNIT_FAMILIES, UNIT_TO_FAMILY_KEY, type InstrumentPreset } from "./constants";
 
 /** Map of instrument key (e.g. "Fluke 8846A") → preset data. */
 export type InstrumentPresetMap = Record<string, InstrumentPreset>;
@@ -342,6 +342,9 @@ export function buildPayload(
     dateOfCalibration:   rm.dateOfCalibration   || undefined,
     calibrationDueDate:  rm.calibrationDueDate  || undefined,
     calibrationInterval: rm.calibrationInterval ?? 12,
+    layoutStyle:         rm.layoutStyle         ?? "current",
+    letterHeadStyle:     rm.letterHeadStyle     ?? "kol",
+    remarks:             (rm.remarks ?? []).filter((r) => r.trim() !== ""),
     instruments: instruments.map((inst) => ({
       nomenclature:  inst.meta.nomenclature,
       make:          inst.meta.make,
@@ -525,5 +528,17 @@ export function mapApiToReportMeta(r: Record<string, unknown>): ReportMeta {
       typeof r.calibrationInterval === "number" && r.calibrationInterval > 0
         ? (r.calibrationInterval as number)
         : 12,
+    layoutStyle:
+      (r.layoutStyle === "current" || r.layoutStyle === "fm36" || r.layoutStyle === "fm36a" || r.layoutStyle === "fm36b")
+        ? (r.layoutStyle as "current" | "fm36" | "fm36a" | "fm36b")
+        : "current",
+    letterHeadStyle:
+      (r.letterHeadStyle === "kol" || r.letterHeadStyle === "kol_nabl" || r.letterHeadStyle === "del_non_nabl")
+        ? (r.letterHeadStyle as "kol" | "kol_nabl" | "del_non_nabl")
+        : "kol",
+    remarks:
+      Array.isArray(r.remarks) && r.remarks.length > 0
+        ? (r.remarks as string[]).map((s) => String(s))
+        : [...DEFAULT_REMARKS],
   };
 }

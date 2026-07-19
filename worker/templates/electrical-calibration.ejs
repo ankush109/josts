@@ -81,6 +81,40 @@
       width: 90px;
       object-fit: contain;
     }
+    /* NABL badge — sits to the right of the QR when both are present */
+    .header-nabl {
+      width: 82px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2px 0 0 6px;
+      text-align: center;
+    }
+    .header-nabl img {
+      height: 62px;
+      width: auto;
+      object-fit: contain;
+    }
+    /* Text-only fallback badge used when nabl.png isn't shipped */
+    .header-nabl .nabl-text {
+      border: 1.2px solid #000;
+      padding: 6px 4px 5px;
+      font-size: 8pt;
+      font-weight: 700;
+      line-height: 1.15;
+      width: 78px;
+      background: #fff;
+    }
+    .header-nabl .nabl-cert {
+      display: block;
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      font-weight: 700;
+      margin-top: 3px;
+      letter-spacing: 0.3px;
+    }
 
     hr.divider {
       border: none;
@@ -151,6 +185,37 @@
       padding: 5px;
       margin-bottom: 0;
       width: calc(100% - 1px);
+    }
+
+    /* ── Remarks box (last-page only) ── */
+    .remarks-box {
+      border: 1px solid #000;
+      border-top: none;
+      padding: 6px 10px 8px;
+      width: calc(100% - 1px);
+      font-size: 9.5pt;
+    }
+    .remarks-title {
+      font-weight: 700;
+      font-size: 10pt;
+      margin: 0 0 4px 0;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #000;
+    }
+    .remarks-list {
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.35;
+    }
+    .remarks-list li { margin-bottom: 2px; }
+
+    /* ── End of certificate marker ── */
+    .end-of-cert {
+      text-align: center;
+      font-weight: 700;
+      font-size: 10pt;
+      margin-top: 8px;
+      letter-spacing: 0.5px;
     }
 
     /* ── Signature footer ── */
@@ -298,7 +363,7 @@ var computedTotalPages = 1 + resultPages.length;
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-        19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
+        <%= typeof letterHeadAddress !== 'undefined' && letterHeadAddress ? letterHeadAddress : '19, British Indian Street, Kolkata 700 069, West Bengal, India.' %><br/>
         CIN: L28100MH1907PLC000252, &nbsp; Tel.: +91 33 2242 9510, &nbsp; Fax: +91 33 2248 0861<br/>
         <span class="meta-row">
           <span>Email: salescal@josts.in</span>
@@ -307,11 +372,28 @@ var computedTotalPages = 1 + resultPages.length;
         (Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001)
       </div>
     </div>
-    <div class="header-qr">
-      <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
-        <img src="<%= qrUrl %>" alt="QR Code" />
-      <% } %>
-    </div>
+    <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
+      <div class="header-qr">
+        <img src="<%= qrUrl %>" alt="Report QR Code" />
+      </div>
+    <% } %>
+    <% if (typeof showNabl !== 'undefined' && showNabl) { %>
+      <div class="header-nabl">
+        <% if (typeof nablBadgeUrl !== 'undefined' && nablBadgeUrl) { %>
+          <img src="<%= nablBadgeUrl %>" alt="NABL Certified" />
+          <% if (typeof nablCertNo !== 'undefined' && nablCertNo) { %>
+            <span class="nabl-cert"><%= nablCertNo %></span>
+          <% } %>
+        <% } else { %>
+          <div class="nabl-text">
+            NABL<br/>ACCREDITED
+            <% if (typeof nablCertNo !== 'undefined' && nablCertNo) { %>
+              <span class="nabl-cert"><%= nablCertNo %></span>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    <% } %>
   </div>
 
   <hr class="divider" />
@@ -525,7 +607,7 @@ var computedTotalPages = 1 + resultPages.length;
     <div class="header-company">
       <div class="company-name">Jost&#8217;s Engineering Company Limited</div>
       <div class="company-meta">
-        19, British Indian Street, Kolkata 700 069, West Bengal, India.<br/>
+        <%= typeof letterHeadAddress !== 'undefined' && letterHeadAddress ? letterHeadAddress : '19, British Indian Street, Kolkata 700 069, West Bengal, India.' %><br/>
         CIN: L28100MH1907PLC000252, &nbsp; Tel.: +91 33 2242 9510, &nbsp; Fax: +91 33 2248 0861<br/>
         <span class="meta-row">
           <span>Email: salescal@josts.in</span>
@@ -534,11 +616,28 @@ var computedTotalPages = 1 + resultPages.length;
         (Registered Office: Great Social Building, 60 Sir Phirozeshah Mehta Road, Mumbai 400 001)
       </div>
     </div>
-    <div class="header-qr">
-      <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
-        <img src="<%= qrUrl %>" alt="QR Code" />
-      <% } %>
-    </div>
+    <% if (typeof qrUrl !== 'undefined' && qrUrl) { %>
+      <div class="header-qr">
+        <img src="<%= qrUrl %>" alt="Report QR Code" />
+      </div>
+    <% } %>
+    <% if (typeof showNabl !== 'undefined' && showNabl) { %>
+      <div class="header-nabl">
+        <% if (typeof nablBadgeUrl !== 'undefined' && nablBadgeUrl) { %>
+          <img src="<%= nablBadgeUrl %>" alt="NABL Certified" />
+          <% if (typeof nablCertNo !== 'undefined' && nablCertNo) { %>
+            <span class="nabl-cert"><%= nablCertNo %></span>
+          <% } %>
+        <% } else { %>
+          <div class="nabl-text">
+            NABL<br/>ACCREDITED
+            <% if (typeof nablCertNo !== 'undefined' && nablCertNo) { %>
+              <span class="nabl-cert"><%= nablCertNo %></span>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    <% } %>
   </div>
 
   <hr class="divider" />
@@ -610,6 +709,17 @@ var computedTotalPages = 1 + resultPages.length;
     </tbody>
   </table>
 
+  <% if (pageIdx === resultPages.length - 1 && Array.isArray(remarks) && remarks.length > 0) { %>
+    <div class="remarks-box">
+      <div class="remarks-title">Remarks :</div>
+      <ol class="remarks-list">
+        <% remarks.forEach(function(r) { %>
+          <li><%= r %></li>
+        <% }); %>
+      </ol>
+    </div>
+  <% } %>
+
   </div><!-- end .page-body -->
 
   <div class="signature-footer">
@@ -639,6 +749,9 @@ var computedTotalPages = 1 + resultPages.length;
       <div class="signature-role">Approved By : <%= typeof approvedByRole !== 'undefined' ? approvedByRole : 'Technical/Quality Manager' %></div>
     </div>
   </div>
+  <% if (pageIdx === resultPages.length - 1) { %>
+    <div class="end-of-cert">***End of Calibration Certificate***</div>
+  <% } %>
   <div class="doc-ref"><%= typeof docRef !== 'undefined' ? docRef : 'JECL/KOL/LAB/43B' %></div>
 
 </div>

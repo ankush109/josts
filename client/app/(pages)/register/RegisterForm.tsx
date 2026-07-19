@@ -1,16 +1,5 @@
 "use client";
 
-/**
- * @fileoverview Registration page form component.
- *
- * Renders a two-column layout:
- *  - Left: `AuthBrandingPanel` (desktop only)
- *  - Right: email + password + confirm-password form
- *
- * On success, stores the JWT and redirects to /login.
- * Only @josts.in email addresses are accepted.
- */
-
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
@@ -18,18 +7,12 @@ import { toast } from "sonner";
 import { z } from "zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Loader2, UserPlus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import type { AxiosError } from "axios";
 
-import { Button } from "@/components/ui/button";
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
 import { AuthBrandingPanel } from "@/components/AuthBrandingPanel";
-import Wordmark from "@/components/Wordmark";
 import { useRegisterMutation } from "@/app/hooks/mutation/useRegisterMutation";
-
-// ── Validation schema ──────────────────────────────────────────────────────
 
 const registerSchema = z
   .object({
@@ -47,11 +30,13 @@ const registerSchema = z
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
-// ── Component ──────────────────────────────────────────────────────────────
+const MONO = "'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+const SANS = "Geist, ui-sans-serif, system-ui, -apple-system, sans-serif";
+const ACCENT = "#2f6fed";
+const INK = "#0b1424";
+const LINE = "#e6e8ec";
+const MUTED = "#616b7a";
 
-/**
- * New-user registration form with animated branding panel.
- */
 export function RegisterForm() {
   const router = useRouter();
   const { mutate: registerUser } = useRegisterMutation();
@@ -65,12 +50,9 @@ export function RegisterForm() {
     defaultValues: { email: "", password: "", confirmPassword: "" },
   });
 
-  /**
-   * Handles form submission: calls the register mutation, stores the token,
-   * and navigates to the login page on success.
-   *
-   * @param values - Validated form values
-   */
+  const passwordValue = form.watch("password") || "";
+  const strength = scorePassword(passwordValue);
+
   function onSubmit(values: RegisterFormValues) {
     setIsSubmitting(true);
     registerUser(values as any, {
@@ -90,163 +72,287 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="force-light min-h-screen lg:grid lg:grid-cols-2">
+    <div
+      className="force-light min-h-screen lg:grid lg:grid-cols-2"
+      style={{ background: "#fff", color: INK, fontFamily: SANS }}
+    >
       <AuthBrandingPanel />
 
-      {/* Form panel */}
-      <div className="flex min-h-screen lg:min-h-0 items-center justify-center bg-background px-6 py-12">
-        <div className="w-full max-w-sm space-y-7">
-          {/* Mobile wordmark */}
-          <div className="flex justify-center lg:hidden">
-            <Wordmark size="lg" showDot caption="Calibration Suite" />
+      <div style={{
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "48px 32px", minHeight: "100vh",
+        background: "#fff", position: "relative",
+      }}>
+        <div style={{
+          position: "absolute", top: 28, left: 32,
+          fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.14em", color: "#8a94a6",
+        }}>
+          § 02 — REGISTER
+        </div>
+
+        {/* Mobile wordmark */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 40 }} className="lg:hidden">
+          <div style={{
+            width: 32, height: 32, borderRadius: 8, background: ACCENT,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
+            </svg>
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 22, letterSpacing: "-0.01em", color: INK }}>Jasper</span>
+        </div>
+
+        <div style={{ width: "100%", maxWidth: 380 }}>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.16em",
+            color: ACCENT,
+            border: `1px solid ${ACCENT}33`,
+            borderRadius: 100, padding: "6px 12px",
+            background: `${ACCENT}0d`,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: ACCENT }} />
+            NEW ACCOUNT
           </div>
 
-          <div className="space-y-1.5">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              Create an account
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Join your calibration team
-            </p>
-          </div>
+          <h2 style={{
+            margin: "20px 0 8px",
+            fontSize: 38, lineHeight: 1.08,
+            letterSpacing: "-0.03em", fontWeight: 660,
+          }}>
+            Join the team.
+          </h2>
+          <p style={{ margin: 0, fontSize: 15, color: MUTED, lineHeight: 1.55 }}>
+            Only <span style={{ fontFamily: MONO, color: INK, fontSize: 13 }}>@josts.in</span> addresses can register — your access is provisioned by an admin.
+          </p>
 
-          <form id="register-form" onSubmit={form.handleSubmit(onSubmit)}>
-            <FieldGroup className="space-y-4">
-              {/* Email */}
-              <Controller
-                name="email"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="email">Work Email</FieldLabel>
-                    <div className="relative mt-1.5">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        {...field}
-                        id="email"
-                        type="email"
-                        aria-invalid={fieldState.invalid}
-                        placeholder="you@josts.in"
-                        autoComplete="email"
-                        className="pl-9 h-10"
-                      />
-                    </div>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
+          <form
+            id="register-form"
+            onSubmit={form.handleSubmit(onSubmit)}
+            style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 18 }}
+          >
+            <Controller
+              name="email"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <FormRow label="WORK EMAIL" error={fieldState.error?.message} invalid={fieldState.invalid}>
+                  <input
+                    {...field}
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@josts.in"
+                    aria-invalid={fieldState.invalid}
+                    style={inputStyle(fieldState.invalid)}
+                  />
+                </FormRow>
+              )}
+            />
 
-              {/* Password */}
-              <Controller
-                name="password"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="password">Password</FieldLabel>
-                    <div className="relative mt-1.5">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        {...field}
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Create a strong password"
-                        aria-invalid={fieldState.invalid}
-                        className="pl-9 pr-10 h-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? (
-                          <FaEye className="h-4 w-4" />
-                        ) : (
-                          <FaEyeSlash className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
+            <Controller
+              name="password"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <FormRow label="PASSWORD" error={fieldState.error?.message} invalid={fieldState.invalid}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      {...field}
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Create a strong password"
+                      aria-invalid={fieldState.invalid}
+                      style={{ ...inputStyle(fieldState.invalid), paddingRight: 40 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      style={eyeBtn}
+                    >
+                      {showPassword ? <FaEye size={14} /> : <FaEyeSlash size={14} />}
+                    </button>
+                  </div>
+                  {passwordValue && <StrengthMeter score={strength} />}
+                </FormRow>
+              )}
+            />
 
-              {/* Confirm password */}
-              <Controller
-                name="confirmPassword"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="confirmPassword">
-                      Confirm Password
-                    </FieldLabel>
-                    <div className="relative mt-1.5">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        {...field}
-                        id="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Re-enter your password"
-                        aria-invalid={fieldState.invalid}
-                        className="pl-9 pr-10 h-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={
-                          showConfirmPassword ? "Hide password" : "Show password"
-                        }
-                      >
-                        {showConfirmPassword ? (
-                          <FaEye className="h-4 w-4" />
-                        ) : (
-                          <FaEyeSlash className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-            </FieldGroup>
+            <Controller
+              name="confirmPassword"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <FormRow label="CONFIRM PASSWORD" error={fieldState.error?.message} invalid={fieldState.invalid}>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      {...field}
+                      id="confirmPassword"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Re-enter your password"
+                      aria-invalid={fieldState.invalid}
+                      style={{ ...inputStyle(fieldState.invalid), paddingRight: 40 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      style={eyeBtn}
+                    >
+                      {showConfirmPassword ? <FaEye size={14} /> : <FaEyeSlash size={14} />}
+                    </button>
+                  </div>
+                </FormRow>
+              )}
+            />
           </form>
 
-          <div className="space-y-3">
-            <Button
-              form="register-form"
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-10"
-              style={{ backgroundColor: "#1e3a5f" }}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account…
-                </>
-              ) : (
-                <>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Create Account
-                </>
-              )}
-            </Button>
+          <button
+            form="register-form"
+            type="submit"
+            disabled={isSubmitting}
+            style={{
+              marginTop: 24, width: "100%",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 9,
+              background: ACCENT, color: "#fff",
+              fontFamily: SANS, fontWeight: 640, fontSize: 15,
+              padding: "14px 20px", borderRadius: 10, border: "none",
+              boxShadow: "0 8px 24px rgba(47,111,237,0.28)",
+              cursor: isSubmitting ? "wait" : "pointer",
+              opacity: isSubmitting ? 0.75 : 1,
+              transition: "transform .12s ease, box-shadow .18s ease, opacity .2s ease",
+            }}
+            onMouseEnter={(e) => { if (!isSubmitting) e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = "none"; }}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Creating account…
+              </>
+            ) : (
+              <>
+                Create Account
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </>
+            )}
+          </button>
 
-            <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/login" className="text-primary font-medium hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </div>
+          <p style={{
+            marginTop: 22, textAlign: "center",
+            fontSize: 13.5, color: MUTED,
+          }}>
+            Already registered?{" "}
+            <Link href="/login" style={{
+              color: ACCENT, fontWeight: 560, textDecoration: "none",
+            }}>
+              Sign in →
+            </Link>
+          </p>
         </div>
+
+        <div style={{
+          position: "absolute", bottom: 24, left: 32, right: 32,
+          display: "flex", justifyContent: "space-between",
+          fontFamily: MONO, fontSize: 10, letterSpacing: "0.12em", color: "#a2acbd",
+        }}>
+          <span>© {new Date().getFullYear()} JOSTS ELECTRIC</span>
+          <span>ISO 17025-READY</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FormRow({
+  label,
+  error,
+  invalid,
+  children,
+}: {
+  label: string;
+  error?: string;
+  invalid?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label style={{
+        display: "block", marginBottom: 8,
+        fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.14em",
+        color: invalid ? "#c94236" : "#4a5468", fontWeight: 600,
+      }}>
+        {label}
+      </label>
+      {children}
+      {error && (
+        <div style={{
+          marginTop: 6, fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.06em",
+          color: "#c94236",
+        }}>
+          ! {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function inputStyle(invalid?: boolean): React.CSSProperties {
+  return {
+    width: "100%",
+    height: 44,
+    padding: "0 14px",
+    borderRadius: 9,
+    border: `1px solid ${invalid ? "#e0a09a" : LINE}`,
+    background: "#fff",
+    color: INK,
+    fontFamily: SANS,
+    fontSize: 15,
+    outline: "none",
+    transition: "border-color .15s ease, box-shadow .15s ease",
+    boxShadow: invalid ? "0 0 0 3px rgba(201,66,54,0.08)" : "none",
+  };
+}
+
+const eyeBtn: React.CSSProperties = {
+  position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+  background: "transparent", border: "none", cursor: "pointer",
+  color: MUTED, display: "flex", alignItems: "center",
+};
+
+function scorePassword(pw: string): number {
+  if (!pw) return 0;
+  let s = 0;
+  if (pw.length >= 6) s++;
+  if (pw.length >= 10) s++;
+  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  return Math.min(s, 4);
+}
+
+function StrengthMeter({ score }: { score: number }) {
+  const labels = ["TOO SHORT", "WEAK", "OK", "GOOD", "STRONG"];
+  const colors = ["#c94236", "#e57e46", "#dfaf3a", "#3aae5d", "#2f6fed"];
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: "flex", gap: 4 }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} style={{
+            flex: 1, height: 3, borderRadius: 2,
+            background: i < score ? colors[score] : "#e6e8ec",
+            transition: "background .2s ease",
+          }} />
+        ))}
+      </div>
+      <div style={{
+        marginTop: 6,
+        fontFamily: MONO, fontSize: 10, letterSpacing: "0.12em",
+        color: colors[score],
+      }}>
+        {labels[score]}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import {
   EP_EQUIPMENT_TRACEABILITY_PRESIGN,
   EP_EQUIPMENT_TRACEABILITY_URL,
 } from "@/lib/endpoints";
+import JasperTone from "@/app/components/theme/JasperTone";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -405,7 +406,8 @@ export default function EquipmentDetailPage() {
   const parameters = draft.parameters ?? [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div data-jz="jasper" className="min-h-screen bg-background">
+      <JasperTone />
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv,.pdf" multiple className="hidden" onChange={handleFileUpload} />
       {/* Top bar */}
       <div className="bg-[#1e3a5f] dark:bg-zinc-900 dark:border-b dark:border-zinc-800 text-white px-6 py-4 flex items-center gap-4 shadow-md">

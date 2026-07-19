@@ -2,83 +2,60 @@
 
 import Link from "next/link";
 import React from "react";
-import {
-  ArrowRight,
-  Calculator,
-  FileBadge,
-  ClipboardList,
-
-  History,
-  Wrench,
-  ShieldCheck,
-  MapPin,
-  Mail,
-  ChevronDown,
-  LayoutDashboard,
-} from "lucide-react";
 import { useAuth } from "@/app/provider/AuthProvider";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const TYPEWRITER_WORDS = [
-  "Calibration Reports",
-  "PDF Certificates",
-  "Instrument Tracking",
-  "Audit History",
+const INSTRUMENTS = [
+  "FLOW METERS",
+  "TORQUE WRENCHES",
+  "MICROMETERS",
+  "DIAL GAUGES",
+  "VERNIER CALIPERS",
+  "MANOMETERS",
+  "LOAD CELLS",
+  "THERMOMETERS",
+  "MULTIMETERS",
+  "PRESSURE GAUGES",
 ];
 
-const INSTRUMENTS = [
-  "Pressure Gauges",
-  "Thermometers",
-  "Flow Meters",
-  "Torque Wrenches",
-  "Micrometers",
-  "Dial Gauges",
-  "Vernier Calipers",
-  "Manometers",
-  "Load Cells",
-  "Tachometers",
+type DMMMode = {
+  key: string;
+  label: string;      // top-left indicator
+  fnBadge: string;    // right-side small text (V DC, V AC, Ω, etc.)
+  base: number;       // baseline reading
+  noise: number;      // ± noise on last digit
+  unit: string;
+  digits: number;     // total significant digits displayed
+  decimals: number;
+  max: number;        // for bargraph
+  rangeText: string;
+};
+
+const DMM_MODES: DMMMode[] = [
+  { key: "DCV", label: "DCV", fnBadge: "V DC",  base: 10.0042, noise: 0.0006, unit: "V",  digits: 6, decimals: 4, max: 100, rangeText: "±100 V · AUTO" },
+  { key: "ACV", label: "ACV", fnBadge: "V AC",  base: 230.42,  noise: 0.05,   unit: "V",  digits: 6, decimals: 2, max: 600, rangeText: "±600 V · AUTO" },
+  { key: "Ω",   label: "Ω",   fnBadge: "kΩ",    base: 4.7326,  noise: 0.0004, unit: "kΩ", digits: 6, decimals: 4, max: 10,  rangeText: "10 kΩ · AUTO"  },
+  { key: "DCA", label: "DCA", fnBadge: "A DC",  base: 1.2453,  noise: 0.0005, unit: "A",  digits: 6, decimals: 4, max: 10,  rangeText: "±10 A · AUTO"  },
+  { key: "Hz",  label: "Hz",  fnBadge: "Hz",    base: 50.001,  noise: 0.003,  unit: "Hz", digits: 6, decimals: 3, max: 100, rangeText: "100 Hz · AUTO" },
+  { key: "°C",  label: "°C",  fnBadge: "°C",    base: 24.6,    noise: 0.15,   unit: "°C", digits: 5, decimals: 1, max: 100, rangeText: "200 °C · AUTO" },
 ];
 
 // ─── hooks ────────────────────────────────────────────────────────────────────
 
-function useTypewriter(words: string[], speed = 70, pause = 1800) {
-  const [displayed, setDisplayed] = React.useState("");
-  const [wordIdx, setWordIdx] = React.useState(0);
-  const [charIdx, setCharIdx] = React.useState(0);
-  const [deleting, setDeleting] = React.useState(false);
-
-  React.useEffect(() => {
-    const current = words[wordIdx];
-    let timeout: ReturnType<typeof setTimeout>;
-    if (!deleting) {
-      timeout = setTimeout(() => {
-        setDisplayed(current.slice(0, charIdx));
-        if (charIdx === current.length) setTimeout(() => setDeleting(true), pause);
-        else setCharIdx((c) => c + 1);
-      }, speed);
-    } else {
-      timeout = setTimeout(() => {
-        setDisplayed(current.slice(0, charIdx));
-        if (charIdx === 0) { setDeleting(false); setWordIdx((w) => (w + 1) % words.length); }
-        else setCharIdx((c) => c - 1);
-      }, speed / 2);
-    }
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [charIdx, deleting, wordIdx]);
-
-  return displayed;
-}
-
-function useInView(threshold = 0.12) {
-  const ref = React.useRef<HTMLDivElement>(null);
+function useInView<T extends HTMLElement>(threshold = 0.15) {
+  const ref = React.useRef<T>(null);
   const [inView, setInView] = React.useState(false);
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect(); } },
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
       { threshold }
     );
     observer.observe(el);
@@ -87,7 +64,6 @@ function useInView(threshold = 0.12) {
   return { ref, inView };
 }
 
-// Counts up from 0 → target when `start` flips to true
 function useCountUp(target: number, duration = 1400, start = false) {
   const [count, setCount] = React.useState(0);
   React.useEffect(() => {
@@ -97,7 +73,7 @@ function useCountUp(target: number, duration = 1400, start = false) {
     const step = (ts: number) => {
       if (!startTime) startTime = ts;
       const p = Math.min((ts - startTime) / duration, 1);
-      const eased = 1 - Math.pow(1 - p, 3); // ease-out-cubic
+      const eased = 1 - Math.pow(1 - p, 3);
       setCount(Math.floor(eased * target));
       if (p < 1) raf = requestAnimationFrame(step);
       else setCount(target);
@@ -108,474 +84,949 @@ function useCountUp(target: number, duration = 1400, start = false) {
   return count;
 }
 
-// Returns true once the page has scrolled past `threshold` px
-function useScrolled(threshold = 60) {
-  const [scrolled, setScrolled] = React.useState(false);
+function useLiveReading(base: number, noise: number, decimals: number, interval = 900) {
+  const [v, setV] = React.useState(base);
   React.useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > threshold);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [threshold]);
-  return scrolled;
+    setV(base);
+    const id = setInterval(() => {
+      const jitter = (Math.random() * 2 - 1) * noise;
+      setV(+(base + jitter).toFixed(decimals));
+    }, interval);
+    return () => clearInterval(id);
+  }, [base, noise, decimals, interval]);
+  return v;
 }
 
-// Starts at `base`, ticks up by 1 every `interval` ms
-function useLiveCount(base: number, interval = 4000) {
-  const [count, setCount] = React.useState(base);
+// ─── small pieces ─────────────────────────────────────────────────────────────
+
+const DMM_MONO = "'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+const LCD_GREEN = "#8afcc4";
+const LCD_DIM = "rgba(138,252,196,0.28)";
+
+function DMM() {
+  const [modeIdx, setModeIdx] = React.useState(0);
+  const [autoCycle, setAutoCycle] = React.useState(true);
+  const [hold, setHold] = React.useState(false);
+  const [rel, setRel] = React.useState(false);
+
   React.useEffect(() => {
-    const id = setInterval(() => setCount((c) => c + 1), interval);
+    if (!autoCycle) return;
+    const id = setInterval(() => setModeIdx((i) => (i + 1) % DMM_MODES.length), 3600);
     return () => clearInterval(id);
-  }, [interval]);
-  return count;
+  }, [autoCycle]);
+
+  const mode = DMM_MODES[modeIdx];
+  const liveValue = useLiveReading(mode.base, mode.noise, mode.decimals);
+  const displayed = hold ? mode.base : liveValue;
+
+  const digitStr = React.useMemo(() => {
+    const totalIntDigits = mode.digits - mode.decimals;
+    const [intPart, decPart = ""] = Math.abs(displayed).toFixed(mode.decimals).split(".");
+    const padInt = intPart.padStart(totalIntDigits, " ");
+    return { padInt, decPart, negative: displayed < 0 };
+  }, [displayed, mode.decimals, mode.digits]);
+
+  const pct = Math.min(Math.abs(displayed) / mode.max, 1);
+  const barSegments = 30;
+  const filled = Math.round(pct * barSegments);
+
+  const handleModeClick = (i: number) => {
+    setModeIdx(i);
+    setAutoCycle(false);
+  };
+
+  return (
+    <div style={{
+      background: "linear-gradient(180deg,#1a2334,#0f1727)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 22,
+      boxShadow: "0 30px 70px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)",
+      overflow: "hidden",
+      animation: "jz-float 7s ease-in-out infinite",
+      userSelect: "none",
+    }}>
+      {/* Instrument bezel/header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+        background: "linear-gradient(180deg,rgba(255,255,255,0.02),transparent)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 8,
+            background: "rgba(79,140,255,0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6ea0ff" strokeWidth="2">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 12l4-4" />
+              <circle cx="12" cy="12" r="1.5" fill="#6ea0ff" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 640, fontSize: 13, color: "#eef2f8" }}>Digital Multimeter</div>
+            <div style={{ fontFamily: DMM_MONO, fontSize: 10.5, color: "#7e8ba0", letterSpacing: "0.02em" }}>JASPER · DMM-6510</div>
+          </div>
+        </div>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6,
+          fontFamily: DMM_MONO, fontSize: 10, letterSpacing: "0.14em",
+          color: "#7fe0a3", background: "rgba(46,204,113,0.1)",
+          border: "1px solid rgba(46,204,113,0.25)",
+          padding: "5px 9px", borderRadius: 6,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2ecc71", animation: "jz-pulse 2s ease-in-out infinite" }} />
+          {autoCycle ? "AUTO" : "MAN"}
+        </div>
+      </div>
+
+      {/* LCD panel */}
+      <div style={{ padding: "16px 18px 14px" }}>
+        <div style={{
+          position: "relative",
+          background: "linear-gradient(180deg,#0b1a1a,#081414)",
+          border: "1px solid rgba(138,252,196,0.12)",
+          borderRadius: 10,
+          padding: "12px 16px 14px",
+          boxShadow: "inset 0 2px 12px rgba(0,0,0,0.55), inset 0 0 24px rgba(138,252,196,0.05)",
+        }}>
+          {/* Status row */}
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            fontFamily: DMM_MONO, fontSize: 9.5, letterSpacing: "0.12em",
+            color: LCD_DIM, marginBottom: 6,
+          }}>
+            <div style={{ display: "flex", gap: 14 }}>
+              <span style={{ color: LCD_GREEN, textShadow: `0 0 6px ${LCD_GREEN}` }}>TRUE-RMS</span>
+              <span style={{ color: autoCycle ? LCD_GREEN : LCD_DIM, textShadow: autoCycle ? `0 0 6px ${LCD_GREEN}` : "none" }}>AUTO</span>
+              <span style={{ color: rel ? LCD_GREEN : LCD_DIM, textShadow: rel ? `0 0 6px ${LCD_GREEN}` : "none" }}>REL</span>
+              <span style={{ color: hold ? "#ffb454" : LCD_DIM, textShadow: hold ? "0 0 6px #ffb454" : "none" }}>HOLD</span>
+            </div>
+            <span style={{ color: LCD_GREEN, textShadow: `0 0 6px ${LCD_GREEN}` }}>{mode.label}</span>
+          </div>
+
+          {/* Big segmented reading */}
+          <div style={{
+            display: "flex", alignItems: "baseline", justifyContent: "space-between",
+            gap: 8, marginTop: 2,
+          }}>
+            <div style={{
+              fontFamily: DMM_MONO,
+              fontSize: 44, fontWeight: 500,
+              color: LCD_GREEN,
+              textShadow: `0 0 8px ${LCD_GREEN}, 0 0 20px rgba(138,252,196,0.35)`,
+              letterSpacing: "0.02em",
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1,
+              whiteSpace: "pre",
+            }}>
+              {digitStr.negative ? "-" : " "}{digitStr.padInt}.{digitStr.decPart}
+            </div>
+            <div style={{
+              fontFamily: DMM_MONO,
+              fontSize: 14, fontWeight: 500,
+              color: LCD_GREEN,
+              textShadow: `0 0 6px ${LCD_GREEN}`,
+              letterSpacing: "0.06em",
+              paddingBottom: 4,
+            }}>
+              {mode.fnBadge}
+            </div>
+          </div>
+
+          {/* Bargraph */}
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 10 }}>
+              {Array.from({ length: barSegments }).map((_, i) => {
+                const active = i < filled;
+                const isMajor = i % 5 === 0;
+                return (
+                  <div key={i} style={{
+                    flex: 1,
+                    height: isMajor ? "100%" : "70%",
+                    background: active ? LCD_GREEN : "rgba(138,252,196,0.08)",
+                    boxShadow: active ? `0 0 4px ${LCD_GREEN}` : "none",
+                    borderRadius: 1,
+                    transition: "background .2s",
+                  }} />
+                );
+              })}
+            </div>
+            <div style={{
+              display: "flex", justifyContent: "space-between",
+              marginTop: 4, fontFamily: DMM_MONO,
+              fontSize: 8.5, letterSpacing: "0.1em", color: LCD_DIM,
+            }}>
+              <span>0</span><span>25</span><span>50</span><span>75</span><span>{mode.max}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Function buttons */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(6,1fr)",
+        gap: 6, padding: "4px 18px 14px",
+      }}>
+        {DMM_MODES.map((m, i) => {
+          const active = i === modeIdx;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => handleModeClick(i)}
+              style={{
+                padding: "9px 0",
+                textAlign: "center",
+                borderRadius: 7,
+                fontFamily: DMM_MONO,
+                fontSize: 11, fontWeight: 600,
+                letterSpacing: "0.08em",
+                background: active
+                  ? "linear-gradient(180deg,rgba(79,140,255,0.32),rgba(79,140,255,0.14))"
+                  : "linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))",
+                border: `1px solid ${active ? "rgba(79,140,255,0.55)" : "rgba(255,255,255,0.06)"}`,
+                color: active ? "#eef2f8" : "#8895aa",
+                cursor: "pointer",
+                boxShadow: active
+                  ? "inset 0 1px 0 rgba(255,255,255,0.12), 0 0 12px rgba(79,140,255,0.35)"
+                  : "inset 0 1px 0 rgba(255,255,255,0.04)",
+                transition: "all .18s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = "linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))";
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = "linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))";
+              }}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Secondary buttons (HOLD / REL / RANGE) */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+        gap: 6, padding: "0 18px 14px",
+      }}>
+        {[
+          { label: "HOLD",  active: hold,  onClick: () => setHold((v) => !v) },
+          { label: "REL",   active: rel,   onClick: () => setRel((v) => !v) },
+          { label: "RANGE", active: false, onClick: () => setAutoCycle((v) => !v) },
+        ].map((b) => (
+          <button
+            key={b.label}
+            type="button"
+            onClick={b.onClick}
+            style={{
+              padding: "7px 0",
+              textAlign: "center",
+              borderRadius: 6,
+              fontFamily: DMM_MONO,
+              fontSize: 10, fontWeight: 600,
+              letterSpacing: "0.14em",
+              background: b.active
+                ? "linear-gradient(180deg,rgba(255,180,84,0.28),rgba(255,180,84,0.1))"
+                : "linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.005))",
+              border: `1px solid ${b.active ? "rgba(255,180,84,0.5)" : "rgba(255,255,255,0.05)"}`,
+              color: b.active ? "#ffd499" : "#6b7689",
+              cursor: "pointer",
+              transition: "all .18s ease",
+            }}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Range / input jacks footer */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "12px 18px",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        background: "rgba(0,0,0,0.15)",
+        fontFamily: DMM_MONO, fontSize: 10, letterSpacing: "0.08em", color: "#8b97ab",
+      }}>
+        <span>RANGE · {mode.rangeText}</span>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {[
+            { label: "VΩ",  color: "#4f8cff" },
+            { label: "mA",  color: "#ffb454" },
+            { label: "COM", color: "#eef2f8" },
+          ].map((j) => (
+            <div key={j.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%",
+                background: `radial-gradient(circle at 30% 30%, ${j.color}, ${j.color}88 60%, ${j.color}22 100%)`,
+                boxShadow: `0 0 4px ${j.color}66, inset 0 0 2px rgba(0,0,0,0.4)`,
+              }} />
+              <span style={{ fontSize: 9, color: "#6b7689" }}>{j.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
+
+// ─── feature icon svgs ────────────────────────────────────────────────────────
+
+const FEATURE_ICONS = [
+  <svg key="1" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16h3" /></svg>,
+  <svg key="2" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9"><path d="M14 3v5h5" /><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" /><path d="M9 13l2 2 4-4" /></svg>,
+  <svg key="3" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9"><path d="M14.7 6.3a4 4 0 00-5.4 5.4l-6 6a1.4 1.4 0 002 2l6-6a4 4 0 005.4-5.4l-2.5 2.5-2-2z" /></svg>,
+  <svg key="4" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9"><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16M9 4v16" /></svg>,
+  <svg key="5" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9"><path d="M3 12a9 9 0 109-9" /><path d="M3 4v5h5" /><path d="M12 8v4l3 2" /></svg>,
+  <svg key="6" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6ea0ff" strokeWidth="1.9"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /><path d="M9 12l2 2 4-4" /></svg>,
+];
+
+const FEATURES = [
+  { title: "Calibration Reports",     desc: "Create and manage calibration reports for every instrument, with structured, validated data entry." },
+  { title: "PDF Certificates",        desc: "Watermarked, branded calibration certificates — auto-generated and ready to download instantly." },
+  { title: "Multi-Instrument Support",desc: "Pressure gauges, thermometers, flow meters and more — each with its own parameter set." },
+  { title: "Instrument Tracking",     desc: "Track every instrument's calibration status, due dates and full measurement history." },
+  { title: "Audit History",           desc: "Full audit trail for every calibration record — see who changed what, and when." },
+  { title: "ISO-Ready Compliance",    desc: "Reports and certificates structured to satisfy ISO calibration and documentation requirements." },
+];
+
+const FAQ = [
+  {
+    q: "Is Jasper compliant with ISO/IEC 17025?",
+    a: "Every report and certificate is structured to satisfy ISO/IEC 17025 documentation requirements — traceable reference standards, uncertainty fields, environmental conditions, and authorized signatories are captured on each record.",
+  },
+  {
+    q: "Does Jasper work offline in the field?",
+    a: "Yes — Jasper is offline-first. Record measurements on-site with no connection, and everything syncs automatically the moment your device is back online. No readings are ever lost.",
+  },
+  {
+    q: "How long is calibration data retained?",
+    a: "Records and generated certificates are retained for the full life of the instrument, with a complete, immutable audit trail. Retention windows can be configured to match your organization's compliance policy.",
+  },
+  {
+    q: "Who can edit or approve records?",
+    a: "Role-based access controls determine who can create, edit, review, and sign off records. Every change is logged with the user, timestamp, and the previous value — nothing is overwritten silently.",
+  },
+  {
+    q: "How are certificates generated and verified?",
+    a: "On save, Jasper auto-generates a watermarked, branded PDF certificate with a unique hash. That hash lets anyone verify a certificate's authenticity against the original record — no tampering, no ambiguity.",
+  },
+];
 
 // ─── component ────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const { user }    = useAuth();
-  const isAuthed    = !!user;
-  const ctaHref     = isAuthed ? "/dashboard" : "/login";
-  const navLabel    = isAuthed ? "Dashboard"  : "Sign In";
-  const heroLabel   = isAuthed ? "Open Dashboard" : "Get Started";
+  const { user } = useAuth();
+  const isAuthed = !!user;
+  const ctaHref = isAuthed ? "/dashboard" : "/login";
+  const heroLabel = isAuthed ? "Open Dashboard" : "Get Started";
+  const navLabel = isAuthed ? "Dashboard" : "Sign In";
   const footerLabel = isAuthed ? "Go to Dashboard" : "Sign In to Portal";
-  const typed       = useTypewriter(TYPEWRITER_WORDS);
-  const scrolled    = useScrolled(60);
-  const statsRef    = useInView();
-  const aboutRef    = useInView();
-  const featuresRef = useInView();
-  const howRef      = useInView();
-  const ctaRef      = useInView();
 
-  const yearsCount  = useCountUp(117, 1400, statsRef.inView);
-  const reportCount = useLiveCount(2847);
+  const statsRef = useInView<HTMLDivElement>();
+  const yearsCount = useCountUp(117, 1400, statsRef.inView);
+  const reportsCount = useCountUp(2854, 1600, statsRef.inView);
 
   return (
     <>
       <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(22px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-        @keyframes marquee {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-        @keyframes lineGrow {
-          from { width: 0%; }
-          to   { width: 75%; }
-        }
-        @keyframes shimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position:  200% center; }
-        }
+        @keyframes jz-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes jz-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.82); } }
+        @keyframes jz-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+        @keyframes jz-drift { 0%,100% { transform: translate(0,0); opacity:.85; } 50% { transform: translate(-26px,22px); opacity:1; } }
+        @keyframes jz-fade-up { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
 
-        .anim-fade-up  { animation: fadeInUp 0.55s ease both; }
-        .anim-fade-in  { animation: fadeIn   0.55s ease both; }
-        .hero-enter    { animation: fadeInUp 0.7s  ease both; }
+        .jz-reveal { opacity: 0; transform: translateY(20px); transition: opacity .7s ease, transform .7s cubic-bezier(.22,.61,.36,1); }
+        .jz-reveal.jz-in { opacity: 1; transform: none; }
 
-        .marquee-track { animation: marquee 28s linear infinite; }
-        .marquee-track:hover { animation-play-state: paused; }
+        .jz-page a { color: #2f6fed; text-decoration: none; }
+        .jz-page a:hover { color: #1e50c0; }
+        .jz-page ::selection { background: #4f8cff; color: #fff; }
 
-        .line-grow-anim { animation: lineGrow 1s ease both; }
+        .jz-feat-card { transition: transform .18s ease, box-shadow .18s ease; }
+        .jz-feat-card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px rgba(11,20,36,0.08); }
 
-        .card-accent { position: relative; overflow: hidden; }
-        .card-accent::before {
-          content: '';
-          position: absolute; top: 0; left: 0; right: 0;
-          height: 3px;
-          background: linear-gradient(90deg, #1e3a5f, #3b82f6);
-          transform: scaleX(0); transform-origin: left;
-          transition: transform 0.3s ease; border-radius: 999px;
+        .jz-faq summary { list-style: none; cursor: pointer; }
+        .jz-faq summary::-webkit-details-marker { display: none; }
+        .jz-faq .jz-ic { transition: transform .25s ease; }
+        .jz-faq[open] .jz-ic { transform: rotate(45deg); }
+        .jz-faq .jz-a { overflow: hidden; max-height: 0; opacity: 0; transition: max-height .3s ease, opacity .3s ease, padding .3s ease; }
+        .jz-faq[open] .jz-a { max-height: 320px; opacity: 1; }
+
+        @media (prefers-reduced-motion: reduce) { .jz-page * { animation: none !important; } }
+
+        @media (max-width: 960px) {
+          .jz-hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; padding-top: 104px !important; padding-bottom: 72px !important; }
+          .jz-about { grid-template-columns: 1fr !important; gap: 48px !important; }
+          .jz-feat-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .jz-flow-grid { grid-template-columns: repeat(2,1fr) !important; row-gap: 48px !important; }
+          .jz-flow-line { display: none !important; }
+          .jz-foot-grid { grid-template-columns: 1fr 1fr !important; }
+          .jz-h1 { font-size: 50px !important; }
         }
-        .card-accent:hover::before { transform: scaleX(1); }
-
-        .shimmer-btn {
-          background-size: 200% auto;
-          background-image: linear-gradient(90deg, #2563eb 0%, #3b82f6 40%, #2563eb 100%);
-          animation: shimmer 3s linear infinite;
+        @media (max-width: 640px) {
+          .jz-nav-links { display: none !important; }
+          .jz-ledger { grid-template-columns: 1fr 1fr !important; }
+          .jz-ledger > div { border-right: none !important; border-bottom: 1px solid var(--jz-line); }
+          .jz-feat-grid { grid-template-columns: 1fr !important; }
+          .jz-flow-grid { grid-template-columns: 1fr !important; }
+          .jz-foot-grid { grid-template-columns: 1fr !important; gap: 32px !important; }
+          .jz-h1 { font-size: 40px !important; }
+          .jz-sec-title { font-size: 32px !important; }
+          .jz-pad { padding-left: 20px !important; padding-right: 20px !important; }
         }
-
       `}</style>
 
-      <div className="force-light min-h-screen bg-white flex flex-col">
-
-        {/* ── Navbar ── */}
-        <header
-          className={`sticky top-0 z-50 transition-all duration-300 ${
-            scrolled
-              ? "shadow-lg backdrop-blur-md border-b border-white/5"
-              : ""
-          }`}
-          style={{
-            backgroundColor: scrolled ? "rgba(30,58,95,0.85)" : "#1e3a5f",
-          }}
-        >
-          <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#2563eb" }}>
-                <ShieldCheck className="h-4 w-4 text-white" />
+      <div
+        className="jz-page force-light"
+        style={{
+          // @ts-expect-error css vars
+          "--jz-accent": "#2f6fed",
+          "--jz-ink": "#0b1424",
+          "--jz-line": "#e6e8ec",
+          "--jz-panel": "#f6f7f9",
+          "--jz-muted": "#616b7a",
+          maxWidth: "100%",
+          overflowX: "hidden",
+          background: "#fff",
+          color: "#0b1424",
+          fontFamily: "Geist, ui-sans-serif, system-ui, -apple-system, sans-serif",
+          WebkitFontSmoothing: "antialiased",
+        }}
+      >
+        {/* ============ NAV ============ */}
+        <header style={{
+          position: "sticky", top: 16, zIndex: 50,
+          display: "flex", justifyContent: "center",
+          padding: "0 20px", marginBottom: -76, pointerEvents: "none",
+        }}>
+          <div style={{
+            pointerEvents: "auto", width: "100%", maxWidth: 1080,
+            padding: "0 14px 0 20px", height: 60,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            background: "rgba(11,20,36,0.72)",
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 16,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: "var(--jz-accent)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                boxShadow: "0 0 0 1px rgba(255,255,255,0.1) inset",
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
+                  <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
+                </svg>
               </div>
-              <span
-                className="text-2xl font-extrabold italic tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
-                style={{ fontFamily: '"Times New Roman", Times, serif' }}
-              >
-                Jasper
-              </span>
+              <span style={{ fontWeight: 700, fontSize: 18, letterSpacing: "-0.01em", color: "#fff" }}>Jasper</span>
             </div>
-            <Link
-              href={ctaHref}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg border border-white/20 text-white/90 hover:bg-white/10 transition-colors"
-            >
-              {isAuthed && <LayoutDashboard className="h-4 w-4" />}
-              {navLabel} <ArrowRight className="h-4 w-4" />
-            </Link>
+            <nav style={{ display: "flex", alignItems: "center", gap: 34 }}>
+              <div className="jz-nav-links" style={{ display: "flex", gap: 28, fontSize: 14, color: "#c3ccdb" }}>
+                <a href="#platform" style={{ color: "#c3ccdb" }}>Platform</a>
+                <a href="#features" style={{ color: "#c3ccdb" }}>Features</a>
+                <a href="#workflow" style={{ color: "#c3ccdb" }}>Workflow</a>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                <div className="jz-nav-links" style={{
+                  display: "flex", alignItems: "center", gap: 7,
+                  fontFamily: "'Geist Mono', ui-monospace, monospace",
+                  fontSize: 10.5, letterSpacing: "0.1em", color: "#8fe3ac",
+                  border: "1px solid rgba(46,204,113,0.28)",
+                  background: "rgba(46,204,113,0.08)",
+                  borderRadius: 100, padding: "6px 12px",
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2ecc71", animation: "jz-pulse 2s ease-in-out infinite" }} />
+                  OPERATIONAL
+                </div>
+                <Link href={ctaHref} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  background: "var(--jz-accent)", color: "#fff",
+                  fontWeight: 600, fontSize: 14,
+                  padding: "10px 18px", borderRadius: 9,
+                  boxShadow: "0 4px 14px rgba(47,111,237,0.32)",
+                }}>
+                  {navLabel}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </Link>
+              </div>
+            </nav>
           </div>
         </header>
 
-        {/* ── Hero ── */}
-        <section
-          className="relative flex flex-col items-center justify-center text-center px-5 py-24 sm:py-36 overflow-hidden"
-          style={{ backgroundColor: "#1e3a5f" }}
-        >
-          {/* Backgrounds */}
-          <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "26px 26px" }} />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-72 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute top-1/3 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Main content */}
-          <div className="relative z-10 max-w-3xl mx-auto space-y-7 hero-enter">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-blue-400/20 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/60">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              Calibration Management Portal
-            </div>
-
+        {/* ============ HERO ============ */}
+        <section style={{ position: "relative", background: "#0b1424", color: "#eef2f8", overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", inset: 0,
+            backgroundImage: "linear-gradient(rgba(255,255,255,0.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.045) 1px,transparent 1px)",
+            backgroundSize: "64px 64px",
+            WebkitMaskImage: "radial-gradient(ellipse 90% 70% at 30% 20%,#000 40%,transparent 100%)",
+            maskImage: "radial-gradient(ellipse 90% 70% at 30% 20%,#000 40%,transparent 100%)",
+          }} />
+          <div style={{
+            position: "absolute", top: -160, right: -120,
+            width: 560, height: 560,
+            background: "radial-gradient(circle,rgba(79,140,255,0.22),transparent 65%)",
+            pointerEvents: "none", animation: "jz-drift 13s ease-in-out infinite",
+          }} />
+          <div className="jz-hero-grid jz-pad" style={{
+            position: "relative", maxWidth: 1240, margin: "0 auto",
+            padding: "150px 32px 96px",
+            display: "grid", gridTemplateColumns: "1.05fr 0.95fr",
+            gap: 64, alignItems: "center",
+          }}>
             <div>
-              <h1 className="text-4xl sm:text-6xl font-bold text-white tracking-tight leading-tight">
-                Manage Your
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 10,
+                fontFamily: "'Geist Mono', ui-monospace, monospace",
+                fontSize: 11, letterSpacing: "0.16em", color: "#9db4de",
+                border: "1px solid rgba(255,255,255,0.14)",
+                borderRadius: 100, padding: "7px 14px",
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--jz-accent)" }} />
+                CALIBRATION MANAGEMENT PORTAL
+              </div>
+              <h1 className="jz-h1" style={{
+                margin: "26px 0 0", fontSize: 66, lineHeight: 1.02,
+                letterSpacing: "-0.035em", fontWeight: 640,
+              }}>
+                Certified<br />calibration,<br />
+                <span style={{ color: "#6ea0ff" }}>measured to spec.</span>
               </h1>
-              <h1 className="text-4xl sm:text-6xl font-bold tracking-tight leading-tight mt-1 min-h-[1.2em]" style={{ color: "#93c5fd" }}>
-                {typed || "\u00A0"}
-                <span className="inline-block w-[3px] h-10 sm:h-14 ml-1.5 align-middle animate-pulse rounded-sm" style={{ backgroundColor: "#93c5fd" }} />
-              </h1>
+              <p style={{
+                margin: "26px 0 0", fontSize: 18, lineHeight: 1.6,
+                color: "#a9b5c8", maxWidth: 490,
+              }}>
+                One structured system to record measurements, generate ISO-compliant certificates, and trace every instrument — from the bench to the field.
+              </p>
+              <div style={{ marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+                <Link href={ctaHref} style={{
+                  display: "inline-flex", alignItems: "center", gap: 9,
+                  background: "var(--jz-accent)", color: "#fff",
+                  fontWeight: 640, fontSize: 15, padding: "14px 24px",
+                  borderRadius: 10, boxShadow: "0 8px 24px rgba(47,111,237,0.35)",
+                }}>
+                  {heroLabel}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </Link>
+                <a href="#features" style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  color: "#c3ccdb", fontWeight: 560, fontSize: 15,
+                }}>
+                  See how it works
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </a>
+              </div>
+              <div style={{
+                marginTop: 38, display: "flex", gap: 26, flexWrap: "wrap",
+                fontFamily: "'Geist Mono', ui-monospace, monospace",
+                fontSize: 11, letterSpacing: "0.12em", color: "#7e8ba0",
+              }}>
+                <span>ISO&nbsp;17025-READY</span>
+                <span style={{ color: "#39435a" }}>/</span>
+                <span>OFFLINE-FIRST</span>
+                <span style={{ color: "#39435a" }}>/</span>
+                <span>BUILT FOR ENGINEERS</span>
+              </div>
             </div>
-
-            <p className="text-base sm:text-lg text-blue-200/60 max-w-xl mx-auto leading-relaxed">
-              Jasper gives your team a single, structured place to record measurements, generate ISO-compliant certificates, and track every instrument — end to end.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <Link
-                href={ctaHref}
-                className="shimmer-btn group flex items-center gap-2 px-8 py-3.5 text-sm font-semibold text-white rounded-xl shadow-xl transition-all hover:scale-105 active:scale-100 w-full sm:w-auto justify-center"
-              >
-                {heroLabel}
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-              <a href="#features" className="flex items-center gap-2 px-6 py-3.5 text-sm font-medium text-blue-200/60 hover:text-white transition-colors w-full sm:w-auto justify-center">
-                See features →
-              </a>
+            <div style={{ position: "relative" }}>
+              <div style={{
+                position: "absolute", top: -14, left: -14,
+                fontFamily: "'Geist Mono', ui-monospace, monospace",
+                fontSize: 10, color: "#5e6b82", letterSpacing: "0.1em",
+              }}>REC — 0042</div>
+              <DMM />
+              <div style={{
+                position: "absolute", bottom: -14, right: -14,
+                fontFamily: "'Geist Mono', ui-monospace, monospace",
+                fontSize: 10, color: "#5e6b82", letterSpacing: "0.1em",
+              }}>◦ TRUE-RMS</div>
             </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-              {["ISO Certified", "Offline-First", "Built for Engineers"].map((t) => (
-                <span key={t} className="text-[11px] px-3 py-1 rounded-full border border-white/10 text-white/30 tracking-wide">{t}</span>
-              ))}
-            </div>
-          </div>
-
-          {/* Scroll indicator */}
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-30 pointer-events-none">
-            <span className="text-[9px] text-white uppercase tracking-[0.2em]">Scroll</span>
-            <ChevronDown className="h-4 w-4 text-white animate-bounce" />
           </div>
         </section>
 
-        {/* ── Wave divider ── */}
-        <div className="relative h-10 bg-white overflow-hidden -mt-px">
-          <svg viewBox="0 0 1440 40" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" style={{ fill: "#1e3a5f" }}>
-            <path d="M0,0 C360,40 1080,0 1440,32 L1440,0 Z" />
-          </svg>
-        </div>
+        {/* ============ TRUST LEDGER ============ */}
+        <section style={{ borderBottom: "1px solid var(--jz-line)" }} ref={statsRef.ref}>
+          <div className="jz-ledger jz-pad" style={{
+            maxWidth: 1240, margin: "0 auto", padding: "0 32px",
+            display: "grid", gridTemplateColumns: "repeat(4,1fr)",
+          }}>
+            <div style={{ padding: "34px 28px", borderRight: "1px solid var(--jz-line)" }}>
+              <div style={{ fontSize: 34, fontWeight: 680, letterSpacing: "-0.02em" }}>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{yearsCount}</span>
+                <span style={{ color: "var(--jz-accent)" }}>+</span>
+              </div>
+              <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--jz-muted)", marginTop: 6 }}>
+                YEARS OF EXCELLENCE
+              </div>
+            </div>
+            <div style={{ padding: "34px 28px", borderRight: "1px solid var(--jz-line)" }}>
+              <div style={{ fontSize: 34, fontWeight: 680, letterSpacing: "-0.02em" }}>Pan-India</div>
+              <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--jz-muted)", marginTop: 6 }}>
+                SERVICE PRESENCE
+              </div>
+            </div>
+            <div style={{ padding: "34px 28px", borderRight: "1px solid var(--jz-line)" }}>
+              <div style={{ fontSize: 34, fontWeight: 680, letterSpacing: "-0.02em" }}>ISO</div>
+              <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--jz-muted)", marginTop: 6 }}>
+                17025 CERTIFIED
+              </div>
+            </div>
+            <div style={{ padding: "34px 28px" }}>
+              <div style={{ fontSize: 34, fontWeight: 680, letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 9 }}>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{reportsCount.toLocaleString()}</span>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#2ecc71", animation: "jz-pulse 2s ease-in-out infinite" }} />
+              </div>
+              <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.1em", color: "var(--jz-muted)", marginTop: 6 }}>
+                REPORTS GENERATED
+              </div>
+            </div>
+          </div>
+        </section>
 
-        {/* ── Stats ── */}
-        <section className="bg-white pb-10 px-5 border-b border-slate-100" ref={statsRef.ref}>
-          <div className="max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 text-center divide-x divide-slate-100">
-            {[
-              { display: `${yearsCount}+`, label: "Years of Excellence" },
-              { display: "Pan‑India",      label: "Presence" },
-              { display: "ISO",            label: "Certified" },
-              {
-                display: (
-                  <span className="inline-flex items-center gap-1.5">
-                    {reportCount.toLocaleString()}
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  </span>
-                ),
-                label: "Reports Generated",
-              },
-            ].map(({ display, label }, i) => (
-              <div
-                key={label}
-                className={`${statsRef.inView ? "anim-fade-up" : "opacity-0"} px-4`}
-                style={{ animationDelay: `${i * 120}ms` }}
-              >
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900">{display}</div>
-                <div className="text-[10px] sm:text-xs text-slate-400 mt-1 uppercase tracking-wider">{label}</div>
+        {/* ============ INSTRUMENT TICKER ============ */}
+        <section style={{ background: "var(--jz-panel)", borderBottom: "1px solid var(--jz-line)", overflow: "hidden", padding: "16px 0" }}>
+          <div style={{ display: "flex", width: "max-content", animation: "jz-marquee 32s linear infinite" }}>
+            {[0, 1].map((k) => (
+              <div key={k} style={{
+                display: "flex", gap: 44, paddingRight: 44,
+                fontFamily: "'Geist Mono', ui-monospace, monospace",
+                fontSize: 12, letterSpacing: "0.1em", color: "#7a8494",
+              }} aria-hidden={k === 1}>
+                {INSTRUMENTS.map((name) => (
+                  <span key={name}>◦ {name}</span>
+                ))}
               </div>
             ))}
           </div>
         </section>
 
-        {/* ── Instrument ticker ── */}
-        <section className="bg-slate-50 border-b border-slate-100 py-4 overflow-hidden select-none">
-          <div className="flex whitespace-nowrap marquee-track">
-            {[...INSTRUMENTS, ...INSTRUMENTS].map((name, i) => (
-              <span key={i} className="inline-flex items-center gap-3 mx-6 text-xs font-medium text-slate-400 uppercase tracking-widest">
-                <span className="w-1 h-1 rounded-full bg-slate-300 inline-block" />
-                {name}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        {/* ── About ── */}
-        <section className="py-20 px-5 bg-white" ref={aboutRef.ref}>
-          <div className="max-w-5xl mx-auto">
-            <div className={`grid sm:grid-cols-2 gap-12 items-center ${aboutRef.inView ? "anim-fade-up" : "opacity-0"}`}>
-              <div className="space-y-5">
-                <span className="text-xs font-semibold uppercase tracking-widest text-blue-500">About the Platform</span>
-                <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight leading-snug">
-                  Built for precision.<br />Designed for teams.
-                </h2>
-                <p className="text-slate-500 leading-relaxed">
-                  Jasper is a modern calibration suite — purpose-built to eliminate paper-based workflows and give engineers a fast, reliable way to produce calibration records, even from the field.
-                </p>
-                <p className="text-slate-500 leading-relaxed">
-                  From pressure gauges to flow meters, each instrument type has its own structured form with pre-defined parameters, ensuring every report is consistent, complete, and traceable from day one.
-                </p>
-                <div className="flex flex-col gap-2.5 pt-2">
-                  {[
-                    "100% digital — no paper forms",
-                    "Automatic PDF certificate generation",
-                    "Live audit trail on every record",
-                    "Role-based access for your team",
-                  ].map((point) => (
-                    <div key={point} className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: "#1e3a5f" }}>
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
-                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      {point}
-                    </div>
-                  ))}
-                </div>
+        {/* ============ PLATFORM / ABOUT ============ */}
+        <section id="platform" style={{ maxWidth: 1240, margin: "0 auto", padding: "104px 32px" }}>
+          <div className="jz-about" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "start" }}>
+            <div>
+              <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--jz-accent)" }}>
+                § 01 — THE PLATFORM
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <h2 className="jz-sec-title" style={{ margin: "16px 0 0", fontSize: 44, lineHeight: 1.08, letterSpacing: "-0.03em", fontWeight: 660 }}>
+                Built for precision.<br />Designed for teams.
+              </h2>
+              <p style={{ margin: "24px 0 0", fontSize: 17, lineHeight: 1.65, color: "#3a4453", maxWidth: 460 }}>
+                Jasper is a modern calibration suite — purpose-built to eliminate paper workflows and give engineers a fast, reliable way to produce calibration records, even from the field.
+              </p>
+              <p style={{ margin: "16px 0 0", fontSize: 17, lineHeight: 1.65, color: "#3a4453", maxWidth: 460 }}>
+                From pressure gauges to flow meters, every instrument type carries its own structured form with pre-defined parameters — so each report is consistent, complete, and traceable from day one.
+              </p>
+              <div style={{ marginTop: 30, display: "grid", gap: 2 }}>
                 {[
-                  { stat: "100%", detail: "Digital workflow — no paper" },
-                  { stat: "Auto", detail: "PDF certificate generation" },
-                  { stat: "Live",  detail: "Audit trail on every record" },
-                  { stat: "Multi", detail: "Instrument type support" },
-                ].map(({ stat, detail }, i) => (
-                  <div
-                    key={detail}
-                    className={`group bg-slate-50 rounded-2xl p-5 border border-slate-100 hover:border-blue-100 hover:shadow-sm hover:bg-blue-50/30 transition-all cursor-default ${aboutRef.inView ? "anim-fade-up" : "opacity-0"}`}
-                    style={{ animationDelay: `${120 + i * 80}ms` }}
-                  >
-                    <div className="text-2xl font-bold group-hover:text-blue-700 transition-colors" style={{ color: "#1e3a5f" }}>{stat}</div>
-                    <div className="text-xs text-slate-500 mt-1 leading-snug">{detail}</div>
+                  "100% digital — no paper forms",
+                  "Automatic PDF certificate generation",
+                  "Live audit trail on every record",
+                  "Role-based access for your team",
+                ].map((point, i, arr) => (
+                  <div key={point} style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 0",
+                    borderBottom: i < arr.length - 1 ? "1px solid var(--jz-line)" : "none",
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--jz-accent)" strokeWidth="2.4">
+                      <circle cx="12" cy="12" r="10" stroke="rgba(47,111,237,0.25)" />
+                      <path d="M8 12l3 3 5-5" />
+                    </svg>
+                    <span style={{ fontSize: 15, fontWeight: 520 }}>{point}</span>
                   </div>
                 ))}
               </div>
             </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {[
+                { n: "01", stat: "100%", detail: "Digital workflow — no paper", dark: false },
+                { n: "02", stat: "Auto", detail: "PDF certificate generation", dark: false },
+                { n: "03", stat: "Live", detail: "Audit trail on every record", dark: false },
+                { n: "04", stat: "Multi", detail: "Instrument type support", dark: true },
+              ].map(({ n, stat, detail, dark }) => (
+                <div key={n} style={{
+                  border: `1px solid ${dark ? "var(--jz-ink)" : "var(--jz-line)"}`,
+                  borderRadius: 14, padding: 26,
+                  background: dark ? "var(--jz-ink)" : "#fff",
+                  color: dark ? "#fff" : "inherit",
+                  position: "relative",
+                }}>
+                  <div style={{
+                    position: "absolute", top: 14, right: 16,
+                    fontFamily: "'Geist Mono', ui-monospace, monospace",
+                    fontSize: 10, color: dark ? "#4a5875" : "#c3c9d2",
+                  }}>{n}</div>
+                  <div style={{ fontSize: 38, fontWeight: 700, letterSpacing: "-0.03em" }}>{stat}</div>
+                  <div style={{ marginTop: 8, fontSize: 14, color: dark ? "#93a1b8" : "var(--jz-muted)", lineHeight: 1.5 }}>
+                    {detail}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
-
-        {/* ── Features ── */}
-        <section id="features" className="py-20 px-5 bg-white" ref={featuresRef.ref}>
-          <div className="max-w-5xl mx-auto">
-            <div className={`text-center mb-14 ${featuresRef.inView ? "anim-fade-up" : "opacity-0"}`}>
-              <span className="text-xs font-semibold uppercase tracking-widest text-blue-500">Features</span>
-              <h2 className="text-3xl font-bold text-slate-900 tracking-tight mt-2">Everything you need</h2>
-              <p className="text-slate-500 mt-3 text-sm max-w-md mx-auto leading-relaxed">
+        {/* ============ FEATURES ============ */}
+        <section id="features" style={{ background: "var(--jz-panel)", borderTop: "1px solid var(--jz-line)", borderBottom: "1px solid var(--jz-line)" }}>
+          <div style={{ maxWidth: 1240, margin: "0 auto", padding: "104px 32px" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 20 }}>
+              <div>
+                <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--jz-accent)" }}>
+                  § 02 — CAPABILITIES
+                </div>
+                <h2 className="jz-sec-title" style={{ margin: "16px 0 0", fontSize: 44, lineHeight: 1.08, letterSpacing: "-0.03em", fontWeight: 660 }}>
+                  Everything you need
+                </h2>
+              </div>
+              <p style={{ fontSize: 16, color: "#3a4453", maxWidth: 360, lineHeight: 1.6, margin: 0 }}>
                 A complete platform for managing instrument calibration — from first measurement to final certificate.
               </p>
             </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[
-                { Icon: Calculator,   title: "Calibration Reports",     desc: "Create and manage calibration reports for all your instruments with structured, validated data entry." },
-                { Icon: FileBadge,    title: "PDF Certificates",        desc: "Watermarked, branded calibration certificates auto-generated and ready to download instantly." },
-                { Icon: Wrench,       title: "Multi-Instrument Support", desc: "Pressure gauges, thermometers, flow meters, and more — each with its own parameter set." },
-                { Icon: ClipboardList,title: "Instrument Tracking",     desc: "Track every instrument's calibration status, due dates, and full measurement history." },
-                { Icon: History,      title: "Audit History",           desc: "Full audit trail for every calibration record — see who changed what, and when." },
-                { Icon: ShieldCheck,  title: "ISO-Ready Compliance",    desc: "Reports and certificates structured to satisfy ISO calibration and documentation requirements." },
-              ].map(({ Icon, title, desc }, i) => (
-                <div
-                  key={title}
-                  className={`card-accent bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col gap-4 ${featuresRef.inView ? "anim-fade-up" : "opacity-0"}`}
-                  style={{ animationDelay: `${i * 75}ms` }}
-                >
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0" style={{ backgroundColor: "#1e3a5f" }}>
-                    <Icon className="h-5 w-5" />
+            <div className="jz-feat-grid" style={{ marginTop: 48, display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
+              {FEATURES.map((f, i) => {
+                const dark = i === 5;
+                return (
+                  <div key={f.title} className="jz-feat-card" style={{
+                    background: dark ? "var(--jz-ink)" : "#fff",
+                    border: `1px solid ${dark ? "var(--jz-ink)" : "var(--jz-line)"}`,
+                    borderRadius: 16, padding: 30, position: "relative",
+                    color: dark ? "#fff" : "inherit",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 11,
+                        background: dark ? "rgba(255,255,255,0.1)" : "var(--jz-ink)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {FEATURE_ICONS[i]}
+                      </div>
+                      <span style={{
+                        fontFamily: "'Geist Mono', ui-monospace, monospace",
+                        fontSize: 11, color: dark ? "#4a5875" : "#c3c9d2",
+                      }}>{String(i + 1).padStart(2, "0")}</span>
+                    </div>
+                    <h3 style={{ margin: "20px 0 0", fontSize: 19, fontWeight: 640, letterSpacing: "-0.01em" }}>
+                      {f.title}
+                    </h3>
+                    <p style={{ margin: "10px 0 0", fontSize: 14.5, lineHeight: 1.6, color: dark ? "#93a1b8" : "var(--jz-muted)" }}>
+                      {f.desc}
+                    </p>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-900">{title}</h3>
-                    <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{desc}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
 
-        {/* ── How It Works ── */}
-        <section className="py-20 px-5 bg-slate-50" ref={howRef.ref}>
-          <div className="max-w-4xl mx-auto">
-            <div className={`text-center mb-14 ${howRef.inView ? "anim-fade-up" : "opacity-0"}`}>
-              <span className="text-xs font-semibold uppercase tracking-widest text-blue-500">Workflow</span>
-              <h2 className="text-3xl font-bold text-slate-900 tracking-tight mt-2">How it works</h2>
-              <p className="text-slate-500 mt-3 text-sm max-w-sm mx-auto">
-                From instrument selection to certified PDF — the whole process in four steps.
+        {/* ============ WORKFLOW ============ */}
+        <section id="workflow" style={{ maxWidth: 1240, margin: "0 auto", padding: "104px 32px" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--jz-accent)" }}>
+              § 03 — WORKFLOW
+            </div>
+            <h2 className="jz-sec-title" style={{ margin: "16px 0 0", fontSize: 44, lineHeight: 1.08, letterSpacing: "-0.03em", fontWeight: 660 }}>
+              How it works
+            </h2>
+            <p style={{ margin: "14px auto 0", fontSize: 17, color: "#3a4453", maxWidth: 440, lineHeight: 1.6 }}>
+              From instrument selection to certified PDF — the whole process in four steps.
+            </p>
+          </div>
+          <div className="jz-flow-grid" style={{ marginTop: 56, display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 0, position: "relative" }}>
+            <div className="jz-flow-line" style={{ position: "absolute", top: 26, left: "12%", right: "12%", height: 1, background: "var(--jz-line)" }} />
+            {[
+              { step: "01", title: "Select Instrument",   desc: "Choose the instrument type and fill in identification details." },
+              { step: "02", title: "Enter Measurements", desc: "Record calibration readings for each parameter." },
+              { step: "03", title: "Review & Save",       desc: "Review the report and save it with a timestamp and author." },
+              { step: "04", title: "Download Certificate",desc: "Generate a watermarked PDF certificate, ready to share." },
+            ].map(({ step, title, desc }, i) => (
+              <div key={step} style={{ position: "relative", padding: "0 20px", textAlign: "center" }}>
+                <div style={{
+                  width: 54, height: 54, margin: "0 auto", borderRadius: 13,
+                  background: i === 3 ? "var(--jz-accent)" : "var(--jz-ink)",
+                  color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontFamily: "'Geist Mono', ui-monospace, monospace",
+                  fontWeight: 600, fontSize: 18, position: "relative", zIndex: 1,
+                }}>{step}</div>
+                <h3 style={{ margin: "20px 0 0", fontSize: 17, fontWeight: 640 }}>{title}</h3>
+                <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--jz-muted)", lineHeight: 1.55 }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ============ FAQ ============ */}
+        <section id="faq" style={{ background: "var(--jz-panel)", borderTop: "1px solid var(--jz-line)", borderBottom: "1px solid var(--jz-line)" }}>
+          <div className="jz-pad" style={{ maxWidth: 840, margin: "0 auto", padding: "104px 32px" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.16em", color: "var(--jz-accent)" }}>
+                § 04 — QUESTIONS
+              </div>
+              <h2 className="jz-sec-title" style={{ margin: "16px 0 0", fontSize: 44, lineHeight: 1.08, letterSpacing: "-0.03em", fontWeight: 660 }}>
+                Compliance, answered
+              </h2>
+              <p style={{ margin: "14px auto 0", fontSize: 17, color: "#3a4453", maxWidth: 460, lineHeight: 1.6 }}>
+                The details engineering and quality teams ask before rolling Jasper out.
               </p>
             </div>
-
-            <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-4">
-              {/* Animated connector line */}
-              <div className="hidden sm:block absolute top-8 left-[12.5%] right-[12.5%] h-px bg-slate-200 z-0">
-                <div
-                  className={`h-full bg-gradient-to-r from-blue-400 to-blue-200 ${howRef.inView ? "line-grow-anim" : "w-0"}`}
-                  style={{ animationDelay: "400ms" }}
-                />
-              </div>
-
-              {[
-                { step: "01", title: "Select Instrument", desc: "Choose the instrument type and fill in identification details." },
-                { step: "02", title: "Enter Measurements", desc: "Record calibration readings for each parameter." },
-                { step: "03", title: "Review & Save",      desc: "Review the report and save it with a timestamp and author." },
-                { step: "04", title: "Download Certificate", desc: "Generate a watermarked PDF certificate, ready to share." },
-              ].map(({ step, title, desc }, i) => (
-                <div
-                  key={step}
-                  className={`relative z-10 flex flex-col items-center text-center gap-3 ${howRef.inView ? "anim-fade-up" : "opacity-0"}`}
-                  style={{ animationDelay: `${i * 120}ms` }}
-                >
-                  <div
-                    className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-lg font-bold shadow-md ring-4 ring-slate-50"
-                    style={{ backgroundColor: "#1e3a5f" }}
-                  >
-                    {step}
+            <div style={{ marginTop: 48 }}>
+              {FAQ.map((f, i) => (
+                <details key={f.q} className="jz-faq" open={i === 0} style={{
+                  background: "#fff", border: "1px solid var(--jz-line)",
+                  borderRadius: 14, marginBottom: 12, padding: "0 24px",
+                }}>
+                  <summary style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    gap: 16, padding: "22px 0",
+                  }}>
+                    <span style={{ fontSize: 17, fontWeight: 600, color: "#0b1424" }}>{f.q}</span>
+                    <span className="jz-ic" style={{
+                      flexShrink: 0, color: "var(--jz-accent)",
+                      fontSize: 22, fontWeight: 400, lineHeight: 1,
+                    }}>+</span>
+                  </summary>
+                  <div className="jz-a">
+                    <p style={{ margin: 0, padding: "0 0 22px", fontSize: 15, lineHeight: 1.7, color: "var(--jz-muted)" }}>
+                      {f.a}
+                    </p>
                   </div>
-                  <h3 className="font-semibold text-slate-900 text-sm">{title}</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
-                </div>
+                </details>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ── CTA ── */}
-        <section className="relative py-24 px-5 overflow-hidden" style={{ backgroundColor: "#1e3a5f" }} ref={ctaRef.ref}>
-          <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-72 h-72 bg-blue-400/10 rounded-full blur-3xl pointer-events-none" />
-
-          <div className={`relative z-10 max-w-2xl mx-auto text-center space-y-6 ${ctaRef.inView ? "anim-fade-up" : "opacity-0"}`}>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-400/20 text-[10px] font-semibold uppercase tracking-widest text-blue-300/50">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              Get started today
+        {/* ============ CTA ============ */}
+        <section style={{ background: "#0b1424", color: "#eef2f8", position: "relative", overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", inset: 0,
+            backgroundImage: "linear-gradient(rgba(255,255,255,0.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.045) 1px,transparent 1px)",
+            backgroundSize: "56px 56px",
+            WebkitMaskImage: "radial-gradient(ellipse 70% 90% at 50% 0%,#000 30%,transparent 100%)",
+            maskImage: "radial-gradient(ellipse 70% 90% at 50% 0%,#000 30%,transparent 100%)",
+          }} />
+          <div className="jz-pad" style={{ position: "relative", maxWidth: 820, margin: "0 auto", padding: "100px 32px", textAlign: "center" }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 9,
+              fontFamily: "'Geist Mono', ui-monospace, monospace",
+              fontSize: 11, letterSpacing: "0.16em", color: "#9db4de",
+              border: "1px solid rgba(255,255,255,0.14)",
+              borderRadius: 100, padding: "7px 14px",
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2ecc71" }} />
+              GET STARTED TODAY
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+            <h2 style={{ margin: "26px 0 0", fontSize: 52, lineHeight: 1.05, letterSpacing: "-0.03em", fontWeight: 660 }}>
               Ready to go paperless?
             </h2>
-            <p className="text-blue-200/60 text-sm max-w-md mx-auto leading-relaxed">
-              Sign in to the portal and start generating digital calibration records for your instruments today. Your team can be up and running in minutes — no setup required.
+            <p style={{ margin: "20px auto 0", fontSize: 18, color: "#a9b5c8", maxWidth: 520, lineHeight: 1.6 }}>
+              Sign in to the portal and start generating digital calibration records today. Your team can be up and running in minutes — no setup required.
             </p>
-            <Link
-              href={ctaHref}
-              className="shimmer-btn inline-flex items-center gap-2 px-9 py-4 text-sm font-semibold text-white rounded-xl transition-all hover:scale-105 active:scale-100 shadow-2xl"
-            >
-              {footerLabel} <ArrowRight className="h-4 w-4" />
-            </Link>
-            <div className="flex flex-wrap items-center justify-center gap-4 pt-1">
-              {["No setup required", "ISO-ready certificates", "Instant PDF download"].map((t) => (
-                <span key={t} className="text-[11px] text-blue-200/40 flex items-center gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-blue-400/40 inline-block" />
-                  {t}
-                </span>
-              ))}
+            <div style={{ marginTop: 34 }}>
+              <Link href={ctaHref} style={{
+                display: "inline-flex", alignItems: "center", gap: 9,
+                background: "var(--jz-accent)", color: "#fff",
+                fontWeight: 640, fontSize: 16, padding: "15px 28px",
+                borderRadius: 11, boxShadow: "0 8px 24px rgba(47,111,237,0.35)",
+              }}>
+                {footerLabel}
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              </Link>
+            </div>
+            <div style={{
+              marginTop: 32, display: "flex", justifyContent: "center", gap: 28, flexWrap: "wrap",
+              fontFamily: "'Geist Mono', ui-monospace, monospace",
+              fontSize: 11, letterSpacing: "0.1em", color: "#7e8ba0",
+            }}>
+              <span>✓ NO SETUP REQUIRED</span>
+              <span>✓ ISO-READY CERTIFICATES</span>
+              <span>✓ INSTANT PDF DOWNLOAD</span>
             </div>
           </div>
         </section>
 
-        {/* ── Footer ── */}
-        <footer style={{ backgroundColor: "#0f172a" }}>
-          <div className="h-px w-full" style={{ background: "linear-gradient(90deg, transparent, #1e3a5f 30%, #2563eb 50%, #1e3a5f 70%, transparent)" }} />
-
-          <div className="max-w-6xl mx-auto px-5 py-14 grid grid-cols-1 sm:grid-cols-3 gap-10">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#1e3a5f" }}>
-                  <ShieldCheck className="h-4 w-4 text-blue-400" />
+        {/* ============ FOOTER ============ */}
+        <footer style={{ background: "#070d18", color: "#8b97ab", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div className="jz-foot-grid jz-pad" style={{
+            maxWidth: 1240, margin: "0 auto", padding: "64px 32px 0",
+            display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr 1fr", gap: 40,
+          }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  background: "var(--jz-accent)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
+                    <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
+                  </svg>
                 </div>
-                <span
-                  className="text-2xl font-extrabold italic tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
-                  style={{ fontFamily: '"Times New Roman", Times, serif' }}
-                >
-                  Jasper
-                </span>
+                <span style={{ fontWeight: 700, fontSize: 17, color: "#fff" }}>Jasper</span>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed max-w-xs">
+              <p style={{ margin: "18px 0 0", fontSize: 14, lineHeight: 1.65, maxWidth: 300 }}>
                 A modern calibration suite for measurement teams — offline-first, ISO-compliant, and engineered for the field.
               </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {["ISO Certified", "Offline-First"].map((badge) => (
-                  <span key={badge} className="text-[10px] px-2.5 py-1 rounded-full border border-white/10 text-slate-500 tracking-wide">{badge}</span>
+              <div style={{ marginTop: 20, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {["ISO CERTIFIED", "OFFLINE-FIRST"].map((b) => (
+                  <span key={b} style={{
+                    fontFamily: "'Geist Mono', ui-monospace, monospace",
+                    fontSize: 10, letterSpacing: "0.1em",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 6, padding: "6px 10px",
+                  }}>{b}</span>
                 ))}
               </div>
             </div>
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Platform</h4>
-              <ul className="space-y-2.5">
+            <div>
+              <h4 style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5c6a82", margin: "0 0 16px" }}>PLATFORM</h4>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                 {["Calibration Reports", "PDF Certificates", "Instrument Tracking", "Audit History"].map((item) => (
                   <li key={item}>
-                    <Link href="/login" className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-1.5 group">
-                      <ArrowRight className="h-3 w-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                      {item}
-                    </Link>
+                    <Link href={ctaHref} style={{ fontSize: 14, color: "#8b97ab" }}>{item}</Link>
                   </li>
                 ))}
               </ul>
             </div>
-
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold uppercase tracking-widest text-slate-500">Resources</h4>
-              <ul className="space-y-3 text-sm text-slate-400">
-                <li className="flex items-start gap-2.5">
-                  <Mail className="h-4 w-4 mt-0.5 shrink-0 text-slate-500" />
-                  <span>support@jasper.app</span>
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-slate-500" />
-                  <span>India</span>
-                </li>
+            <div>
+              <h4 style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5c6a82", margin: "0 0 16px" }}>COMPANY</h4>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                {["About", "Compliance", "Contact"].map((item) => (
+                  <li key={item}>
+                    <a href="#" style={{ fontSize: 14, color: "#8b97ab" }}>{item}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 style={{ fontFamily: "'Geist Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: "0.14em", color: "#5c6a82", margin: "0 0 16px" }}>CONTACT</h4>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10, fontSize: 14 }}>
+                <li>support@jasper.app</li>
+                <li>India</li>
               </ul>
             </div>
           </div>
-
-          <div className="border-t border-white/5 py-5 px-5">
-            <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
-              <p>© {new Date().getFullYear()} Jasper. All rights reserved.</p>
-              <p>ISO-Certified Calibration Portal</p>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: 48, padding: "22px 32px" }}>
+            <div style={{
+              maxWidth: 1240, margin: "0 auto",
+              display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12,
+              fontFamily: "'Geist Mono', ui-monospace, monospace",
+              fontSize: 11, letterSpacing: "0.08em", color: "#5c6a82",
+            }}>
+              <span>© {new Date().getFullYear()} JASPER · JOSTS ELECTRIC</span>
+              <span>ISO-CERTIFIED CALIBRATION PORTAL</span>
             </div>
           </div>
         </footer>

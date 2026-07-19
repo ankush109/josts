@@ -1,10 +1,11 @@
 import path from "path";
+import QRCode from "qrcode";
 import CalibrationReport from "../db/models/calibration.js";
 import { Template, TemplateVersion } from "../db/models/template.js";
 import { renderTemplate, renderTemplateString, renderHtmlToPdf } from "../lib/pdf.js";
 import { uploadPdfToS3 } from "../lib/s3.js";
 import { readImageAsBase64, formatDate, buildCalibrationS3Key } from "../lib/utils.js";
-import { CERT_DEFAULTS } from "../config.js";
+import { CERT_DEFAULTS, LETTER_HEAD_VARIANTS, PUBLIC_APP_URL } from "../config.js";
 import logger from "../lib/logger.js";
 
 const log = logger("calibration");
@@ -140,14 +141,43 @@ function validUptoFromDueDate(due) {
  * @param {number} instIndex - Index of the instrument to render (default `0`).
  * @returns {object} Template variables.
  */
-function buildCalibrationTemplateData(report, instIndex = 0) {
+async function buildCalibrationTemplateData(report, instIndex = 0) {
   const inst = report.instruments?.[instIndex] ?? {};
+
+  // Letterhead variant — falls back to plain Kolkata for old reports.
+  const letterHeadKey = LETTER_HEAD_VARIANTS[report.letterHeadStyle]
+    ? report.letterHeadStyle
+    : "kol";
+  const letterHead = LETTER_HEAD_VARIANTS[letterHeadKey];
+
+  // Per-report QR — encodes the deep-link so scanning takes you to the
+  // report. Only generated when the chosen letterhead needs one.
+  let qrUrl = "";
+  if (letterHead.showQr && report._id) {
+    try {
+      const reportUrl = `${PUBLIC_APP_URL}/calibration/${String(report._id)}`;
+      qrUrl = await QRCode.toDataURL(reportUrl, {
+        errorCorrectionLevel: "M",
+        margin: 1,
+        width: 220,
+      });
+    } catch (err) {
+      log.warn("QR generation failed — proceeding without QR", { error: err.message, reportId: String(report._id) });
+    }
+  }
 
   return {
     ...CERT_DEFAULTS,
 
     logoUrl: readImageAsBase64("logo2.png"),
-    qrUrl:   readImageAsBase64("qr.png"),
+    qrUrl,
+
+    // Letterhead variant + related flags for the EJS template
+    letterHeadStyle: letterHeadKey,
+    letterHeadAddress: letterHead.address,
+    showNabl:          Boolean(letterHead.nablCertNo),
+    nablCertNo:        letterHead.nablCertNo,
+    nablBadgeUrl:      readImageAsBase64("nabl.png"), // optional — template hides badge img when empty
 
     // Certificate metadata
     certificateNo:        report.certNo || report.csrNo || "",
@@ -197,8 +227,24 @@ function buildCalibrationTemplateData(report, instIndex = 0) {
     // Signatories
     calibratedByName: report.signatures?.calibratedBy?.signatureName || report.signatures?.calibratedBy?.name || "",
     approvedByName:   report.signatures?.verifiedBy?.signatureName   || report.signatures?.verifiedBy?.name   || "",
+
+    // Certificate remarks — rendered on the last page. Fall back to the standard
+    // 7 lines when the report was created before this field existed.
+    remarks: (Array.isArray(report.remarks) && report.remarks.length > 0)
+      ? report.remarks
+      : DEFAULT_REMARKS,
   };
 }
+
+const DEFAULT_REMARKS = [
+  "DUC : Device Under Calibration.",
+  "Average of 5 reading has been taken in DUC.",
+  "This certificate refer only to the particular item submitted for calibration",
+  "The results in the certificate are valid at the time of measurement under stated conditions.",
+  "Calibration sticker has been affix on the calibrated sample indicating \"CALIBRATION STATUS\".",
+  "The certificate should not be produced except in full without prior approval from the Technical Manager and / or the Quality Manager",
+  "Measurement Uncertainty reported is at appproximately 95% of Confidence Level with k = 2, Units of measurement results and uncertainty are the same as that of a range selected Unless otherwise indicated.",
+];
 
 // ─── Job handler ──────────────────────────────────────────────────────────────
 
@@ -236,7 +282,7 @@ export async function handleCalibrationJob(reportId) {
   });
 
   for (let i = 0; i < instruments.length; i++) {
-    const data  = buildCalibrationTemplateData(report, i);
+    const data  = await buildCalibrationTemplateData(report, i);
     const html  = templateBody
       ? renderTemplateString(templateBody, data)
       : await renderTemplate(templatePath, data);

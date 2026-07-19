@@ -177,6 +177,20 @@ const calibrationReportSchema = new mongoose.Schema(
     /** Internal certificate number generated server-side. */
     certNo:              { type: String, trim: true, default: "" },
     formatNo:            { type: String, trim: true, default: "JECL/KOL/LAB/FM/36B" },
+    /** PDF template variant. Determines which EJS file the worker renders. */
+    layoutStyle: {
+      type:    String,
+      enum:    ["current", "fm36", "fm36a", "fm36b"],
+      default: "current",
+    },
+    /** Letterhead style — chooses which brand block prints at the top of every PDF page. */
+    letterHeadStyle: {
+      type:    String,
+      enum:    ["kol", "kol_nabl", "del_non_nabl"],
+      default: "kol",
+    },
+    /** Free-form notes rendered as a numbered list on the last certificate page. */
+    remarks:             { type: [String], default: [] },
     status: {
       type:    String,
       enum:    ["draft", "submitted", "verified", "rejected"],

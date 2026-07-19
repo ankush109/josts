@@ -24,6 +24,9 @@ export const createCalibrationSchema = z.object({
   dateOfCalibration:   z.string().optional(),
   calibrationDueDate:  z.string().optional(),
   calibrationInterval: z.number().int().positive().optional(),
+  layoutStyle:         z.enum(["current", "fm36", "fm36a", "fm36b"]).optional(),
+  letterHeadStyle:     z.enum(["kol", "kol_nabl", "del_non_nabl"]).optional(),
+  remarks:             z.array(z.string()).optional(),
   instruments:         z.array(z.any()).optional(),
   signatures:          z.record(z.string(), z.any()).optional(),
 });

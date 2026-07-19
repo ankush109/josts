@@ -27,3 +27,33 @@ export const CERT_DEFAULTS = {
   approvedByRole:         "Technical/Quality Manager",
   totalPages:             "2",
 };
+
+/**
+ * Base URL of the client app — QR codes on generated PDFs encode
+ * `<PUBLIC_APP_URL>/calibration/<reportId>` so scanning takes you to the
+ * report. Falls back to production if not set.
+ */
+export const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://jasper.josts.in";
+
+/**
+ * Address + NABL data per letterhead variant. `showQr` flags whether a
+ * report QR is rendered; `nablCertNo` marks NABL-accredited headers so the
+ * badge shows.
+ */
+export const LETTER_HEAD_VARIANTS = {
+  kol: {
+    address:    "19, British Indian Street, Kolkata 700 069, West Bengal, India.",
+    showQr:     false,
+    nablCertNo: "",
+  },
+  kol_nabl: {
+    address:    "19 A, Abdul Hamid Street, Kolkata-700069, WB",
+    showQr:     true,
+    nablCertNo: "NABLC0526WB04743",
+  },
+  del_non_nabl: {
+    address:    "Unit #708 709, 7th Floor, Gopal Heights, New Delhi - 110034",
+    showQr:     true,
+    nablCertNo: "",
+  },
+};

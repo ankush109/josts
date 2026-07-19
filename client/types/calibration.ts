@@ -13,6 +13,12 @@
 
 // ── Report-level metadata ──────────────────────────────────────────────────
 
+/** PDF layout style — selects which EJS template renders the certificate. */
+export type LayoutStyle = "current" | "fm36" | "fm36a" | "fm36b";
+
+/** Letterhead variant — switches the top-of-page brand block on the PDF. */
+export type LetterHeadStyle = "kol" | "kol_nabl" | "del_non_nabl";
+
 /** Top-level report fields (customer info, dates, location). */
 export interface ReportMeta {
   certNo: string;
@@ -25,6 +31,12 @@ export interface ReportMeta {
   calibrationDueDate: string;
   /** Calibration interval in months. Default 12. When != 12 the rendered PDF replaces the due date with "As Per Client Requirement". */
   calibrationInterval: number;
+  /** PDF template variant. Default "current" keeps the existing detailed certificate. */
+  layoutStyle: LayoutStyle;
+  /** Letterhead style — chooses which brand block prints on every page. Default "kol". */
+  letterHeadStyle: LetterHeadStyle;
+  /** Free-form notes rendered as a numbered list on the last certificate page. Users can edit, add, or remove entries. */
+  remarks: string[];
 }
 
 // ── Instrument metadata ────────────────────────────────────────────────────
@@ -106,6 +118,8 @@ export interface Measurement {
   readings: string[];
   /** Per-cell unit — one per reading, each independently selectable. */
   readingUnits: string[];
+  /** STD Value per reading — only populated in Comparison (FM/36A) layout. Same length as `readings`. */
+  stdReadings?: string[];
   corrected: string;
   /** Null until the compute endpoint has been called. */
   computed: ComputedBudget | null;

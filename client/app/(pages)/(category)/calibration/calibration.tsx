@@ -39,6 +39,7 @@ import {
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
+import FmMeasureTable from "./_components/FmMeasureTable";
 
 // ─── Types (canonical source: @/types/calibration) ───────────────────────────
 import type {
@@ -58,6 +59,9 @@ import type {
 import {
   BLANK_REPORT_META,
   BLANK_INSTRUMENT_META as BLANK_META,
+  DEFAULT_REMARKS,
+  LAYOUT_STYLE_OPTIONS,
+  LETTER_HEAD_OPTIONS,
   PARAM_STATUS_DOT,
   SI_UNIT_FAMILIES,
   UNIT_TO_FAMILY_KEY,
@@ -434,7 +438,7 @@ const MetaGrid: FC<{
         <div className="flex flex-col gap-1">
           <Field label="Humidity (%RH)" k="humidity" {...sharedProps} />
           <p className="text-[10px] text-zinc-400">
-            {meta.voltageArea === "high" ? "Required: > 60 %RH" : "Required: ≤ 60 %RH"}
+            {meta.voltageArea === "high" ? "Required: ≤ 60 %RH" : "Required: > 60 %RH"}
           </p>
         </div>
       </CollapsibleSection>
@@ -2218,6 +2222,7 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
   const [reportMeta, setReportMeta] = useState<ReportMeta>({ ...BLANK_REPORT_META });
   const [reportDetailsOpen, setReportDetailsOpen] = useState(!isEditMode);
+  const [remarksOpen, setRemarksOpen] = useState(!isEditMode);
   const [tourRun, setTourRun] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const cleanSnapshot    = useRef<{ instruments: Instrument[]; reportMeta: ReportMeta } | null>(null);
@@ -2501,10 +2506,10 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
       } else {
         const humVal = parseFloat(inst.meta.humidity);
         if (!isNaN(humVal)) {
-          if (inst.meta.voltageArea === "high" && humVal <= 60)
-            errors.push({ message: `[${lbl}] Humidity must be > 60 %RH for High Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
-          else if (inst.meta.voltageArea !== "high" && humVal > 60)
-            errors.push({ message: `[${lbl}] Humidity must be ≤ 60 %RH for Low Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
+          if (inst.meta.voltageArea === "high" && humVal > 60)
+            errors.push({ message: `[${lbl}] Humidity must be ≤ 60 %RH for High Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
+          else if (inst.meta.voltageArea !== "high" && humVal <= 60)
+            errors.push({ message: `[${lbl}] Humidity must be > 60 %RH for Low Voltage Area`, instId: inst.id, fieldId: "field-humidity" });
         }
       }
       if (inst.meta.refStandards.length === 0)
@@ -2959,7 +2964,406 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div data-jz="calib" className="flex min-h-screen bg-background">
+      <style>{`
+        /* ═══ Landing-tone redesign for the calibration form ═══════════════════
+           Scope: everything under [data-jz="calib"]. Both light & dark. No JSX
+           changes — visual only.
+        ═══════════════════════════════════════════════════════════════════════ */
+
+        /* ── Design tokens ─────────────────────────────────────────────────── */
+        [data-jz="calib"] {
+          --jz-page: #f6f8fb;
+          --jz-card: #ffffff;
+          --jz-card-elev: #ffffff;
+          --jz-ink: #0b1424;
+          --jz-ink-soft: #1f2a3d;
+          --jz-muted: #5c6473;
+          --jz-faint: #97a1b3;
+          --jz-line: #e5e8ee;
+          --jz-line-soft: #eef1f5;
+          --jz-hover: #f2f4f9;
+          --jz-accent: #2f6fed;
+          --jz-accent-hover: #1e50c0;
+          --jz-accent-soft: #eaf1ff;
+          --jz-accent-soft-border: #c7d7f5;
+          --jz-warn: #b5651a;
+          --jz-warn-soft: #fef4e5;
+          --jz-warn-border: #f0d59c;
+          --jz-ok: #1d7a44;
+          --jz-ok-soft: #e6f6ee;
+          --jz-ok-border: #bde4cd;
+          --jz-err: #b52c2c;
+          --jz-err-soft: #fbeaea;
+          --jz-err-border: #f3c6c6;
+          --jz-shadow: 0 1px 2px rgba(11,20,36,0.04), 0 12px 32px rgba(11,20,36,0.05);
+          --jz-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+          font-family: Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
+          background: var(--jz-page) !important;
+          color: var(--jz-ink);
+        }
+        .dark [data-jz="calib"] {
+          --jz-page: #070d18;
+          --jz-card: #0f1a2e;
+          --jz-card-elev: #131f36;
+          --jz-ink: #eef2f8;
+          --jz-ink-soft: #d4dbe6;
+          --jz-muted: #9aa5b7;
+          --jz-faint: #6b7689;
+          --jz-line: rgba(255,255,255,0.08);
+          --jz-line-soft: rgba(255,255,255,0.04);
+          --jz-hover: rgba(255,255,255,0.04);
+          --jz-accent: #4f8cff;
+          --jz-accent-hover: #6ea0ff;
+          --jz-accent-soft: rgba(79,140,255,0.12);
+          --jz-accent-soft-border: rgba(79,140,255,0.35);
+          --jz-warn: #ffb454;
+          --jz-warn-soft: rgba(255,180,84,0.1);
+          --jz-warn-border: rgba(255,180,84,0.3);
+          --jz-ok: #6ee7b7;
+          --jz-ok-soft: rgba(52,211,153,0.12);
+          --jz-ok-border: rgba(52,211,153,0.35);
+          --jz-err: #fca5a5;
+          --jz-err-soft: rgba(248,113,113,0.12);
+          --jz-err-border: rgba(248,113,113,0.35);
+          --jz-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 12px 32px rgba(0,0,0,0.35);
+          color: var(--jz-ink);
+        }
+
+        /* ── Global mono treatment for uppercase labels ────────────────────── */
+        [data-jz="calib"] .uppercase.tracking-widest,
+        [data-jz="calib"] .uppercase.tracking-\\[0\\.2em\\],
+        [data-jz="calib"] .uppercase.tracking-\\[0\\.25em\\],
+        [data-jz="calib"] .uppercase.tracking-\\[0\\.3em\\] {
+          font-family: var(--jz-mono) !important;
+          letter-spacing: 0.14em !important;
+          font-weight: 600 !important;
+        }
+
+        /* Selection */
+        [data-jz="calib"] ::selection { background: var(--jz-accent); color: #fff; }
+
+        /* ── Shadcn primitive swaps ────────────────────────────────────────── */
+        [data-jz="calib"] { --primary: oklch(0.55 0.22 262); --ring: oklch(0.55 0.22 262); }
+        .dark [data-jz="calib"] { --primary: oklch(0.68 0.18 262); --ring: oklch(0.68 0.18 262); }
+
+        [data-jz="calib"] button.bg-primary,
+        [data-jz="calib"] [class*=" bg-primary"] {
+          background-color: var(--jz-accent) !important;
+          color: #fff !important;
+          box-shadow: 0 4px 14px rgba(47,111,237,0.28);
+          transition: transform .12s ease, box-shadow .18s ease, background-color .15s ease;
+        }
+        [data-jz="calib"] button.bg-primary:hover,
+        [data-jz="calib"] [class*=" bg-primary"]:hover { transform: translateY(-1px); }
+
+        /* ── Accent recolor: all Tailwind blue-* utilities ─────────────────── */
+        [data-jz="calib"] .text-blue-500,
+        [data-jz="calib"] .text-blue-600 { color: var(--jz-accent) !important; }
+        [data-jz="calib"] .text-blue-700 { color: var(--jz-accent-hover) !important; }
+        [data-jz="calib"] .hover\\:text-blue-800:hover { color: var(--jz-accent-hover) !important; }
+        [data-jz="calib"] .bg-blue-500 { background-color: var(--jz-accent) !important; }
+        [data-jz="calib"] .bg-blue-50,
+        [data-jz="calib"] .bg-blue-50\\/60,
+        [data-jz="calib"] .bg-blue-100 { background-color: var(--jz-accent-soft) !important; }
+        [data-jz="calib"] .hover\\:bg-blue-100:hover { background-color: var(--jz-accent-soft) !important; }
+        [data-jz="calib"] .border-blue-100,
+        [data-jz="calib"] .border-blue-200,
+        [data-jz="calib"] .border-blue-300,
+        [data-jz="calib"] .hover\\:border-blue-300:hover { border-color: var(--jz-accent-soft-border) !important; }
+        [data-jz="calib"] .border-blue-500 { border-color: var(--jz-accent) !important; }
+        [data-jz="calib"] .ring-blue-100,
+        [data-jz="calib"] .ring-blue-200 { --tw-ring-color: var(--jz-accent-soft-border) !important; }
+        [data-jz="calib"] .focus\\:border-blue-400:focus { border-color: var(--jz-accent) !important; }
+        [data-jz="calib"] .focus\\:ring-blue-100:focus { --tw-ring-color: var(--jz-accent-soft-border) !important; }
+
+        .dark [data-jz="calib"] .text-blue-400 { color: var(--jz-accent) !important; }
+        .dark [data-jz="calib"] .text-blue-300 { color: var(--jz-accent-hover) !important; }
+        .dark [data-jz="calib"] .bg-blue-950\\/40,
+        .dark [data-jz="calib"] .bg-blue-950\\/20,
+        .dark [data-jz="calib"] .hover\\:bg-blue-950\\/40:hover { background-color: var(--jz-accent-soft) !important; }
+        .dark [data-jz="calib"] .border-blue-800,
+        .dark [data-jz="calib"] .border-blue-800\\/60,
+        .dark [data-jz="calib"] .border-blue-900\\/40 { border-color: var(--jz-accent-soft-border) !important; }
+        .dark [data-jz="calib"] .ring-blue-900,
+        .dark [data-jz="calib"] .focus\\:ring-blue-900:focus { --tw-ring-color: var(--jz-accent-soft-border) !important; }
+
+        /* ── Neutral recolor: zinc borders / bgs → landing tone ────────────── */
+        [data-jz="calib"] .border-zinc-100,
+        [data-jz="calib"] .divide-zinc-100 > * + * { border-color: var(--jz-line-soft) !important; }
+        [data-jz="calib"] .border-zinc-200,
+        [data-jz="calib"] .divide-zinc-200 > * + * { border-color: var(--jz-line) !important; }
+        [data-jz="calib"] .border-zinc-300 { border-color: #cfd6e0 !important; }
+        [data-jz="calib"] .border-slate-200 { border-color: var(--jz-line) !important; }
+        [data-jz="calib"] .bg-zinc-50 { background-color: var(--jz-page) !important; }
+        [data-jz="calib"] .bg-zinc-50\\/50,
+        [data-jz="calib"] .bg-zinc-50\\/60,
+        [data-jz="calib"] .bg-zinc-50\\/70,
+        [data-jz="calib"] .bg-zinc-50\\/80 { background-color: var(--jz-hover) !important; }
+        [data-jz="calib"] .bg-zinc-100,
+        [data-jz="calib"] .bg-zinc-100\\/60,
+        [data-jz="calib"] .hover\\:bg-zinc-100:hover,
+        [data-jz="calib"] .hover\\:bg-zinc-100\\/60:hover { background-color: var(--jz-hover) !important; }
+        [data-jz="calib"] .bg-zinc-200 { background-color: var(--jz-line) !important; }
+        [data-jz="calib"] .text-zinc-300 { color: var(--jz-faint) !important; }
+        [data-jz="calib"] .text-zinc-400 { color: var(--jz-faint) !important; }
+        [data-jz="calib"] .text-zinc-500 { color: var(--jz-muted) !important; }
+        [data-jz="calib"] .text-zinc-600 { color: var(--jz-muted) !important; }
+        [data-jz="calib"] .text-zinc-700 { color: var(--jz-ink-soft) !important; }
+        [data-jz="calib"] .text-zinc-800,
+        [data-jz="calib"] .text-zinc-900 { color: var(--jz-ink) !important; }
+
+        .dark [data-jz="calib"] .border-zinc-700 { border-color: var(--jz-line) !important; }
+        .dark [data-jz="calib"] .border-zinc-800 { border-color: var(--jz-line-soft) !important; }
+        .dark [data-jz="calib"] .bg-zinc-800,
+        .dark [data-jz="calib"] .bg-zinc-800\\/30,
+        .dark [data-jz="calib"] .bg-zinc-800\\/40,
+        .dark [data-jz="calib"] .bg-zinc-800\\/50,
+        .dark [data-jz="calib"] .hover\\:bg-zinc-800:hover,
+        .dark [data-jz="calib"] .hover\\:bg-zinc-800\\/50:hover { background-color: var(--jz-hover) !important; }
+        .dark [data-jz="calib"] .bg-zinc-900,
+        .dark [data-jz="calib"] .bg-zinc-900\\/50,
+        .dark [data-jz="calib"] .dark\\:bg-zinc-900 { background-color: var(--jz-card) !important; }
+        .dark [data-jz="calib"] .text-zinc-500,
+        .dark [data-jz="calib"] .text-zinc-600 { color: var(--jz-muted) !important; }
+        .dark [data-jz="calib"] .text-zinc-400 { color: var(--jz-faint) !important; }
+        .dark [data-jz="calib"] .text-zinc-300,
+        .dark [data-jz="calib"] .text-zinc-200,
+        .dark [data-jz="calib"] .text-zinc-100 { color: var(--jz-ink) !important; }
+        .dark [data-jz="calib"] .bg-zinc-700 { background-color: var(--jz-line) !important; }
+
+        /* ── Sticky top bar (nav) ──────────────────────────────────────────── */
+        /* Render the whole sticky region (title/breadcrumb row + toolbar row +
+           step/timeline strip) as ONE cohesive card so it doesn't feel like
+           free-floating text. */
+        [data-jz="calib"] .sticky.top-0 {
+          background: var(--jz-card) !important;
+          backdrop-filter: saturate(140%) blur(18px);
+          -webkit-backdrop-filter: saturate(140%) blur(18px);
+          border: 1px solid var(--jz-line) !important;
+          border-radius: 14px !important;
+          box-shadow: var(--jz-shadow);
+          margin: 12px 12px 0 !important;
+          overflow: hidden;
+        }
+        /* Title/breadcrumb row */
+        [data-jz="calib"] .sticky.top-0 > div:first-child {
+          padding: 16px 20px !important;
+        }
+        /* Toolbar row (has border-t) */
+        [data-jz="calib"] .sticky.top-0 > div > .border-t {
+          background: color-mix(in oklab, var(--jz-page), transparent 40%) !important;
+          border-top-color: var(--jz-line-soft) !important;
+          padding: 10px 20px !important;
+        }
+        /* Timeline strip (comes AFTER the sticky, but visually should join it) */
+        [data-jz="calib"] .flex-1.overflow-x-auto.flex.flex-col > div.overflow-x-auto.shrink-0 {
+          margin: 0 12px !important;
+          background: var(--jz-card) !important;
+          border-left: 1px solid var(--jz-line) !important;
+          border-right: 1px solid var(--jz-line) !important;
+          border-bottom: 1px solid var(--jz-line) !important;
+          border-radius: 0 0 14px 14px !important;
+          padding: 12px 20px !important;
+          box-shadow: var(--jz-shadow);
+          margin-top: -1px !important;
+        }
+        /* Connect the sticky header to the timeline below: kill sticky bottom radius */
+        [data-jz="calib"] .sticky.top-0 { border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; border-bottom: none !important; }
+
+        /* ── Sidebar ───────────────────────────────────────────────────────── */
+        [data-jz="calib"] .fixed.lg\\:relative {
+          background: var(--jz-card) !important;
+          border-right: 1px solid var(--jz-line) !important;
+          box-shadow: none !important;
+        }
+
+        /* ── Card containers (the section boxes) ───────────────────────────── */
+        [data-jz="calib"] .rounded-xl.border {
+          background: var(--jz-card) !important;
+          border: 1px solid var(--jz-line) !important;
+          border-radius: 14px !important;
+          box-shadow: var(--jz-shadow);
+        }
+        [data-jz="calib"] .rounded-xl.border.border-dashed {
+          background: transparent !important;
+          border-style: dashed !important;
+        }
+
+        /* Section header rows (collapsible & non) */
+        [data-jz="calib"] .rounded-xl.border > button:first-child,
+        [data-jz="calib"] .rounded-xl.border > div.flex.items-center.justify-between:first-child {
+          background: linear-gradient(180deg, color-mix(in oklab, var(--jz-page), transparent 60%), transparent) !important;
+          border-bottom: 1px solid var(--jz-line-soft) !important;
+          padding: 14px 20px !important;
+        }
+        [data-jz="calib"] .rounded-xl.border > button:first-child:hover {
+          background: var(--jz-hover) !important;
+        }
+
+        /* Section marker eyebrows — placed on the card container so they sit
+           in a reserved strip ABOVE the header row without disrupting the
+           header's own flex layout. */
+        [data-jz="calib"] [data-tour="report-details"],
+        [data-jz="calib"] [data-tour="instrument-meta"] { position: relative; padding-top: 26px !important; }
+        [data-jz="calib"] [data-tour="report-details"]::before,
+        [data-jz="calib"] [data-tour="instrument-meta"]::before {
+          position: absolute;
+          top: 12px; left: 20px;
+          font-family: var(--jz-mono);
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          font-weight: 700;
+          color: var(--jz-accent);
+          pointer-events: none;
+          z-index: 1;
+        }
+        [data-jz="calib"] [data-tour="report-details"]::before { content: "§ 01 — REPORT"; }
+        [data-jz="calib"] [data-tour="instrument-meta"]::before { content: "§ 02 — INSTRUMENT"; }
+        /* Section card header row: reset any prior wrap and keep the natural flex row. */
+        [data-jz="calib"] [data-tour="report-details"] > button:first-child,
+        [data-jz="calib"] [data-tour="instrument-meta"] > div:first-child { border-top: 1px solid var(--jz-line-soft); }
+
+        /* Section header title text bumps up + tighter */
+        [data-jz="calib"] .rounded-xl.border span.font-semibold.text-sm {
+          font-size: 15px !important;
+          letter-spacing: -0.005em !important;
+          font-weight: 620 !important;
+          color: var(--jz-ink) !important;
+        }
+
+        /* ── Inputs / Selects / Textarea ───────────────────────────────────── */
+        [data-jz="calib"] input:not([type="checkbox"]):not([type="radio"]):not([role="combobox"]),
+        [data-jz="calib"] textarea,
+        [data-jz="calib"] [data-slot="select-trigger"],
+        [data-jz="calib"] [data-slot="input"] {
+          background: var(--jz-card) !important;
+          border: 1px solid var(--jz-line) !important;
+          color: var(--jz-ink) !important;
+          border-radius: 8px !important;
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease !important;
+        }
+        [data-jz="calib"] input[readonly] { background: color-mix(in oklab, var(--jz-page), transparent 40%) !important; color: var(--jz-muted) !important; }
+        [data-jz="calib"] input:focus-visible,
+        [data-jz="calib"] textarea:focus-visible,
+        [data-jz="calib"] [data-slot="select-trigger"]:focus-visible,
+        [data-jz="calib"] [data-slot="input"]:focus-visible {
+          border-color: var(--jz-accent) !important;
+          box-shadow: 0 0 0 3px color-mix(in oklab, var(--jz-accent), transparent 78%) !important;
+          outline: none !important;
+        }
+        [data-jz="calib"] input::placeholder,
+        [data-jz="calib"] textarea::placeholder { color: var(--jz-faint) !important; }
+
+        /* Field row spacing polish */
+        [data-jz="calib"] .grid.grid-cols-2 { row-gap: 14px !important; column-gap: 16px !important; }
+
+        /* ── Status timeline strip / step strip ────────────────────────────── */
+        [data-jz="calib"] .bg-blue-50\\/60.border-b,
+        [data-jz="calib"] .bg-zinc-50\\/80.border-b {
+          background: color-mix(in oklab, var(--jz-page), transparent 40%) !important;
+          border-bottom-color: var(--jz-line-soft) !important;
+        }
+        .dark [data-jz="calib"] .bg-blue-950\\/20.border-b,
+        .dark [data-jz="calib"] .bg-zinc-900\\/50.border-b {
+          background: color-mix(in oklab, var(--jz-card), transparent 40%) !important;
+          border-bottom-color: var(--jz-line-soft) !important;
+        }
+
+        /* Timeline dots — use accent for current, ok green for done */
+        [data-jz="calib"] .bg-emerald-500 { background-color: var(--jz-ok) !important; }
+        [data-jz="calib"] .ring-emerald-200 { --tw-ring-color: var(--jz-ok-border) !important; }
+        .dark [data-jz="calib"] .ring-emerald-900 { --tw-ring-color: var(--jz-ok-border) !important; }
+        [data-jz="calib"] .text-emerald-600 { color: var(--jz-ok) !important; }
+        [data-jz="calib"] .text-emerald-500 { color: var(--jz-ok) !important; }
+        .dark [data-jz="calib"] .text-emerald-400 { color: var(--jz-ok) !important; }
+
+        /* Amber warnings recolor */
+        [data-jz="calib"] .bg-amber-50 { background-color: var(--jz-warn-soft) !important; }
+        .dark [data-jz="calib"] .bg-amber-950\\/40 { background-color: var(--jz-warn-soft) !important; }
+        [data-jz="calib"] .border-amber-200,
+        [data-jz="calib"] .border-amber-300 { border-color: var(--jz-warn-border) !important; }
+        .dark [data-jz="calib"] .border-amber-800,
+        .dark [data-jz="calib"] .border-amber-800\\/60,
+        .dark [data-jz="calib"] .border-amber-700 { border-color: var(--jz-warn-border) !important; }
+        [data-jz="calib"] .text-amber-600,
+        [data-jz="calib"] .text-amber-700,
+        [data-jz="calib"] .text-amber-800 { color: var(--jz-warn) !important; }
+        .dark [data-jz="calib"] .text-amber-400,
+        .dark [data-jz="calib"] .text-amber-300 { color: var(--jz-warn) !important; }
+
+        /* Red destructive recolor */
+        [data-jz="calib"] .text-red-500,
+        [data-jz="calib"] .text-red-600 { color: var(--jz-err) !important; }
+        .dark [data-jz="calib"] .text-red-400,
+        .dark [data-jz="calib"] .text-red-300 { color: var(--jz-err) !important; }
+        [data-jz="calib"] .bg-red-50 { background-color: var(--jz-err-soft) !important; }
+        .dark [data-jz="calib"] .bg-red-950\\/40 { background-color: var(--jz-err-soft) !important; }
+        [data-jz="calib"] .border-red-200 { border-color: var(--jz-err-border) !important; }
+        .dark [data-jz="calib"] .border-red-800 { border-color: var(--jz-err-border) !important; }
+
+        /* Emerald pill (Preset params loaded etc.) — keep readable */
+        [data-jz="calib"] .text-emerald-600 { color: var(--jz-ok) !important; }
+        [data-jz="calib"] .bg-emerald-50 { background-color: var(--jz-ok-soft) !important; }
+        .dark [data-jz="calib"] .bg-emerald-950\\/40 { background-color: var(--jz-ok-soft) !important; }
+        [data-jz="calib"] .border-emerald-200 { border-color: var(--jz-ok-border) !important; }
+
+        /* Violet compute button */
+        [data-jz="calib"] .text-violet-700 { color: var(--jz-accent) !important; }
+        .dark [data-jz="calib"] .text-violet-400 { color: var(--jz-accent) !important; }
+        [data-jz="calib"] .border-violet-200 { border-color: var(--jz-accent-soft-border) !important; }
+        .dark [data-jz="calib"] .border-violet-800 { border-color: var(--jz-accent-soft-border) !important; }
+        [data-jz="calib"] .hover\\:bg-violet-50:hover { background-color: var(--jz-accent-soft) !important; }
+        .dark [data-jz="calib"] .hover\\:bg-violet-950\\/40:hover { background-color: var(--jz-accent-soft) !important; }
+        [data-jz="calib"] .hover\\:border-violet-300:hover { border-color: var(--jz-accent) !important; }
+        .dark [data-jz="calib"] .hover\\:border-violet-700:hover { border-color: var(--jz-accent) !important; }
+
+        /* ── Small buttons (outline, ghost) ─────────────────────────────────── */
+        [data-jz="calib"] button[data-slot="button"]:not(.bg-primary):not([class*=" bg-primary"]) {
+          background: var(--jz-card) !important;
+          color: var(--jz-ink) !important;
+          border-color: var(--jz-line) !important;
+          transition: background .15s ease, border-color .15s ease, transform .12s ease !important;
+        }
+        [data-jz="calib"] button[data-slot="button"]:not(.bg-primary):not([class*=" bg-primary"]):hover {
+          background: var(--jz-hover) !important;
+          border-color: var(--jz-accent-soft-border) !important;
+        }
+
+        /* Focus rings uniform */
+        [data-jz="calib"] .focus-visible\\:ring-ring\\/50:focus-visible {
+          --tw-ring-color: color-mix(in oklab, var(--jz-accent), transparent 55%) !important;
+        }
+
+        /* ── Sidebar instrument selector cards ─────────────────────────────── */
+        [data-jz="calib"] .fixed.lg\\:relative [data-tour="instrument-sidebar"] + div > div {
+          border-radius: 10px !important;
+          transition: background .15s ease, border-color .15s ease;
+        }
+
+        /* Scrollbars — subtle */
+        [data-jz="calib"] ::-webkit-scrollbar { width: 10px; height: 10px; }
+        [data-jz="calib"] ::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--jz-line), transparent 30%); border-radius: 6px; }
+        [data-jz="calib"] ::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--jz-muted), transparent 60%); }
+        [data-jz="calib"] ::-webkit-scrollbar-track { background: transparent; }
+
+        /* Content spacing polish */
+        [data-jz="calib"] .flex-1.px-4.py-4.lg\\:px-8.lg\\:py-6.space-y-4 {
+          padding-top: 20px !important;
+          padding-bottom: 24px !important;
+          gap: 16px;
+        }
+
+        /* Kill heavy shadows from cards that already have our shadow */
+        [data-jz="calib"] .shadow-sm { box-shadow: none !important; }
+
+        /* Table borders inside the form */
+        [data-jz="calib"] table th { color: var(--jz-muted) !important; }
+        [data-jz="calib"] table thead tr { border-bottom-color: var(--jz-line) !important; }
+
+        /* Empty state (dashed card) polish */
+        [data-jz="calib"] .rounded-xl.border-dashed { border-color: var(--jz-line) !important; background: transparent !important; }
+      `}</style>
 
       {/* ── Mobile backdrop ── */}
       {sidebarOpen && (
@@ -3562,6 +3966,119 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="flex flex-col gap-2 col-span-2 lg:col-span-4">
+                    <Label className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+                      Letterhead
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {LETTER_HEAD_OPTIONS.map((opt) => {
+                        const selected = reportMeta.letterHeadStyle === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            disabled={viewMode}
+                            onClick={() => updateReportMeta("letterHeadStyle", opt.value)}
+                            className={cn(
+                              "relative text-left rounded-xl border transition-all overflow-hidden group",
+                              "bg-white dark:bg-zinc-900",
+                              selected
+                                ? "border-blue-500 ring-2 ring-blue-500/20 shadow-md"
+                                : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600",
+                              viewMode && "cursor-not-allowed opacity-70"
+                            )}
+                          >
+                            {/* Selected checkmark */}
+                            {selected && (
+                              <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-sm z-10">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              </div>
+                            )}
+
+                            {/* Preview canvas — mimics the top of the PDF */}
+                            <div className="p-3 bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-800/30 dark:to-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
+                              <div className="flex items-start gap-2">
+                                {/* Josts logo mock */}
+                                <div className="shrink-0 flex flex-col items-center">
+                                  <div className="w-9 h-4 rounded-full bg-blue-100 dark:bg-blue-950/60 border border-blue-300 dark:border-blue-800 flex items-center justify-center">
+                                    <span className="text-[7px] font-bold text-blue-700 dark:text-blue-400 italic">Josts</span>
+                                  </div>
+                                  <span className="text-[5px] text-blue-500/70 mt-0.5">Since 1907</span>
+                                </div>
+                                {/* Company name + address */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[8px] font-bold text-zinc-800 dark:text-zinc-200 leading-tight truncate">
+                                    Jost&apos;s Engineering Company Limited
+                                  </div>
+                                  <div className="text-[5.5px] text-zinc-500 dark:text-zinc-400 leading-tight mt-0.5 line-clamp-2">
+                                    {opt.value === "kol"
+                                      ? "19, British Indian Street, Kolkata 700 069, West Bengal, India."
+                                      : opt.value === "kol_nabl"
+                                      ? "19 A, Abdul Hamid Street, Kolkata-700069, WB"
+                                      : "Unit #708 709, 7th Floor, Gopal Heights, New Delhi - 110034"}
+                                  </div>
+                                  <div className="text-[5px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
+                                    Email: salescal@josts.in
+                                  </div>
+                                </div>
+                                {/* QR + NABL mocks */}
+                                {opt.value !== "kol" && (
+                                  <div className="shrink-0 h-9 w-9 rounded-sm border border-zinc-300 dark:border-zinc-600 bg-white grid grid-cols-4 grid-rows-4 gap-[1px] p-[2px]">
+                                    {Array.from({ length: 16 }).map((_, i) => (
+                                      <div
+                                        key={i}
+                                        className={cn(
+                                          "rounded-[1px]",
+                                          (i * 7) % 3 === 0 ? "bg-zinc-900 dark:bg-zinc-100" : "bg-transparent"
+                                        )}
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                                {opt.value === "kol_nabl" && (
+                                  <div className="shrink-0 h-9 w-9 rounded-sm border border-amber-400 bg-amber-50 dark:bg-amber-950/40 flex flex-col items-center justify-center">
+                                    <div className="text-[5px] font-bold text-amber-800 dark:text-amber-300 leading-none">NABL</div>
+                                    <div className="text-[4px] text-amber-700 dark:text-amber-400 mt-0.5 leading-none">CERTIFIED</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Label bar */}
+                            <div className="px-3 py-2 flex items-center justify-between">
+                              <div>
+                                <div className={cn(
+                                  "text-[12px] font-semibold leading-tight",
+                                  selected ? "text-blue-700 dark:text-blue-400" : "text-zinc-800 dark:text-zinc-200"
+                                )}>
+                                  {opt.label}
+                                </div>
+                                <div className="text-[10px] font-mono text-zinc-400 mt-0.5 truncate">
+                                  {opt.hint}
+                                </div>
+                              </div>
+                              {/* Feature tags */}
+                              <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                {opt.value !== "kol" && (
+                                  <span className="text-[8px] font-mono uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                                    QR
+                                  </span>
+                                )}
+                                {opt.value === "kol_nabl" && (
+                                  <span className="text-[8px] font-mono uppercase tracking-wider text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
+                                    NABL
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                      This letterhead prints on every page of the generated certificate. The QR (when present) scans to this report.
+                    </p>
+                  </div>
                   <RF id="report-dateOfCalibration" label="Date of Calibration" value={reportMeta.dateOfCalibration} type="date"
                     readOnly={viewMode}
                     onChange={!viewMode ? (v) => updateReportMeta("dateOfCalibration", v) : undefined} />
@@ -3747,6 +4264,65 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {view === "readings" && (
+                  <Select
+                    value={reportMeta.layoutStyle}
+                    onValueChange={async (v) => {
+                      const next = v as typeof reportMeta.layoutStyle;
+                      const prev = reportMeta.layoutStyle;
+                      updateReportMeta("layoutStyle", next);
+
+                      // Nothing to persist until the report exists on server / IDB.
+                      if (!isEditMode || !reportId) return;
+
+                      const nextMeta = { ...reportMeta, layoutStyle: next };
+
+                      if (reportIdIsLocal) {
+                        if (!userId) return;
+                        try {
+                          const payload = buildPayload(instruments, "draft", userId, nextMeta);
+                          await updateLocalDraft(reportId, payload);
+                          cleanSnapshot.current = { instruments, reportMeta: nextMeta };
+                          setSnapshotVersion((v) => v + 1);
+                          toast.success("Layout saved");
+                        } catch {
+                          updateReportMeta("layoutStyle", prev);
+                          toast.error("Failed to save layout");
+                        }
+                        return;
+                      }
+
+                      updateCalibrationReport({ reportId, layoutStyle: next } as any, {
+                        onSuccess: () => {
+                          cleanSnapshot.current = { instruments, reportMeta: nextMeta };
+                          setSnapshotVersion((v) => v + 1);
+                          toast.success("Layout saved");
+                        },
+                        onError: () => {
+                          updateReportMeta("layoutStyle", prev);
+                          toast.error("Failed to save layout");
+                        },
+                      });
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-7 text-[11px] font-mono uppercase tracking-wider border-zinc-200 dark:border-zinc-700 px-2.5 gap-1.5 min-w-[8rem]"
+                      title="Table layout"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {LAYOUT_STYLE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <span className="flex items-center gap-2">
+                            <span>{opt.label}</span>
+                            <span className="text-[10px] font-mono text-zinc-400">· {opt.formatNo}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 {view === "results" && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -3777,11 +4353,20 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               </div>
             </div>
             {view === "readings" ? (
-              <MeasureTable
-                param={activeParam}
-                onUpdateParam={(updated) => updateParam(activeInstId, updated)}
-                readOnly={viewMode}
-              />
+              reportMeta.layoutStyle === "current" ? (
+                <MeasureTable
+                  param={activeParam}
+                  onUpdateParam={(updated) => updateParam(activeInstId, updated)}
+                  readOnly={viewMode}
+                />
+              ) : (
+                <FmMeasureTable
+                  param={activeParam}
+                  variant={reportMeta.layoutStyle}
+                  onUpdateParam={(updated) => updateParam(activeInstId, updated)}
+                  readOnly={viewMode}
+                />
+              )
             ) : (
               <div className="p-4 space-y-4">
                 <ResultsTable param={activeParam} />
@@ -3789,6 +4374,84 @@ export default function CalibrationReportPage({ reportId }: CalibrationReportPag
               </div>
             )}
           </div>}
+
+          {/* Remarks section — printed on last certificate page */}
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setRemarksOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 bg-zinc-50/50 hover:bg-zinc-100/60 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                {remarksOpen
+                  ? <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                  : <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />}
+                <span className="text-sm font-semibold text-zinc-800">Remarks</span>
+                <span className="text-xs text-zinc-400">· Printed on the final certificate</span>
+              </div>
+              <span className="text-[11px] text-zinc-400 font-mono">
+                {reportMeta.remarks.length} {reportMeta.remarks.length === 1 ? "line" : "lines"}
+              </span>
+            </button>
+            {remarksOpen && (
+              <div className="p-5 space-y-2">
+                {reportMeta.remarks.map((line, idx) => (
+                  <div key={idx} className="flex items-start gap-2 group">
+                    <span className="mt-1.5 text-[11px] font-mono text-zinc-400 w-5 text-right shrink-0">
+                      {idx + 1}.
+                    </span>
+                    <textarea
+                      value={line}
+                      readOnly={viewMode}
+                      onChange={(e) => {
+                        const next = [...reportMeta.remarks];
+                        next[idx] = e.target.value;
+                        updateReportMeta("remarks", next);
+                      }}
+                      rows={Math.max(1, Math.ceil(line.length / 90))}
+                      placeholder="Remark…"
+                      className="flex-1 min-w-0 text-[13px] leading-snug bg-zinc-50/40 dark:bg-zinc-800/30 border border-zinc-200 dark:border-zinc-700 rounded-md px-2.5 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 dark:focus:ring-blue-900 resize-y"
+                    />
+                    {!viewMode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = reportMeta.remarks.filter((_, i) => i !== idx);
+                          updateReportMeta("remarks", next);
+                        }}
+                        title="Remove"
+                        className="mt-1 p-1 rounded text-zinc-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {!viewMode && (
+                  <div className="pt-1 flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => updateReportMeta("remarks", [...reportMeta.remarks, ""])}
+                      className="gap-1.5 h-8 text-[12px] border-dashed"
+                    >
+                      <Plus className="h-3 w-3" /> Add remark
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => updateReportMeta("remarks", [...DEFAULT_REMARKS])}
+                      className="h-8 text-[11px] text-zinc-400 hover:text-zinc-700"
+                    >
+                      Reset to default (7)
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Signatures */}
           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 px-6 py-5">

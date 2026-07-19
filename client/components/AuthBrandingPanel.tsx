@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const TAGLINES = [
   "Calibration reports that work offline, anywhere.",
@@ -11,115 +11,216 @@ const TAGLINES = [
   "Field-ready. Lab-grade.",
 ] as const;
 
-const BRAND_NAME = "Jasper";
-const SUB_BRAND = "Calibration Suite";
-const TYPEWRITER_INTERVAL_MS = 80;
-const TAGLINE_INTERVAL_MS = 3000;
-const TAGLINE_FADE_DURATION_MS = 400;
+const INSTRUMENTS = [
+  "FLOW METERS", "TORQUE WRENCHES", "MICROMETERS", "DIAL GAUGES",
+  "VERNIER CALIPERS", "MANOMETERS", "LOAD CELLS", "THERMOMETERS",
+  "MULTIMETERS", "PRESSURE GAUGES",
+];
+
+const MONO = "'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace";
+const SANS = "Geist, ui-sans-serif, system-ui, -apple-system, sans-serif";
 
 export function AuthBrandingPanel() {
-  const [displayedText, setDisplayedText] = useState("");
-  const [typewriterDone, setTypewriterDone] = useState(false);
-
-  useEffect(() => {
-    let i = 0;
-    const id = setInterval(() => {
-      setDisplayedText(BRAND_NAME.slice(0, i + 1));
-      i++;
-      if (i >= BRAND_NAME.length) {
-        clearInterval(id);
-        setTimeout(() => setTypewriterDone(true), 600);
-      }
-    }, TYPEWRITER_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, []);
-
   const [taglineIndex, setTaglineIndex] = useState(0);
   const [taglineFade, setTaglineFade] = useState(true);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const id = setInterval(() => {
       setTaglineFade(false);
       setTimeout(() => {
-        setTaglineIndex((prev) => (prev + 1) % TAGLINES.length);
+        setTaglineIndex((i) => (i + 1) % TAGLINES.length);
         setTaglineFade(true);
-      }, TAGLINE_FADE_DURATION_MS);
-    }, TAGLINE_INTERVAL_MS);
+      }, 400);
+    }, 3200);
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1200);
+    return () => clearInterval(id);
+  }, []);
+
+  const liveValue = (10.0042 + Math.sin(tick * 0.7) * 0.0008).toFixed(4);
+
   return (
     <div
-      className="hidden lg:flex flex-col items-center justify-center p-16 relative overflow-hidden"
-      style={{ backgroundColor: "#1e3a5f" }}
+      className="hidden lg:flex relative overflow-hidden"
+      style={{
+        background: "#0b1424",
+        color: "#eef2f8",
+        fontFamily: SANS,
+        WebkitFontSmoothing: "antialiased",
+      }}
     >
-      {/* Dot grid texture */}
-      <div
-        className="absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }}
-      />
+      <style>{`
+        @keyframes jz-auth-drift { 0%,100% { transform: translate(0,0); opacity:.85; } 50% { transform: translate(-26px,22px); opacity:1; } }
+        @keyframes jz-auth-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.82); } }
+        @keyframes jz-auth-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      `}</style>
 
-      {/* Geometric accents */}
-      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-400/20 to-transparent" />
-      <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-blue-400/20 to-transparent" />
-      <div className="absolute top-12 right-12 w-24 h-24 border border-blue-400/[0.08] rounded-full" />
-      <div className="absolute bottom-16 left-10 w-32 h-32 border border-blue-400/[0.06] rounded-full" />
+      {/* Grid overlay with radial mask */}
+      <div style={{
+        position: "absolute", inset: 0,
+        backgroundImage: "linear-gradient(rgba(255,255,255,0.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.045) 1px,transparent 1px)",
+        backgroundSize: "64px 64px",
+        WebkitMaskImage: "radial-gradient(ellipse 90% 70% at 25% 25%,#000 40%,transparent 100%)",
+        maskImage: "radial-gradient(ellipse 90% 70% at 25% 25%,#000 40%,transparent 100%)",
+      }} />
 
-      <div className="relative z-10 flex flex-col items-center text-center gap-10 max-w-sm">
-        {/* Typewriter brand name */}
-        <div>
-          <h1
-            className="text-6xl font-extrabold tracking-tight italic bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
-            style={{ fontFamily: '"Times New Roman", Times, serif' }}
-          >
-            {displayedText}
-            {!typewriterDone && (
-              <span className="inline-block w-[3px] h-12 bg-white/80 ml-1 animate-pulse align-middle" />
-            )}
-          </h1>
-          <div className="mt-3 mx-auto w-12 h-px bg-blue-400" />
-          {typewriterDone && (
-            <p className="mt-3 text-xs uppercase tracking-[0.3em] text-blue-200/60 font-medium animate-in fade-in duration-700">
-              {SUB_BRAND}
-            </p>
-          )}
-        </div>
+      {/* Drifting glow */}
+      <div style={{
+        position: "absolute", top: -160, right: -120,
+        width: 560, height: 560,
+        background: "radial-gradient(circle,rgba(79,140,255,0.22),transparent 65%)",
+        pointerEvents: "none",
+        animation: "jz-auth-drift 13s ease-in-out infinite",
+      }} />
 
-        {/* Decorative monogram */}
-        <div className="relative">
-          <div className="h-32 w-32 rounded-3xl bg-gradient-to-br from-blue-500/20 via-indigo-500/15 to-violet-500/20 border border-white/10 backdrop-blur-sm shadow-2xl shadow-black/30 flex items-center justify-center">
-            <span
-              className="text-7xl font-extrabold italic bg-clip-text text-transparent bg-gradient-to-br from-white via-blue-200 to-violet-300"
-              style={{ fontFamily: '"Times New Roman", Times, serif' }}
-            >
-              J
-            </span>
+      {/* Content column */}
+      <div style={{
+        position: "relative", zIndex: 1,
+        display: "flex", flexDirection: "column",
+        width: "100%", padding: "44px 56px",
+      }}>
+        {/* Top row: wordmark + status pill */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "#2f6fed",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.1) inset",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2">
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><circle cx="12" cy="12" r="5" />
+              </svg>
+            </div>
+            <span style={{ fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em", color: "#fff" }}>Jasper</span>
           </div>
-          <div className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-gradient-to-br from-blue-400 to-violet-500 ring-4 ring-[#1e3a5f]" />
+          <div style={{
+            display: "flex", alignItems: "center", gap: 7,
+            fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.14em", color: "#8fe3ac",
+            border: "1px solid rgba(46,204,113,0.28)",
+            background: "rgba(46,204,113,0.08)",
+            borderRadius: 100, padding: "6px 12px",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2ecc71", animation: "jz-auth-pulse 2s ease-in-out infinite" }} />
+            OPERATIONAL
+          </div>
         </div>
 
-        {/* Divider */}
-        <div className="w-full flex items-center gap-4">
-          <div className="flex-1 h-px bg-blue-400/15" />
-          <span className="text-[10px] uppercase tracking-[0.25em] text-blue-300/40 font-medium">
-            Precision · Reliability · Trust
-          </span>
-          <div className="flex-1 h-px bg-blue-400/15" />
-        </div>
+        {/* Main text block */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", marginTop: 40, marginBottom: 40 }}>
+          <div style={{
+            display: "inline-flex", alignSelf: "flex-start",
+            alignItems: "center", gap: 10,
+            fontFamily: MONO, fontSize: 11, letterSpacing: "0.16em", color: "#9db4de",
+            border: "1px solid rgba(255,255,255,0.14)",
+            borderRadius: 100, padding: "7px 14px",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2f6fed" }} />
+            CALIBRATION MANAGEMENT PORTAL
+          </div>
 
-        {/* Rotating tagline */}
-        <p
-          className="text-sm text-blue-200/50 h-6 transition-all duration-400 ease-in-out"
-          style={{
+          <h1 style={{
+            margin: "26px 0 0",
+            fontSize: 52, lineHeight: 1.02,
+            letterSpacing: "-0.035em", fontWeight: 640,
+            fontFamily: SANS,
+          }}>
+            Certified<br />calibration,<br />
+            <span style={{ color: "#6ea0ff" }}>measured to spec.</span>
+          </h1>
+
+          <p style={{
+            margin: "24px 0 0", fontSize: 16, lineHeight: 1.6,
+            color: "#a9b5c8", maxWidth: 440,
+            minHeight: 48,
             opacity: taglineFade ? 1 : 0,
             transform: taglineFade ? "translateY(0)" : "translateY(6px)",
-          }}
-        >
-          {TAGLINES[taglineIndex]}
-        </p>
+            transition: "opacity .4s ease, transform .4s ease",
+          }}>
+            {TAGLINES[taglineIndex]}
+          </p>
+
+          {/* Live micro-readout card */}
+          <div style={{
+            marginTop: 36, maxWidth: 320,
+            display: "flex", alignItems: "center", gap: 14,
+            padding: "14px 16px",
+            background: "linear-gradient(180deg,#101c31,#0c1626)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 12,
+            boxShadow: "0 20px 40px rgba(0,0,0,0.35)",
+          }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "rgba(79,140,255,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6ea0ff" strokeWidth="2">
+                <circle cx="12" cy="12" r="9" />
+                <path d="M12 12l4-4" />
+                <circle cx="12" cy="12" r="1.5" fill="#6ea0ff" />
+              </svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: "0.14em", color: "#7e8ba0" }}>DC VOLTAGE · LIVE</div>
+              <div style={{
+                fontFamily: MONO, fontSize: 20, fontWeight: 500,
+                color: "#8afcc4",
+                textShadow: "0 0 8px #8afcc4, 0 0 20px rgba(138,252,196,0.35)",
+                letterSpacing: "0.02em",
+                fontVariantNumeric: "tabular-nums",
+                marginTop: 2,
+              }}>
+                {liveValue} <span style={{ fontSize: 14 }}>V</span>
+              </div>
+            </div>
+            <div style={{
+              fontFamily: MONO, fontSize: 9, letterSpacing: "0.12em",
+              color: "#7fe0a3",
+              background: "rgba(46,204,113,0.1)",
+              border: "1px solid rgba(46,204,113,0.25)",
+              padding: "4px 7px", borderRadius: 5,
+            }}>
+              PASS
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom row: mono tags + instrument ticker */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{
+            display: "flex", gap: 16, flexWrap: "wrap",
+            fontFamily: MONO, fontSize: 10.5, letterSpacing: "0.14em", color: "#7e8ba0",
+          }}>
+            <span>ISO&nbsp;17025-READY</span>
+            <span style={{ color: "#39435a" }}>/</span>
+            <span>OFFLINE-FIRST</span>
+            <span style={{ color: "#39435a" }}>/</span>
+            <span>BUILT FOR ENGINEERS</span>
+          </div>
+
+          <div style={{
+            overflow: "hidden",
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+            paddingTop: 16,
+            margin: "0 -56px",
+          }}>
+            <div style={{ display: "flex", width: "max-content", animation: "jz-auth-marquee 32s linear infinite", paddingLeft: 56 }}>
+              {[0, 1].map((k) => (
+                <div key={k} style={{
+                  display: "flex", gap: 32, paddingRight: 32,
+                  fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", color: "#5e6b82",
+                }} aria-hidden={k === 1}>
+                  {INSTRUMENTS.map((n) => <span key={n}>◦ {n}</span>)}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

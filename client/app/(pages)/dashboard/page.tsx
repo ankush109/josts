@@ -21,6 +21,7 @@ import {
   type PresenceUser,
 } from "@/app/hooks/query/usePresence";
 import { useAuth } from "@/app/provider/AuthProvider";
+import JasperTone from "@/app/components/theme/JasperTone";
 
 // ─── helpers ──────────────────────────────────────────────────────────────
 
@@ -790,12 +791,18 @@ export default function DashboardPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-background pt-20 pb-12">
+      <main data-jz="jasper" className="min-h-screen bg-background pt-20 pb-12">
+        <JasperTone />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-6 flex items-end justify-between flex-wrap gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <div className="font-mono text-[10.5px] tracking-[0.16em] font-bold text-[#2f6fed] dark:text-[#4f8cff] uppercase mb-2">
+                § {isAdmin ? "ADMIN" : "USER"} — DASHBOARD
+              </div>
+              <h1 className="text-3xl font-bold text-foreground tracking-tight" style={{ letterSpacing: "-0.025em", fontWeight: 660 }}>
+                Dashboard
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1.5">
                 {isAdmin ? "System-wide overview" : "Your activity overview"}
               </p>
             </div>
