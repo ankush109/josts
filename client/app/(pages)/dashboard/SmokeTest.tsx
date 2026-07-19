@@ -228,7 +228,10 @@ export default function SmokeTestPanel() {
     reset();
     setRunning(true);
     const startAll = Date.now();
+    let passedCount = 0;
+    let failedCount = 0;
     let failedStep: { key: string; label: string; error: string } | undefined;
+    const totalSteps = buildSteps().length;
 
     for (const step of buildSteps()) {
       if (abortRef.current.aborted) {
@@ -248,6 +251,7 @@ export default function SmokeTestPanel() {
           detail:  result.detail ?? "OK",
           data:    result.data,
         });
+        passedCount += 1;
       } catch (err: any) {
         const errorText = extractError(err);
         failedStep = { key: step.key, label: step.label, error: errorText };
@@ -258,6 +262,7 @@ export default function SmokeTestPanel() {
           error:   errorText,
         });
         setExpandedKey(step.key);
+        failedCount += 1;
         break;
       }
     }
@@ -271,31 +276,26 @@ export default function SmokeTestPanel() {
         : `Finished in ${elapsed}s`
     );
 
-    // Persist run summary to localStorage
-    setSteps((finalSteps) => {
-      const passedCount = finalSteps.filter((s) => s.status === "passed").length;
-      const failedCount = finalSteps.filter((s) => s.status === "failed").length;
-      const overall: RunHistoryEntry["overall"] =
-        abortRef.current.aborted ? "aborted" :
-        failedCount > 0          ? "failed"  :
-                                   "passed";
-      const entry: RunHistoryEntry = {
-        ts:          Date.now(),
-        durationMs,
-        passed:      passedCount,
-        failed:      failedCount,
-        total:       finalSteps.length,
-        overall,
-        reportId:    ctxRef.current.createdReportId,
-        certNo:      ctxRef.current.createdCertNo,
-        pdfUrl:      ctxRef.current.pdfUrl,
-        failedStep,
-      };
-      const next = [entry, ...loadHistory()].slice(0, HISTORY_MAX);
-      saveHistory(next);
-      setHistory(next);
-      return finalSteps;
-    });
+    // Persist run summary — no nested setState so the write actually lands
+    const overall: RunHistoryEntry["overall"] =
+      abortRef.current.aborted ? "aborted" :
+      failedCount > 0          ? "failed"  :
+                                 "passed";
+    const entry: RunHistoryEntry = {
+      ts:          Date.now(),
+      durationMs,
+      passed:      passedCount,
+      failed:      failedCount,
+      total:       totalSteps,
+      overall,
+      reportId:    ctxRef.current.createdReportId,
+      certNo:      ctxRef.current.createdCertNo,
+      pdfUrl:      ctxRef.current.pdfUrl,
+      failedStep,
+    };
+    const next = [entry, ...loadHistory()].slice(0, HISTORY_MAX);
+    saveHistory(next);
+    setHistory(next);
   }
 
   function clearHistory() {
@@ -425,10 +425,8 @@ export default function SmokeTestPanel() {
         </div>
       </div>
 
-      {/* Run history */}
-      {history.length > 0 && (
-        <RunHistoryPanel history={history} onClear={clearHistory} />
-      )}
+      {/* Run history — always mounted so admins know where past runs live */}
+      <RunHistoryPanel history={history} onClear={clearHistory} />
     </div>
   );
 }
@@ -446,22 +444,36 @@ function RunHistoryPanel({ history, onClear }: { history: RunHistoryEntry[]; onC
           <History className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-semibold text-foreground">Run history</span>
           <span className="text-[10.5px] font-mono uppercase tracking-widest text-muted-foreground">
-            {history.length} · {passedTotal} passed · {failedTotal} failed
+            {history.length === 0
+              ? "NO RUNS YET"
+              : `${history.length} · ${passedTotal} passed · ${failedTotal} failed`}
           </span>
         </div>
-        <button
-          onClick={onClear}
-          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-        >
-          <Trash2 className="h-3 w-3" />
-          Clear
-        </button>
+        {history.length > 0 && (
+          <button
+            onClick={onClear}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[11px] font-medium text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+          >
+            <Trash2 className="h-3 w-3" />
+            Clear
+          </button>
+        )}
       </div>
-      <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
-        {history.map((entry, i) => (
-          <RunHistoryRow key={`${entry.ts}-${i}`} entry={entry} />
-        ))}
-      </div>
+      {history.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+          <History className="h-6 w-6 text-muted-foreground/40" />
+          <p className="text-[12.5px] text-muted-foreground max-w-xs">
+            Past runs will appear here — status, elapsed time, and quick links to the report + PDF.
+            Persisted in this browser only ({HISTORY_MAX} most recent).
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-border max-h-[420px] overflow-y-auto">
+          {history.map((entry, i) => (
+            <RunHistoryRow key={`${entry.ts}-${i}`} entry={entry} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

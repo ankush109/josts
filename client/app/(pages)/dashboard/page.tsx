@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import UserManagement from "@/app/(pages)/(category)/users/UserManagement";
 import TemplateManagement from "@/app/(pages)/(category)/templates/TemplateManagement";
 import SmokeTestPanel from "./SmokeTest";
+import Analytics from "./Analytics";
 import {
   useGetDashboard,
   type DashboardStats,
@@ -774,7 +775,7 @@ function SectionTabs({
 }
 
 export default function DashboardPage() {
-  const { data, isLoading, isError } = useGetDashboard();
+  const { data, isLoading, isError, refetch, isFetching } = useGetDashboard();
   const { user } = useAuth();
   const router = useRouter();
   const [view, setView] = useState<SectionView>("analytics");
@@ -825,103 +826,13 @@ export default function DashboardPage() {
           )}
 
           {data && (
-            <div className="space-y-5">
-              {/* Top stat row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Total Reports" value={data.reports.total} />
-                <StatCard
-                  label="This Month"
-                  value={data.reports.thisMonth}
-                  delta={data.reports.thisMonth - data.reports.lastMonth}
-                />
-                <StatCard label="Verified" value={data.reports.byStatus.verified} />
-                <StatCard
-                  label="Avg verify time"
-                  value={data.avgVerifyDays ? `${data.avgVerifyDays.value}d` : "—"}
-                  hint={data.avgVerifyDays ? `over ${data.avgVerifyDays.sampleSize} reports` : undefined}
-                />
-              </div>
-
-              <StatusBar byStatus={data.reports.byStatus} total={data.reports.total} />
-
-              {/* User & login stats row */}
-              {data.users && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <StatCard
-                    label="Total Users"
-                    value={data.users.total}
-                    delta={data.users.thisWeek - data.users.lastWeek}
-                    hint={`${data.users.thisWeek} new this week`}
-                  />
-                  <StatCard
-                    label="Logins this week"
-                    value={data.users.loginsThisWeek}
-                    delta={data.users.loginsThisWeek - data.users.loginsLastWeek}
-                  />
-                  <StatCard
-                    label="Total Logins"
-                    value={data.users.loginsTotal}
-                    hint="all-time"
-                  />
-                  <StatCard
-                    label="New This Week"
-                    value={data.users.thisWeek}
-                    hint={`${data.users.lastWeek} last week`}
-                  />
-                </div>
-              )}
-
-              {/* Weekly user activity chart */}
-              {data.weeklyActivity && data.weeklyActivity.length > 0 && (
-                <WeeklyActivityChart weeks={data.weeklyActivity} />
-              )}
-
-              {/* Trend chart */}
-              {data?.trend?.length > 0 && <TrendChart trend={data.trend} />}
-
-              {/* Equipment + workload row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-zinc-900 rounded-xl border border-border p-4 sm:p-5 grid grid-cols-3 gap-3 sm:gap-6">
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">Total Equipment</span>
-                    <span className="text-xl sm:text-2xl font-bold text-foreground">{data.equipment.total}</span>
-                  </div>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">Active</span>
-                    <span className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">{data.equipment.active}</span>
-                  </div>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <span className="text-[11px] sm:text-xs text-muted-foreground font-medium truncate">Expiring Soon</span>
-                    <span className={`text-xl sm:text-2xl font-bold ${data.equipment.expiringSoon.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
-                      {data.equipment.expiringSoon.length}
-                    </span>
-                  </div>
-                </div>
-
-                {isAdmin && data.engineers.length > 0 && <EngineerWorkload engineers={data.engineers} />}
-              </div>
-
-              {/* Buckets + active users row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ExpiringBucketsChart
-                  buckets={data.equipment.expiringBuckets ?? { critical: 0, soon: 0, upcoming: 0 }}
-                />
-                <ActiveUsersPanel users={activeUsers} currentUserId={user?.id} />
-              </div>
-
-              {/* Customers + Most viewed */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <TopCustomersList customers={data.topCustomers ?? []} />
-                <TopViewedList items={data.topViewed ?? []} />
-              </div>
-
-              {/* Activity feed full width */}
-              <AuditFeed entries={data.auditFeed ?? []} />
-
-              <ExpiringSoonTable items={data.equipment.expiringSoon} />
-
-              <RecentReportsList reports={data.recentReports} />
-            </div>
+            <Analytics
+              data={data}
+              activeUsers={activeUsers}
+              currentUserId={user?.id}
+              onRefresh={() => refetch()}
+              isFetching={isFetching}
+            />
           )}
           </>
           )}

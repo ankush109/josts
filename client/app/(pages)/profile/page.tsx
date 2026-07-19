@@ -5,15 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
-import { User, MapPin, Mail, PenLine, Save, Loader2, BadgeCheck, Sun, Moon, Monitor } from "lucide-react";
+import {
+  User, MapPin, Mail, PenLine, Save, Loader2, BadgeCheck,
+  Sun, Moon, Monitor, Shield, ArrowLeft,
+} from "lucide-react";
 import { AUTH_API } from "@/app/hooks/client";
 import { ENDPOINTS } from "@/app/hooks/endpoints";
 import { useAuth } from "@/app/provider/AuthProvider";
 import { useTheme } from "next-themes";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
+
+function getInitials(name?: string | null): string {
+  if (!name) return "U";
+  return name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
+}
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
@@ -51,7 +60,7 @@ export default function ProfilePage() {
       });
       const updatedUser = { ...user, ...res.data.user };
       setUser(updatedUser);
-      toast.success("Profile updated successfully!");
+      toast.success("Profile updated");
     } catch {
       toast.error("Failed to update profile");
     } finally {
@@ -59,202 +68,263 @@ export default function ProfilePage() {
     }
   };
 
-  const initials =
-    formData.name
-      ?.split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase() || "U";
-
   const hasUnsavedChanges =
     formData.signatureName !== (user?.signatureName || "") ||
     formData.location !== (user?.location || "");
 
+  const handleReset = () => {
+    setFormData({
+      name: user?.name || "",
+      email: user?.email || "",
+      location: user?.location || "",
+      signatureName: user?.signatureName || "",
+    });
+    toast.info("Changes discarded");
+  };
+
   return (
-    <div className="min-h-screen bg-background pt-16 pb-12">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Profile Settings</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Manage your account settings and preferences
-          </p>
-        </div>
 
-        <div className="grid gap-5">
-          {/* Personal info */}
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xl font-medium">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <CardTitle className="text-base">Personal Information</CardTitle>
-                  <CardDescription>Update your personal details</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-1.5">
-                <Label htmlFor="name" className="flex items-center gap-2 text-sm">
-                  <User className="h-3.5 w-3.5 text-muted-foreground" />
-                  Full Name
-                </Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  className="max-w-sm bg-muted/40"
-                  disabled
-                />
-                <p className="text-xs text-muted-foreground">Full name is set from your email and cannot be changed here.</p>
-              </div>
+      {/* Hero */}
+      <div className="pt-24 pb-10 border-b border-border/60 bg-gradient-to-b from-card/60 to-transparent">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-6"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to dashboard
+          </Link>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="signatureName" className="flex items-center gap-2 text-sm">
-                  <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-                  Signature Name
-                </Label>
-                <Input
-                  id="signatureName"
-                  placeholder="Name to appear on calibration certificates"
-                  value={formData.signatureName}
-                  onChange={(e) => handleInputChange("signatureName", e.target.value)}
-                  className="max-w-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  This name appears on all calibration reports and PDFs under your signature.
-                </p>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-5">
+            <div className="relative shrink-0">
+              <div className="h-24 w-24 rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground flex items-center justify-center text-3xl font-semibold shadow-lg shadow-primary/20">
+                {getInitials(formData.name)}
               </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="flex items-center gap-2 text-sm">
-                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                  Email Address
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  className="max-w-sm bg-muted/40"
-                  disabled
-                />
-                <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="location" className="flex items-center gap-2 text-sm">
-                  <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                  Location
-                </Label>
-                <Input
-                  id="location"
-                  placeholder="e.g., Kolkata, India"
-                  value={formData.location}
-                  onChange={(e) => handleInputChange("location", e.target.value)}
-                  className="max-w-sm"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Appearance */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base">Appearance</CardTitle>
-              <CardDescription>Choose how the app looks to you</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-3 gap-3">
-                {([
-                  { value: "light", label: "Light", icon: Sun },
-                  { value: "dark",  label: "Dark",  icon: Moon },
-                  { value: "system", label: "System", icon: Monitor },
-                ] as const).map(({ value, label, icon: Icon }) => (
-                  <button
-                    key={value}
-                    onClick={() => setTheme(value)}
-                    className={`flex flex-col items-center gap-2.5 rounded-xl border-2 p-4 transition-all ${
-                      theme === value
-                        ? "border-primary bg-primary/5"
-                        : "border-border bg-muted/30 hover:bg-muted/60"
-                    }`}
-                  >
-                    <div className={`rounded-lg p-2 ${theme === value ? "bg-primary/10" : "bg-background"}`}>
-                      <Icon className={`h-5 w-5 ${theme === value ? "text-primary" : "text-muted-foreground"}`} />
-                    </div>
-                    <span className={`text-sm font-medium ${theme === value ? "text-primary" : "text-muted-foreground"}`}>
-                      {label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                Your preference is saved locally on this device.
+              <span className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-green-500 border-4 border-background flex items-center justify-center">
+                <BadgeCheck className="h-3.5 w-3.5 text-white" />
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight truncate">
+                {formData.name || "Your profile"}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1 truncate">
+                {formData.email || "—"}
               </p>
-            </CardContent>
-          </Card>
-
-          {/* Account info */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base">Account Information</CardTitle>
-              <CardDescription>View your account details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              <div className="flex justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Account Status</span>
-                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-600">
-                  <BadgeCheck className="h-3.5 w-3.5" /> Active
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-primary/20">
+                  <Shield className="h-3 w-3" />
+                  {user?.role ? user.role[0].toUpperCase() + user.role.slice(1) : "Member"}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 text-green-500 px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ring-green-500/20">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Active
                 </span>
               </div>
-              <Separator />
-              <div className="flex justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Role</span>
-                <span className="text-sm font-medium capitalize">{user?.role ?? "—"}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Signature Name</span>
-                <span className="text-sm font-medium">{user?.signatureName || <span className="text-amber-500 text-xs">Not set</span>}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setFormData({
-                  name: user?.name || "",
-                  email: user?.email || "",
-                  location: user?.location || "",
-                  signatureName: user?.signatureName || "",
-                });
-                toast.info("Changes discarded");
-              }}
-              disabled={!hasUnsavedChanges}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving || !hasUnsavedChanges}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Content */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32">
+        <div className="grid gap-6 lg:grid-cols-3">
+
+          {/* Left: personal info */}
+          <div className="lg:col-span-2 space-y-6">
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-4 border-b border-border/60 bg-muted/20">
+                <CardTitle className="text-base">Personal information</CardTitle>
+                <CardDescription>Details visible on your calibration certificates.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-5">
+                <FormField
+                  id="name"
+                  label="Full name"
+                  icon={User}
+                  value={formData.name}
+                  disabled
+                  hint="Set from your email address."
+                />
+                <FormField
+                  id="email"
+                  label="Email address"
+                  icon={Mail}
+                  type="email"
+                  value={formData.email}
+                  disabled
+                  hint="Contact an administrator to change your email."
+                />
+                <FormField
+                  id="signatureName"
+                  label="Signature name"
+                  icon={PenLine}
+                  value={formData.signatureName}
+                  onChange={(v) => handleInputChange("signatureName", v)}
+                  placeholder="Name to appear on certificates"
+                  hint="This is printed on every PDF you sign off on."
+                />
+                <FormField
+                  id="location"
+                  label="Location"
+                  icon={MapPin}
+                  value={formData.location}
+                  onChange={(v) => handleInputChange("location", v)}
+                  placeholder="e.g. Kolkata, India"
+                />
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-4 border-b border-border/60 bg-muted/20">
+                <CardTitle className="text-base">Appearance</CardTitle>
+                <CardDescription>Choose how the app looks on this device.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-3 gap-3">
+                  {([
+                    { value: "light",  label: "Light",  icon: Sun },
+                    { value: "dark",   label: "Dark",   icon: Moon },
+                    { value: "system", label: "System", icon: Monitor },
+                  ] as const).map(({ value, label, icon: Icon }) => {
+                    const active = theme === value;
+                    return (
+                      <button
+                        key={value}
+                        onClick={() => setTheme(value)}
+                        className={cn(
+                          "group flex flex-col items-center gap-2.5 rounded-xl p-4 transition-all",
+                          "ring-1 ring-inset",
+                          active
+                            ? "ring-primary bg-primary/5 shadow-sm shadow-primary/10"
+                            : "ring-border hover:ring-border/80 hover:bg-accent/40",
+                        )}
+                        aria-pressed={active}
+                      >
+                        <div className={cn(
+                          "rounded-lg p-2 transition-colors",
+                          active ? "bg-primary/15 text-primary" : "bg-muted/60 text-muted-foreground group-hover:text-foreground",
+                        )}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <span className={cn("text-sm font-medium", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")}>
+                          {label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: account summary */}
+          <div className="space-y-6">
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-4 border-b border-border/60 bg-muted/20">
+                <CardTitle className="text-base">Account</CardTitle>
+                <CardDescription>Read-only account snapshot.</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-0">
+                <InfoRow label="Status">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    Active
+                  </span>
+                </InfoRow>
+                <Separator />
+                <InfoRow label="Role">
+                  <span className="text-sm font-medium capitalize">{user?.role ?? "—"}</span>
+                </InfoRow>
+                <Separator />
+                <InfoRow label="Signature">
+                  <span className="text-sm font-medium">
+                    {user?.signatureName || <span className="text-amber-500 text-xs">Not set</span>}
+                  </span>
+                </InfoRow>
+                <Separator />
+                <InfoRow label="Location">
+                  <span className="text-sm font-medium">
+                    {user?.location || <span className="text-muted-foreground/70 text-xs">—</span>}
+                  </span>
+                </InfoRow>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* Sticky action bar */}
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-40 transition-transform duration-200",
+          hasUnsavedChanges ? "translate-y-0" : "translate-y-full",
+        )}
+      >
+        <div className="bg-card/95 backdrop-blur border-t border-border shadow-[0_-8px_24px_-8px_rgba(0,0,0,0.3)]">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
+            <p className="text-sm text-muted-foreground hidden sm:block">You have unsaved changes.</p>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button variant="ghost" onClick={handleReset} disabled={isSaving}>
+                Discard
+              </Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
+                ) : (
+                  <><Save className="mr-2 h-4 w-4" /> Save changes</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Local building blocks ─────────────────────────────────────────── */
+
+function FormField({
+  id, label, icon: Icon, value, onChange, disabled, placeholder, hint, type,
+}: {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  onChange?: (v: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  hint?: string;
+  type?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="flex items-center gap-2 text-sm font-medium">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        {label}
+      </Label>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(e) => onChange?.(e.target.value)}
+        className={cn("max-w-md", disabled && "bg-muted/40 cursor-not-allowed")}
+      />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-3">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      {children}
     </div>
   );
 }
