@@ -33,7 +33,7 @@ export const CERT_DEFAULTS = {
  * `<PUBLIC_APP_URL>/calibration/<reportId>` so scanning takes you to the
  * report. Falls back to production if not set.
  */
-export const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://jasper.josts.in";
+export const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || "https://jost-client-acm8.vercel.app";
 
 /**
  * Address + NABL data per letterhead variant. `showQr` flags whether a

@@ -93,8 +93,9 @@
       text-align: center;
     }
     .header-nabl img {
-      height: 62px;
+      height: 90px;
       width: auto;
+      max-width: 82px;
       object-fit: contain;
     }
     /* Text-only fallback badge used when nabl.png isn't shipped */
@@ -381,9 +382,6 @@ var computedTotalPages = 1 + resultPages.length;
       <div class="header-nabl">
         <% if (typeof nablBadgeUrl !== 'undefined' && nablBadgeUrl) { %>
           <img src="<%= nablBadgeUrl %>" alt="NABL Certified" />
-          <% if (typeof nablCertNo !== 'undefined' && nablCertNo) { %>
-            <span class="nabl-cert"><%= nablCertNo %></span>
-          <% } %>
         <% } else { %>
           <div class="nabl-text">
             NABL<br/>ACCREDITED
@@ -625,9 +623,6 @@ var computedTotalPages = 1 + resultPages.length;
       <div class="header-nabl">
         <% if (typeof nablBadgeUrl !== 'undefined' && nablBadgeUrl) { %>
           <img src="<%= nablBadgeUrl %>" alt="NABL Certified" />
-          <% if (typeof nablCertNo !== 'undefined' && nablCertNo) { %>
-            <span class="nabl-cert"><%= nablCertNo %></span>
-          <% } %>
         <% } else { %>
           <div class="nabl-text">
             NABL<br/>ACCREDITED
